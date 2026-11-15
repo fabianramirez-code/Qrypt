@@ -2,7 +2,7 @@
 
 An ultralight, secure, TUI-based secrets manager designed to run 100% on top of Git repositories as its storage and identity backend, with no need for complex centralized servers.
 
-> **Status:** early stage. Only identity creation is implemented, as a library with no user interface yet. Nothing is audited: do not store real secrets with Qrypt. The design is documented in [`docs/`](docs/).
+> **Status:** early stage. Qrypt can create an identity; it cannot unlock one or store secrets yet. Nothing is audited: do not rely on Qrypt for real secrets. The design is documented in [`docs/`](docs/).
 
 ## Key Features
 
@@ -31,6 +31,7 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 | ------------------------------------ | -------------------------------------------------------------------- |
 | [Key model](docs/key-model.md)       | Key types, private key protection, and encryption for several people |
 | [Identity](docs/identity.md)         | Exact constructions and the identity file format                     |
+| [Terminal interface](docs/tui.md)    | Screens and the rules they follow                                    |
 | [Threat model](docs/threat-model.md) | Main attack paths and the planned defenses                           |
 
 ## Project Structure
@@ -42,9 +43,21 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 └── pkg/        # Public reusable packages
 ```
 
+## Usage
+
+Run Qrypt from an interactive terminal. On Windows, use Windows Terminal, PowerShell or cmd.
+
+```
+go run ./cmd/qrypt
+```
+
+The first run creates your identity. It shows your passphrase and your recovery phrase so you can write them on paper, and it saves nothing until you have confirmed both. See [Terminal interface](docs/tui.md).
+
+At this stage you can delete the identity file to start over. Its location is shown at the end.
+
 ## Development
 
-Qrypt requires Go 1.26 or later. Run the tests with:
+Qrypt requires Go 1.26.7 or later. An older Go installation downloads that version automatically. Run the tests with:
 
 ```
 go test ./...
