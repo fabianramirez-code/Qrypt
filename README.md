@@ -2,7 +2,7 @@
 
 An ultralight, secure, TUI-based secrets manager designed to run 100% on top of Git repositories as its storage and identity backend, with no need for complex centralized servers.
 
-> **Status:** early stage. There is no implementation code yet. The design is documented in [`docs/`](docs/).
+> **Status:** early stage. Only identity creation is implemented, as a library with no user interface yet. Nothing is audited: do not store real secrets with Qrypt. The design is documented in [`docs/`](docs/).
 
 ## Key Features
 
@@ -21,7 +21,8 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 | ------------- | ----------------------------------------------------------------------------- |
 | Language      | Go (Golang)                                                                   |
 | TUI Framework | `charmbracelet/bubbletea` & `charmbracelet/lipgloss`                          |
-| Cryptography  | Hybrid: X25519 + ML-KEM-768, Ed25519 + ML-DSA-65 (PQC via `cloudflare/circl`) |
+| Cryptography  | Hybrid: X25519 + ML-KEM-768, Ed25519 + ML-DSA-65                              |
+| Crypto code   | Go standard library, `golang.org/x/crypto`, `cloudflare/circl` (ML-DSA only)  |
 | Storage       | File-based vaults on top of Git (GitHub integration)                          |
 
 ## Design
@@ -29,6 +30,7 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 | Document                             | Content                                                              |
 | ------------------------------------ | -------------------------------------------------------------------- |
 | [Key model](docs/key-model.md)       | Key types, private key protection, and encryption for several people |
+| [Identity](docs/identity.md)         | Exact constructions and the identity file format                     |
 | [Threat model](docs/threat-model.md) | Main attack paths and the planned defenses                           |
 
 ## Project Structure
@@ -38,6 +40,14 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 ├── cmd/        # Binary entry points
 ├── internal/   # Private application code
 └── pkg/        # Public reusable packages
+```
+
+## Development
+
+Qrypt requires Go 1.26 or later. Run the tests with:
+
+```
+go test ./...
 ```
 
 ## License

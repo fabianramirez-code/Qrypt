@@ -29,6 +29,8 @@ Each identity has two key pairs:
 
 An attacker must break both the classical and the post-quantum algorithm to read a secret or forge a signature.
 
+The encryption pair is X-Wing, a published combination of X25519 and ML-KEM-768.
+
 ### Why hybrid
 
 - ML-KEM and ML-DSA became standards in August 2024. If a flaw appears in them or in an implementation, the classical algorithm still protects the data.
@@ -50,6 +52,8 @@ All keys of an identity are derived from **one random seed**.
 - The seed is shown once, at creation, as a **recovery phrase** to write on paper.
 
 There is no server that can reset a forgotten passphrase. Without the recovery phrase, the identity is lost, and with it access to everything encrypted for it.
+
+The exact constructions and the file format are specified in [Identity](identity.md).
 
 ### Alternatives considered
 
@@ -88,5 +92,4 @@ These are not decided yet:
 
 - **Vault format:** file layout in the repository, exact scope boundaries (for example, whether categories get their own key), and how names and other metadata are encrypted.
 - **Trust in public keys:** how a client verifies that a public key really belongs to a member. See the [threat model](threat-model.md#3-tampering-with-the-vault-repository).
-- **Exact constructions and parameters:** hybrid combiner, key derivation from the seed, AEAD, Argon2id parameters, and recovery phrase encoding. Qrypt will use published, publicly reviewed constructions rather than custom ones.
-- **Library choice:** `cloudflare/circl` for everything, or Go's standard library `crypto/mlkem` for ML-KEM.
+- **Constructions for the vault:** the AEAD for secrets, how scope keys are wrapped, and how the two signatures are combined. The identity constructions are already fixed in [Identity](identity.md). Qrypt uses published, publicly reviewed constructions rather than custom ones.

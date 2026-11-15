@@ -1,0 +1,6 @@
+# Keep LF line endings for Go files on every platform.
+# Without this, Git on Windows may check them out with CRLF and gofmt reports them as unformatted.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+internal/identity/bip39_english.txt text eol=lf
