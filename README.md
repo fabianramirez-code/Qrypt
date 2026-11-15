@@ -43,9 +43,22 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 └── pkg/        # Public reusable packages
 ```
 
+## Download
+
+A prebuilt program for Windows is published on the [Releases](https://github.com/fabianramirez-code/Qrypt/releases) page. You do not need Go to run it.
+
+1. Download `qrypt-<version>-windows-amd64.zip` and unzip it.
+2. Double-click `qrypt.exe`, or run it from Windows Terminal, PowerShell or cmd.
+
+The program is not signed. The first time, Windows may show a "Windows protected your PC" notice: choose "More info", then "Run anyway". To check the download, compare it with the `.sha256` file published next to it:
+
+```
+Get-FileHash .\qrypt-<version>-windows-amd64.zip -Algorithm SHA256
+```
+
 ## Usage
 
-Run Qrypt from an interactive terminal. On Windows, use Windows Terminal, PowerShell or cmd.
+To run Qrypt from source, use an interactive terminal. On Windows, use Windows Terminal, PowerShell or cmd.
 
 ```
 go run ./cmd/qrypt
@@ -67,6 +80,14 @@ Qrypt requires Go 1.26.7 or later. An older Go installation downloads that versi
 go test ./...
 ```
 
+To build the Windows release zip:
+
+```
+.\build.ps1 -Version v0.1.0
+```
+
+The script uses Go from your PATH. If Go is not installed, it downloads the official Go zip into a local `go` folder, checks its SHA-256, and uses it from there. Nothing is installed on the system. The result is written to `dist`.
+
 ## License
 
-To be defined.
+Qrypt is licensed under the [Apache License 2.0](LICENSE).
