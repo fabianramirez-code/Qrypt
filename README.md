@@ -1,37 +1,45 @@
-# Gestor de Secretos y Contraseñas TUI PQC (Post-Quantum Cryptography)
+# PQC (Post-Quantum Cryptography) TUI Secrets and Password Manager
 
-Un gestor de secretos ultraligero y seguro basado en TUI, diseñado para operar 100% sobre repositorios Git como almacenamiento y backend de identidad, sin necesidad de servidores centralizados complejos.
+An ultralight, secure, TUI-based secrets manager designed to run 100% on top of Git repositories as its storage and identity backend, with no need for complex centralized servers.
 
-> **Estado:** en fase inicial. Aún no hay código de implementación.
+> **Status:** early stage. There is no implementation code yet. The design is documented in [`docs/`](docs/).
 
-## Características clave
+## Key Features
 
-- **Espacios de trabajo:** Personal y Empresarial.
-- **Jerarquía por ambientes** (`DEV`, `QA`, `PRO`) y categorías.
-- **Criptografía resistente a computación cuántica** (estándares NIST):
-  - **ML-KEM** (FIPS 203) para encapsulamiento de llaves; la llave compartida resultante cifra los secretos con un AEAD simétrico.
-  - **ML-DSA** (FIPS 204) para firmas digitales.
-- **Control de acceso** basado en llaves públicas y cifrado por destinatario.
-- **Gestión segura de memoria:** borrado directo de búferes en RAM y portapapeles con autolimpieza.
+- **Workspaces:** Personal and Enterprise.
+- **Hierarchy by environment** (`DEV`, `QA`, `PRO`) and by category.
+- **One protection level:** personal, test, and production secrets are all protected the same way.
+- **Quantum-resistant hybrid cryptography** (classical + NIST post-quantum standards):
+  - **X25519 + ML-KEM-768** (FIPS 203) for key encapsulation. Secrets are encrypted with a symmetric AEAD.
+  - **Ed25519 + ML-DSA-65** (FIPS 204) for digital signatures.
+- **Access control** based on public keys and per-recipient encryption.
+- **Secure memory handling:** direct wiping of in-RAM buffers and a self-clearing clipboard.
 
 ## Tech Stack
 
-| Área          | Tecnología                                                  |
-| ------------- | ----------------------------------------------------------- |
-| Lenguaje      | Go (Golang)                                                 |
-| TUI Framework | `charmbracelet/bubbletea` & `charmbracelet/lipgloss`        |
-| Criptografía  | NIST PQC (ML-KEM / ML-DSA vía `cloudflare/circl`)           |
-| Storage       | Vaults basados en archivos sobre Git (integración GitHub)   |
+| Area          | Technology                                                                    |
+| ------------- | ----------------------------------------------------------------------------- |
+| Language      | Go (Golang)                                                                   |
+| TUI Framework | `charmbracelet/bubbletea` & `charmbracelet/lipgloss`                          |
+| Cryptography  | Hybrid: X25519 + ML-KEM-768, Ed25519 + ML-DSA-65 (PQC via `cloudflare/circl`) |
+| Storage       | File-based vaults on top of Git (GitHub integration)                          |
 
-## Estructura del proyecto
+## Design
+
+| Document                             | Content                                                              |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| [Key model](docs/key-model.md)       | Key types, private key protection, and encryption for several people |
+| [Threat model](docs/threat-model.md) | Main attack paths and the planned defenses                           |
+
+## Project Structure
 
 ```
 .
-├── cmd/        # Puntos de entrada de los binarios
-├── internal/   # Código privado de la aplicación
-└── pkg/        # Paquetes reutilizables públicos
+├── cmd/        # Binary entry points
+├── internal/   # Private application code
+└── pkg/        # Public reusable packages
 ```
 
-## Licencia
+## License
 
-Por definir.
+To be defined.
