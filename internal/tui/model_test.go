@@ -193,6 +193,117 @@ func TestFullFlow(t *testing.T) {
 		t.Fatal(m.ExitStatus())
 	}
 }
+func TestSavingIgnoresKeysUntilResult(t *testing.T) {
+	m, path, words := fixture(t)
+	m, pass := toCheck(t, m)
+	for _, position := range []int{2, 11} {
+		m = typeText(t, m, words[position])
+		m = enter(t, m)
+	}
+	m = typeText(t, m, words[23])
+	next, save := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	if save == nil || m.screen != saving || m.ExitStatus() != 1 {
+		t.Fatal("save did not start")
+	}
+	absence(t, path)
+	for _, pressed := range []tea.KeyPressMsg{{Code: 'c', Mod: tea.ModCtrl}, {Code: tea.KeyEnter}, {Code: tea.KeyEsc}, {Code: tea.KeyExtended, Text: "x"}} {
+		before := m.View().Content
+		next, cmd := m.Update(pressed)
+		m = next.(Model)
+		if cmd != nil || m.screen != saving || m.ExitStatus() != 1 || m.View().Content != before {
+			t.Fatalf("key %v changed saving state or quit", pressed)
+		}
+		absence(t, path)
+	}
+	next, cmd := m.Update(save())
+	m = next.(Model)
+	if cmd != nil || m.screen != done || !strings.Contains(plain(m), "Done") || m.ExitStatus() != 0 {
+		t.Fatal("save result did not show Done")
+	}
+	loaded, err := identity.Load(path, []byte(pass))
+	if err != nil || loaded.RecoveryPhrase() != strings.Join(words, " ") {
+		t.Fatalf("saved identity does not open: %v", err)
+	}
+	next, cmd = m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if cmd == nil || next.(Model).ExitStatus() != 0 {
+		t.Fatal("Ctrl+C on Done did not exit successfully")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("Done did not quit")
+	}
+}
+
+func TestCtrlCWhileGeneratingOrChecking(t *testing.T) {
+	for _, state := range []screen{waitingSeal, waitingOpen} {
+		t.Run(fmt.Sprint(state), func(t *testing.T) {
+			m, path, _ := fixture(t)
+			var pending tea.Cmd
+			if state == waitingSeal {
+				next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+				m, pending = next.(Model), cmd
+			} else {
+				var pass string
+				m, pass = phrase(t, m)
+				m = enter(t, m)
+				m = typeText(t, m, pass)
+				next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+				m, pending = next.(Model), cmd
+			}
+			if pending == nil || m.screen != state {
+				t.Fatal("waiting command not returned")
+			}
+			next, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+			m = next.(Model)
+			if cmd == nil || m.ExitStatus() != 1 {
+				t.Fatal("Ctrl+C did not quit waiting state with status 1")
+			}
+			if _, ok := cmd().(tea.QuitMsg); !ok {
+				t.Fatal("Ctrl+C did not return QuitMsg")
+			}
+			absence(t, path)
+		})
+	}
+}
+
+func TestTypedTextFitsMinimumWindow(t *testing.T) {
+	input := strings.TrimSpace(strings.Repeat("abcdefgh ", 7))
+	if len(input) != 62 {
+		t.Fatal("test input is not 62 characters")
+	}
+	for _, step := range []int{3, 5} {
+		t.Run(fmt.Sprint(step), func(t *testing.T) {
+			m, _, _ := fixture(t)
+			if step == 3 {
+				m, _ = phrase(t, m)
+				m = enter(t, m)
+			} else {
+				m, _ = toCheck(t, m)
+			}
+			m = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 20})
+			m = typeText(t, m, input)
+			view := plain(m)
+			prefix := "Type the 7 words in order (visible):\n"
+			if step == 5 {
+				prefix = "Type word 3:\n"
+			}
+			field := strings.SplitN(view, prefix, 2)
+			if len(field) != 2 {
+				t.Fatalf("missing input field: %q", view)
+			}
+			visible := strings.SplitN(field[1], "\n\nEnter: check", 2)
+			if len(visible) != 2 || strings.ReplaceAll(visible[0], "\n", "") != input {
+				t.Fatalf("typed text not fully visible: %q", view)
+			}
+			for _, line := range strings.Split(view, "\n") {
+				if lipgloss.Width(line) > 60 {
+					t.Fatalf("line exceeds 60 columns: %q", line)
+				}
+			}
+		})
+	}
+}
+
 func TestQuitBeforeSave(t *testing.T) {
 	for step := 1; step <= 5; step++ {
 		t.Run(fmt.Sprint(step), func(t *testing.T) {

@@ -123,6 +123,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = "Pasting is not accepted. Type the words from your paper."
 		}
 	case tea.KeyPressMsg:
+		if m.screen == saving {
+			return m, nil
+		}
 		if v.Code == 'c' && v.Mod&tea.ModCtrl != 0 {
 			m.clearSecrets()
 			if m.screen != done && m.screen != existing {
@@ -278,13 +281,13 @@ func (m Model) viewContent() string {
 	case passphrase:
 		return m.passphraseView()
 	case confirmPassphrase:
-		return title.Render("Confirm passphrase") + "\nType the 7 words in order (visible):\n" + m.input + "\n" + m.message + "\n" + hint.Render("Enter: check  Esc: back")
+		return title.Render("Confirm passphrase") + "\nType the 7 words in order (visible):\n" + wrapLine(m.input) + "\n" + m.message + "\n" + hint.Render("Enter: check  Esc: back")
 	case waitingOpen:
 		return title.Render("Confirm passphrase") + "\nChecking your passphrase. Please wait."
 	case recovery:
 		return m.recoveryView()
 	case confirmRecovery:
-		return title.Render("Confirm recovery phrase") + fmt.Sprintf("\nWord %d of 3\nType word %d:\n", m.index+1, m.positions[m.index]+1) + m.input + "\n" + m.message + "\n" + hint.Render("Enter: check  Esc: back")
+		return title.Render("Confirm recovery phrase") + fmt.Sprintf("\nWord %d of 3\nType word %d:\n", m.index+1, m.positions[m.index]+1) + wrapLine(m.input) + "\n" + m.message + "\n" + hint.Render("Enter: check  Esc: back")
 	case saving:
 		return title.Render("Saving") + "\nSaving your identity. Please wait."
 	case done:
