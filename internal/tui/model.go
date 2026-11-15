@@ -1,4 +1,4 @@
-// Package tui implements the alternate-screen identity creation and unlock flows.
+// Package tui implements the alternate-screen identity creation, unlock, and restore flows.
 package tui
 
 import (
@@ -31,6 +31,11 @@ const (
 	checkingUnlock
 	unlocked
 	cannotOpen
+	restoreIntro
+	restoreWord
+	rebuilding
+	restored
+	notRestored
 )
 
 type sealedMsg struct {
@@ -40,10 +45,18 @@ type sealedMsg struct {
 	err    error
 }
 type openedMsg struct{ err error }
-type savedMsg struct{ err error }
+type savedMsg struct {
+	backup string
+	err    error
+}
+type rebuiltMsg struct {
+	sealed []byte
+	pass   string
+	err    error
+}
 type unlockedMsg struct{ err error }
 
-// Model holds the state of a single identity creation or unlock session.
+// Model holds the state of a single identity creation, unlock, or restore session.
 type Model struct {
 	path          string
 	language      Language
@@ -60,6 +73,10 @@ type Model struct {
 	visible       bool
 	positions     [3]int
 	index         int
+	restoring     bool
+	restoreOrigin screen
+	restoreWords  []string
+	backup        string
 	generate      func() (*identity.Identity, error)
 	pick          func() [3]int
 }
@@ -105,6 +122,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.id, m.sealed, m.pass = v.id, v.sealed, v.pass
 		m.words = strings.Fields(v.id.RecoveryPhrase())
 		m.screen = passphrase
+	case rebuiltMsg:
+		if m.screen != rebuilding {
+			return m, nil
+		}
+		clear(m.restoreWords)
+		m.restoreWords = nil
+		m.index = 0
+		m.input = ""
+		if v.err != nil {
+			m.screen = restoreWord
+			m.message = m.language.text().invalidPhrase
+		} else {
+			m.sealed, m.pass = v.sealed, v.pass
+			m.screen = passphrase
+			m.message = ""
+		}
 	case openedMsg:
 		if m.screen != waitingOpen {
 			return m, nil
@@ -112,6 +145,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.err != nil {
 			m.screen = confirmPassphrase
 			m.message = passError(v.err, m.language.text())
+		} else if m.restoring {
+			m.screen = saving
+			path, data := m.path, m.sealed
+			return m, func() tea.Msg {
+				backup, err := identity.SaveReplacing(path, data)
+				return savedMsg{backup: backup, err: err}
+			}
 		} else {
 			m.screen = recovery
 		}
@@ -139,28 +179,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.clearSecrets()
-		if v.err != nil {
+		if m.restoring {
+			if v.err != nil {
+				m.screen = notRestored
+				m.message = restoreSaveError(v.err, m.language.text())
+			} else {
+				m.backup = v.backup
+				m.screen = restored
+				m.status = 0
+			}
+		} else if v.err != nil {
 			m.fail(v.err)
 		} else {
 			m.screen = done
 			m.status = 0
 		}
 	case tea.PasteMsg:
-		if m.screen == confirmPassphrase || m.screen == confirmRecovery || m.screen == unlock {
+		if m.screen == confirmPassphrase || m.screen == confirmRecovery || m.screen == unlock || m.screen == restoreWord {
 			m.message = m.language.text().pasted
 		}
 	case tea.KeyPressMsg:
-		if m.screen == saving || m.screen == checkingUnlock && !(v.Code == 'c' && v.Mod&tea.ModCtrl != 0) {
+		if m.screen == saving || (m.screen == checkingUnlock || m.screen == rebuilding) && !(v.Code == 'c' && v.Mod&tea.ModCtrl != 0) {
 			return m, nil
 		}
 		if v.Code == 'c' && v.Mod&tea.ModCtrl != 0 {
-			m.clearSecrets()
-			if m.screen != done && m.screen != unlocked {
+			if m.restoring && m.screen != restored && m.screen != notRestored {
+				m.resetRestore()
+			} else {
+				m.clearSecrets()
+			}
+			if m.screen != done && m.screen != unlocked && m.screen != restored {
 				m.status = 1
 			}
 			return m, tea.Quit
 		}
-		if m.screen == done || m.screen == notSaved || m.screen == unlocked || m.screen == cannotOpen {
+		if m.screen == done || m.screen == notSaved || m.screen == unlocked || m.screen == cannotOpen || m.screen == restored || m.screen == notRestored {
 			return m, tea.Quit
 		}
 		switch m.screen {
@@ -176,6 +229,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.screen = m.start
 			}
 		case unlock:
+			if v.Code == 'r' && v.Mod&tea.ModCtrl != 0 {
+				m.beginRestore(unlock)
+				return m, nil
+			}
 			if v.Code == tea.KeyEsc {
 				m.input = ""
 				return m, tea.Quit
@@ -197,6 +254,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.editInput(v)
 		case welcome:
+			if (v.Code == 'r' || v.Code == 'R') && v.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
+				m.beginRestore(welcome)
+				return m, nil
+			}
 			if v.Code == tea.KeyEsc {
 				return m, tea.Quit
 			}
@@ -212,6 +273,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return sealedMsg{id: id, sealed: data, pass: pass, err: err}
 				}
 			}
+		case restoreIntro:
+			if v.Code == tea.KeyEsc {
+				origin := m.restoreOrigin
+				m.resetRestore()
+				m.screen = origin
+			} else if v.Code == tea.KeyEnter {
+				m.screen = restoreWord
+				m.message = ""
+			}
+		case restoreWord:
+			return m.restoreWordKey(v)
 		case passphrase:
 			if v.Code == tea.KeyEnter {
 				m.screen = confirmPassphrase
@@ -326,7 +398,10 @@ func (m *Model) clearSecrets() {
 	m.pass = ""
 	clear(m.words)
 	m.words = nil
+	clear(m.restoreWords)
+	m.restoreWords = nil
 	m.input = ""
+	m.visible = false
 }
 func (m *Model) fail(err error) {
 	m.screen = notSaved
@@ -376,7 +451,7 @@ func (m Model) viewContent() string {
 		if !m.visible {
 			field = strings.Repeat("*", len([]rune(field)))
 		}
-		return title.Render(t.unlockTitle) + "\n" + t.unlockPrompt + "\n" + wrapWidth(field, m.width) + "\n" + t.typedWords(len(strings.Fields(m.input))) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.unlockHint)
+		return title.Render(t.unlockTitle) + "\n" + t.unlockPrompt + "\n" + wrapWidth(field, m.width) + "\n" + t.typedWords(len(strings.Fields(m.input))) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.unlockHint) + "\n" + hint.Render(t.unlockRestoreHint)
 	case checkingUnlock:
 		return title.Render(t.unlockTitle) + "\n" + t.checking
 	case unlocked:
@@ -384,9 +459,23 @@ func (m Model) viewContent() string {
 	case cannotOpen:
 		return title.Render(t.cannotOpenTitle) + "\n" + wrapLine(m.message) + "\n" + wrapLine(t.fileLabel+m.path) + "\n" + hint.Render(t.exitHint)
 	case welcome:
-		return title.Render(t.welcomeTitle) + "\n\n" + t.welcomeBody + "\n\n" + hint.Render(t.welcomeHint)
+		return title.Render(t.welcomeTitle) + "\n\n" + t.welcomeBody + "\n\n" + t.welcomeRestore + "\n" + hint.Render(t.welcomeHint)
 	case waitingSeal:
 		return title.Render(t.welcomeTitle) + "\n" + t.generating
+	case restoreIntro:
+		body := t.restoreIntro
+		if _, err := os.Stat(m.path); err == nil {
+			body += "\n\n" + t.restoreBackup
+		}
+		return title.Render(t.restoreTitle) + "\n\n" + body + "\n\n" + hint.Render(t.restoreIntroHint)
+	case restoreWord:
+		field := m.input
+		if !m.visible {
+			field = strings.Repeat("*", len([]rune(field)))
+		}
+		return title.Render(t.restoreWordTitle) + "\n" + t.restoreProgress(m.index+1) + "\n" + t.restorePrompt(m.index+1) + "\n" + wrapWidth(field, m.width) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.restoreWordHint)
+	case rebuilding:
+		return title.Render(t.restoreTitle) + "\n" + t.rebuilding
 	case passphrase:
 		return m.passphraseView()
 	case confirmPassphrase:
@@ -399,6 +488,14 @@ func (m Model) viewContent() string {
 		return title.Render(t.confirmRecoveryTitle) + "\n" + t.wordProgress(m.index+1) + "\n" + t.wordPrompt(m.positions[m.index]+1) + "\n" + wrapLine(m.input) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
 	case saving:
 		return title.Render(t.savingTitle) + "\n" + t.savingBody
+	case restored:
+		body := title.Render(t.restoredTitle) + "\n" + t.restoredBody + "\n" + wrapLine(t.fileLabel+m.path)
+		if m.backup != "" {
+			body += "\n" + wrapLine(t.backupLabel+m.backup)
+		}
+		return body + "\n" + t.previousPass + "\n" + t.keepNewPass + "\n" + hint.Render(t.exitHint)
+	case notRestored:
+		return title.Render(t.notRestoredTitle) + "\n" + t.notRestoredBody + "\n" + wrapLine(m.message) + "\n" + t.notRestoredOutro + "\n" + t.discardNew + "\n" + t.phraseStillValid + "\n" + hint.Render(t.exitHint)
 	case done:
 		return title.Render(t.doneTitle) + "\n" + t.doneBody + "\n" + wrapLine(t.fileLabel+m.path) + "\n" + t.doneOutro + "\n" + hint.Render(t.exitHint)
 	case notSaved:
@@ -444,7 +541,11 @@ func (m Model) passphraseView() string {
 		lines = append(lines, fmt.Sprintf("%d. %s", i+1, word))
 	}
 	t := m.language.text()
-	return title.Render(t.passTitle) + "\n" + t.passIntro + "\n" + secret.Render(strings.Join(lines, "\n")) + "\n" + t.passOutro + "\n" + hint.Render(t.secretHint)
+	passTitle := t.passTitle
+	if m.restoring {
+		passTitle = t.newPassTitle
+	}
+	return title.Render(passTitle) + "\n" + t.passIntro + "\n" + secret.Render(strings.Join(lines, "\n")) + "\n" + t.passOutro + "\n" + hint.Render(t.secretHint)
 }
 func (m Model) recoveryView() string {
 	var lines []string

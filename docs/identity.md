@@ -103,7 +103,8 @@ The salt and the nonce are generated again, at random, every time an identity is
 | macOS   | `~/Library/Application Support/qrypt/identity`                   |
 | Linux   | `$XDG_CONFIG_HOME/qrypt/identity`, or `~/.config/qrypt/identity` |
 
-- **Never overwritten.** Qrypt refuses to write an identity file where one already exists. Replacing an identity by accident would lose access to everything encrypted for it.
+- **Never overwritten by accident.** Creating an identity refuses to write where an identity file already exists. Replacing an identity by accident would lose access to everything encrypted for it.
+- **Replaced only when restoring, and with a backup.** Restoring an identity from its recovery phrase may replace the identity file. Qrypt first keeps the previous file next to it, under the same name followed by `.backup-` and the UTC date and time, for example `identity.backup-20260115T093000Z`. At every moment the identity file is either the complete previous one or the complete new one. Qrypt never deletes or changes a backup.
 - **Written whole or not at all.** Qrypt writes the file under a temporary name in the same directory, syncs it, and then links it to its final name. After a crash the identity file is either complete or absent. This needs a file system that supports hard links. A crash can leave a temporary file behind; it is safe to delete.
 - **Owner only.** The directory is created with mode `0700` and the file with mode `0600`. On Windows these modes have no effect, and the file relies on the permissions of the user profile.
 - **Never in a repository.** The identity file must not be stored in Git.

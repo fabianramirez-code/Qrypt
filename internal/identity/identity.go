@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 	"golang.org/x/crypto/argon2"
@@ -76,12 +77,16 @@ var (
 	ErrDecryption = errors.New("wrong passphrase or damaged identity file")
 	// ErrAlreadyExists means an identity file was not overwritten.
 	ErrAlreadyExists = errors.New("identity file already exists")
+	// ErrBackupExists means replacement refused to overwrite an existing backup.
+	ErrBackupExists = errors.New("identity backup already exists")
 )
 
 //go:embed bip39_english.txt
 var wordList []byte
 
 var words = strings.Fields(string(wordList))
+
+var now = time.Now
 
 var wordIndex = func() map[string]int {
 	if len(words) != wordListSize {
@@ -93,6 +98,13 @@ var wordIndex = func() map[string]int {
 	}
 	return index
 }()
+
+// InWordList reports whether word is a complete BIP39 English word, ignoring
+// letter case and surrounding whitespace. Inner whitespace is not accepted.
+func InWordList(word string) bool {
+	_, found := wordIndex[strings.ToLower(strings.TrimSpace(word))]
+	return found
+}
 
 // Identity holds the secret master seed from which its keys are derived.
 type Identity struct{ seed []byte }
@@ -333,42 +345,99 @@ func DefaultPath() (string, error) {
 	return filepath.Join(configDir, "qrypt", "identity"), nil
 }
 
-// Save validates and writes a whole identity file or none at the destination, never overwriting one.
-// It creates the parent directory and writes to a same-directory temporary file before linking it.
-func Save(path string, sealed []byte) error {
+func validateSealed(sealed []byte) error {
 	if len(sealed) != fileSize || !bytes.Equal(sealed[:magicSize], []byte(magic)) {
 		return ErrInvalidFormat
 	}
 	if sealed[versionOffset] != version {
 		return ErrUnsupportedVersion
 	}
+	return nil
+}
+
+// writeSealedTemp creates a synced, closed owner-only temporary file next to path.
+// The caller removes the returned file after linking or renaming it.
+func writeSealedTemp(path string, sealed []byte) (string, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
+		return "", err
 	}
 	file, err := os.CreateTemp(dir, ".identity-*")
 	if err != nil {
-		return err
+		return "", err
 	}
-	defer os.Remove(file.Name())
 	_, writeErr := file.Write(sealed)
 	if writeErr == nil {
 		writeErr = file.Sync()
 	}
 	closeErr := file.Close()
-	if writeErr != nil {
-		return writeErr
+	if writeErr != nil || closeErr != nil {
+		os.Remove(file.Name())
+		if writeErr != nil {
+			return "", writeErr
+		}
+		return "", closeErr
 	}
-	if closeErr != nil {
-		return closeErr
+	return file.Name(), nil
+}
+
+// Save validates and writes a whole identity file or none at the destination, never overwriting one.
+// It creates the parent directory and writes to a same-directory temporary file before linking it.
+func Save(path string, sealed []byte) error {
+	if err := validateSealed(sealed); err != nil {
+		return err
 	}
-	if err := os.Link(file.Name(), path); err != nil {
+	temp, err := writeSealedTemp(path, sealed)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(temp)
+	if err := os.Link(temp, path); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return ErrAlreadyExists
 		}
 		return err
 	}
 	return nil
+}
+
+// SaveReplacing writes a complete sealed identity, keeping any previous file as
+// a timestamped backup before atomically replacing it. It never overwrites a
+// backup, and removes its temporary file on every return path.
+func SaveReplacing(path string, sealed []byte) (backup string, err error) {
+	if err := validateSealed(sealed); err != nil {
+		return "", err
+	}
+	temp, err := writeSealedTemp(path, sealed)
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(temp)
+
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		if err := os.Link(temp, path); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return "", ErrAlreadyExists
+			}
+			return "", err
+		}
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+
+	backup = path + ".backup-" + now().UTC().Format("20060102T150405Z")
+	if err := os.Link(path, backup); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return "", ErrBackupExists
+		}
+		return "", err
+	}
+	if err := os.Rename(temp, path); err != nil {
+		os.Remove(backup)
+		return "", err
+	}
+	return backup, nil
 }
 
 // Load reads at most 97 bytes from disk and opens the identity file, checking

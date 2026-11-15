@@ -1,15 +1,15 @@
 # Terminal Interface
 
-What the `qrypt` program shows and how it behaves. So far it has two flows: creating an identity and unlocking it.
+What the `qrypt` program shows and how it behaves. So far it has three flows: creating an identity, unlocking it, and restoring it from its recovery phrase.
 
-> **Status:** early stage. After unlocking there is nothing to do yet, because storing secrets is not implemented. Restoring an identity from its recovery phrase is not implemented either.
+> **Status:** early stage. After unlocking there is nothing to do yet, because storing secrets is not implemented.
 
 ## Rules for every screen
 
 - **Alternate screen only.** Qrypt draws on the terminal's alternate screen, which disappears when the program exits. A passphrase or a recovery phrase never stays in the terminal's scrollback.
 - **Interactive terminal required.** If standard input or standard output is not a terminal, Qrypt prints one line to standard error, exits with status 1, and does nothing else. Secrets can never be piped into a file or into another program.
 - **Nothing else receives secrets.** No logs, no clipboard, and nothing on standard output or standard error after the program exits.
-- **Ctrl+C quits** at once, on every screen except while the identity file is being written (step 6 of creating an identity). That write takes an instant and is never interrupted, so the exit status always matches what is on disk.
+- **Ctrl+C quits** at once, on every screen except while the identity file is being written (the Saving step of creating and of restoring). That write takes an instant and is never interrupted, so the exit status always matches what is on disk.
 - **Small windows.** If the window is smaller than 60 columns by 20 rows, or its size is not known yet, Qrypt shows only a request to enlarge it. Secrets are never shown cut off.
 - **Two languages.** The interface is in English or in Spanish. See [Language](#language).
 - **Typed, not pasted.** Fields for a passphrase or a recovery word ignore pasted text. Pasting would mean that a secret had been copied to the clipboard.
@@ -29,10 +29,12 @@ Qrypt asks for the language every time it starts. It is the first screen.
 
 Qrypt first asks for the [language](#language). Then:
 
-| Situation                                                         | What Qrypt does                               |
-| ----------------------------------------------------------------- | --------------------------------------------- |
-| No identity file at the [default location](identity.md#5-storage) | Starts the flow "Creating an identity".       |
-| An identity file already exists                                   | Starts the flow "Unlocking an identity".      |
+| Situation                                                         | What Qrypt does                          |
+| ----------------------------------------------------------------- | ---------------------------------------- |
+| No identity file at the [default location](identity.md#5-storage) | Starts the flow "Creating an identity".  |
+| An identity file already exists                                   | Starts the flow "Unlocking an identity". |
+
+Both flows offer a way into "Restoring an identity".
 
 ## Creating an identity
 
@@ -40,7 +42,7 @@ Nothing is written to disk until step 6. Quitting before that leaves no file and
 
 | Step | Screen                                                                                                                                   | The user does            | Then                                                                                                                                                      |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | **Welcome.** Explains the two secrets, and that both are shown once and cannot be reset by anyone.                                       | Enter                    | Qrypt generates the identity and its passphrase, which takes a moment, then goes to step 2. Esc quits.                                                    |
+| 1    | **Welcome.** Explains the two secrets, and that both are shown once and cannot be reset by anyone.                                       | Enter                    | Qrypt generates the identity and its passphrase, which takes a moment, then goes to step 2. R starts "Restoring an identity". Esc quits.                  |
 | 2    | **Passphrase.** The 7 words, numbered, with the instruction to write them on paper in order.                                             | Enter                    | Step 3.                                                                                                                                                   |
 | 3    | **Confirm passphrase.** A text field. What the user types is visible.                                                                    | Types the 7 words, Enter | Qrypt opens the encrypted identity with what was typed. If it opens, step 4. If not, the screen says why and the user tries again. Esc returns to step 2. |
 | 4    | **Recovery phrase.** The 24 words, numbered, in 3 columns, with the instruction to write them on paper and keep it away from the device. | Enter                    | Step 5.                                                                                                                                                   |
@@ -65,11 +67,11 @@ On the Not saved screen, Qrypt translates the cause when it knows it, such as an
 
 Unlocking writes nothing to disk and never changes the identity file.
 
-| Step | Screen                                                                                                    | The user does            | Then                                                                                                                                                                                                                 |
-| ---- | --------------------------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | **Unlock.** A field for the passphrase, hidden as it is typed, and a count of the words typed so far.     | Types the 7 words, Enter | Qrypt opens the identity file with what was typed, which takes a moment. If it opens, step 2. If the passphrase is rejected, the screen says why and the user tries again. If the file cannot be used, step 3. Esc quits. |
-| 2    | **Unlocked.** Says that the passphrase is correct and that storing secrets is not available yet.          | Any key                  | Exits with status 0.                                                                                                                                                                                                 |
-| 3    | **Cannot open.** Says why and where the identity file is.                                                 | Any key                  | Exits with status 1.                                                                                                                                                                                                 |
+| Step | Screen                                                                                                | The user does            | Then                                                                                                                                                                                                                                                              |
+| ---- | ----------------------------------------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | **Unlock.** A field for the passphrase, hidden as it is typed, and a count of the words typed so far. | Types the 7 words, Enter | Qrypt opens the identity file with what was typed, which takes a moment. If it opens, step 2. If the passphrase is rejected, the screen says why and the user tries again. If the file cannot be used, step 3. Ctrl+R starts "Restoring an identity". Esc quits. |
+| 2    | **Unlocked.** Says that the passphrase is correct and that storing secrets is not available yet.      | Any key                  | Exits with status 0.                                                                                                                                                                                                                                              |
+| 3    | **Cannot open.** Says why and where the identity file is.                                             | Any key                  | Exits with status 1.                                                                                                                                                                                                                                              |
 
 Quitting at step 1, or while the passphrase is being checked, exits with status 1.
 
@@ -78,25 +80,50 @@ Quitting at step 1, or while the passphrase is being checked, exits with status 
 - **The field keeps what was typed** after a rejected attempt, so a typing mistake can be found with Tab and corrected.
 - **No limit on attempts.** Every attempt already costs one Argon2id computation, and an attacker who has the identity file does not need Qrypt to guess.
 
+## Restoring an identity
+
+Restoring rebuilds an identity from its recovery phrase and gives it a new passphrase. It serves two cases: a new device with no identity file, and a forgotten passphrase.
+
+Nothing is written to disk until step 5. Quitting before that changes nothing.
+
+| Step | Screen                                                                                                                                                                                            | The user does            | Then                                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | **Restore.** Explains that the 24-word recovery phrase is needed and that the identity gets a new passphrase. When an identity file exists, it also says that the file will be kept as a backup. | Enter                    | Step 2. Esc returns to the screen the user came from.                                                                                                                                                                    |
+| 2    | **Recovery phrase, word by word.** Asks for word 1 to word 24, one at a time. The field is hidden as it is typed. Tab shows or hides it.                                                          | Types each word, Enter   | A word that is not in the word list is rejected at once and asked again. Esc goes back one word, and at word 1 it returns to step 1. After word 24 Qrypt checks the whole phrase. If it is valid, step 3. If not, the screen says so and starts again at word 1. |
+| 3    | **New passphrase.** Qrypt rebuilds the identity and generates a new passphrase, which takes a moment. Then it shows the 7 words, numbered, as when creating an identity.                          | Enter                    | Step 4.                                                                                                                                                                                                                  |
+| 4    | **Confirm passphrase.** As when creating an identity.                                                                                                                                             | Types the 7 words, Enter | If it opens the identity, step 5. If not, the screen says why and the user tries again. Esc returns to step 3.                                                                                                           |
+| 5    | **Saving.**                                                                                                                                                                                       |                          | Qrypt writes the identity file. If one already existed, it is first kept as a backup. Keys are ignored until it finishes. On success, step 6. On failure, step 7.                                                       |
+| 6    | **Restored.** Says that the identity is restored, where the file is, where the backup is if there is one, and that the previous passphrase no longer opens Qrypt on this device. Shows no secret. | Any key                  | Exits with status 0.                                                                                                                                                                                                     |
+| 7    | **Not restored.** Says why, that nothing was changed, that the new passphrase is not valid and must be discarded, and that the recovery phrase is still valid.                                    | Any key                  | Exits with status 1.                                                                                                                                                                                                     |
+
+Quitting before step 6 exits with status 1.
+
+- **The same identity.** A restored identity has the same keys as before. Only the passphrase is new.
+- **The previous file is always kept.** Qrypt cannot tell whether the recovery phrase belongs to the identity file it replaces, because that file cannot be opened. The backup is described under [Storage](identity.md#5-storage).
+- **No recovery phrase is shown.** The user already has it, so this flow never displays it.
+- **Each word is checked as it is entered.** A typing mistake is caught at that word, not after all 24.
+
 ## Messages
 
 ### When a passphrase or a recovery word is rejected
 
-| Cause                                                             | English                                                    | Spanish                                                      |
-| ----------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
-| Not 7 words                                                       | `Type exactly 7 words.`                                    | `Escribe exactamente 7 palabras.`                            |
-| A word is not in the list                                         | `One of the words is not valid. Check the spelling.`       | `Una de las palabras no es válida. Revisa cómo está escrita.` |
-| Creating: seven valid words that do not open the identity         | `That is not the passphrase shown. Check your paper.`      | `Esa no es la frase de contraseña mostrada. Revisa tu papel.` |
-| Creating: wrong recovery word                                     | `That is not word <n>. Check your paper.`                  | `Esa no es la palabra <n>. Revisa tu papel.`                 |
-| Unlocking: seven valid words that do not open the identity file   | `Wrong passphrase, or the identity file is damaged.`       | `Frase incorrecta, o el archivo de identidad está dañado.`   |
-| Pasted text                                                       | `Pasting is not accepted. Type the words from your paper.` | `No se acepta pegar. Escribe las palabras de tu papel.`      |
+| Cause                                                           | English                                                    | Spanish                                                       |
+| --------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------- |
+| Not 7 words                                                     | `Type exactly 7 words.`                                    | `Escribe exactamente 7 palabras.`                             |
+| A passphrase word is not in the list                            | `One of the words is not valid. Check the spelling.`       | `Una de las palabras no es válida. Revisa cómo está escrita.` |
+| Creating or restoring: seven valid words that do not open the identity | `That is not the passphrase shown. Check your paper.`      | `Esa no es la frase de contraseña mostrada. Revisa tu papel.` |
+| Creating: wrong recovery word                                   | `That is not word <n>. Check your paper.`                  | `Esa no es la palabra <n>. Revisa tu papel.`                  |
+| Unlocking: seven valid words that do not open the identity file | `Wrong passphrase, or the identity file is damaged.`       | `Frase incorrecta, o el archivo de identidad está dañado.`    |
+| Restoring: a word is not in the list                            | `That is not a valid word. Check the spelling.`            | `Esa no es una palabra válida. Revisa cómo está escrita.`     |
+| Restoring: the 24 words are not a valid recovery phrase         | `Not a valid recovery phrase. Type the 24 words again.`    | `Frase de recuperación no válida. Escríbela de nuevo.`        |
+| Pasted text                                                     | `Pasting is not accepted. Type the words from your paper.` | `No se acepta pegar. Escribe las palabras de tu papel.`       |
 
 When unlocking, Qrypt cannot tell a wrong passphrase from a damaged file, so one message covers both.
 
 ### On the Cannot open screen
 
-| Cause                                         | English                                                  | Spanish                                                       |
-| --------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
-| The file is not an identity file              | `The identity file is not a valid Qrypt identity.`       | `El archivo de identidad no es una identidad válida de Qrypt.` |
-| The file has a format version Qrypt does not know | `This identity was created by a newer version of Qrypt.` | `Esta identidad es de una versión más nueva de Qrypt.`        |
-| Anything else, such as a file that cannot be read | As the system reports it                                 | As the system reports it                                      |
+| Cause                                             | English                                                  | Spanish                                                        |
+| ------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------- |
+| The file is not an identity file                  | `The identity file is not a valid Qrypt identity.`       | `El archivo de identidad no es una identidad válida de Qrypt.` |
+| The file has a format version Qrypt does not know | `This identity was created by a newer version of Qrypt.` | `Esta identidad es de una versión más nueva de Qrypt.`         |
+| Anything else, such as a file that cannot be read | As the system reports it                                 | As the system reports it                                       |

@@ -179,7 +179,7 @@ func TestFullFlow(t *testing.T) {
 		t.Logf("Step %d (80x24):\n%s", step, strings.ReplaceAll(view, wrapLine("Identity file: "+path), "Identity file: <path>"))
 	}
 	capture(1, plain(m))
-	for _, text := range []string{"Creating an identity", "Qrypt will give you two secrets.", "Passphrase (7 words)", "You type it every time you open Qrypt on this device.", "Recovery phrase (24 words)", "It rebuilds your identity if you lose this device", "or forget the passphrase.", "Write both on paper. They are shown only now,", "and nobody can reset them.", "Enter: create   Esc: quit"} {
+	for _, text := range []string{"Creating an identity", "Qrypt will give you two secrets.", "Passphrase (7 words)", "You type it every time you open Qrypt on this device.", "Recovery phrase (24 words)", "It rebuilds your identity if you lose this device", "or forget the passphrase.", "Write both on paper. They are shown only now,", "and nobody can reset them.", "Enter: create   R: restore   Esc: quit"} {
 		if !strings.Contains(plain(m), text) {
 			t.Fatal(plain(m))
 		}
