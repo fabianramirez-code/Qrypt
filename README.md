@@ -51,7 +51,9 @@ Run Qrypt from an interactive terminal. On Windows, use Windows Terminal, PowerS
 go run ./cmd/qrypt
 ```
 
-The first run creates your identity. It shows your passphrase and your recovery phrase so you can write them on paper, and it saves nothing until you have confirmed both. See [Terminal interface](docs/tui.md).
+Qrypt first asks for the language of the interface: English or Spanish.
+
+The first run creates your identity. It shows your passphrase and your recovery phrase so you can write them on paper, and it saves nothing until you have confirmed both. The words of both phrases are always in English. See [Terminal interface](docs/tui.md).
 
 At this stage you can delete the identity file to start over. Its location is shown at the end.
 

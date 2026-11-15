@@ -16,7 +16,8 @@ import (
 type screen int
 
 const (
-	welcome screen = iota
+	languageScreen screen = iota
+	welcome
 	waitingSeal
 	passphrase
 	confirmPassphrase
@@ -41,6 +42,8 @@ type savedMsg struct{ err error }
 // Model holds the state of a single identity-creation session.
 type Model struct {
 	path          string
+	language      Language
+	start         screen
 	screen        screen
 	width, height int
 	status        int
@@ -57,14 +60,15 @@ type Model struct {
 }
 
 // New constructs a session for the explicit identity path without writing to disk.
-func New(path string) Model {
-	m := Model{path: path, status: 1, generate: identity.Generate, pick: randomPositions}
+func New(path string, preferred Language) Model {
+	m := Model{path: path, language: preferred, status: 1, generate: identity.Generate, pick: randomPositions}
 	if _, err := os.Stat(path); err == nil {
-		m.screen = existing
-		m.status = 0
+		m.start = existing
 	} else if !errors.Is(err, os.ErrNotExist) {
-		m.screen = notSaved
+		m.start = notSaved
 		m.message = err.Error()
+	} else {
+		m.start = welcome
 	}
 	return m
 }
@@ -102,7 +106,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.err != nil {
 			m.screen = confirmPassphrase
-			m.message = passError(v.err)
+			m.message = passError(v.err, m.language.text())
 		} else {
 			m.screen = recovery
 		}
@@ -120,7 +124,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.PasteMsg:
 		if m.screen == confirmPassphrase || m.screen == confirmRecovery {
-			m.message = "Pasting is not accepted. Type the words from your paper."
+			m.message = m.language.text().pasted
 		}
 	case tea.KeyPressMsg:
 		if m.screen == saving {
@@ -137,6 +141,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		switch m.screen {
+		case languageScreen:
+			switch v.Code {
+			case tea.KeyEsc:
+				return m, tea.Quit
+			case tea.KeyUp:
+				m.language = English
+			case tea.KeyDown:
+				m.language = Spanish
+			case tea.KeyEnter:
+				m.screen = m.start
+				if m.screen == existing {
+					m.status = 0
+				}
+			}
 		case welcome:
 			if v.Code == tea.KeyEsc {
 				return m, tea.Quit
@@ -193,7 +211,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if v.Code == tea.KeyEnter {
 				position := m.positions[m.index]
 				if !strings.EqualFold(strings.TrimSpace(m.input), m.words[position]) {
-					m.message = fmt.Sprintf("That is not word %d. Check your paper.", position+1)
+					m.message = m.language.text().wrongWord(position + 1)
 				} else {
 					m.index++
 					m.message = ""
@@ -230,14 +248,14 @@ func (m *Model) editInput(key tea.KeyPressMsg) {
 		}
 	}
 }
-func passError(err error) string {
+func passError(err error, text texts) string {
 	switch {
 	case errors.Is(err, identity.ErrPassphraseWordCount):
-		return "Type exactly 7 words."
+		return text.wordCount
 	case errors.Is(err, identity.ErrPassphraseUnknownWord):
-		return "One of the words is not valid. Check the spelling."
+		return text.unknownWord
 	default:
-		return "That is not the passphrase shown. Check your paper."
+		return text.wrongPass
 	}
 }
 func (m *Model) clearSecrets() {
@@ -252,7 +270,11 @@ func (m *Model) clearSecrets() {
 func (m *Model) fail(err error) {
 	m.screen = notSaved
 	m.status = 1
-	m.message = err.Error()
+	if errors.Is(err, identity.ErrAlreadyExists) {
+		m.message = m.language.text().alreadyExists
+	} else {
+		m.message = err.Error()
+	}
 	m.clearSecrets()
 }
 
@@ -269,31 +291,47 @@ func (m Model) View() tea.View {
 
 func (m Model) viewContent() string {
 	if m.width < 60 || m.height < 20 {
-		return "Enlarge the window to at least 60 columns by 20 rows.\n"
+		if m.screen == languageScreen {
+			return wrapLine("Enlarge the window to at least 60 by 20. / Agranda la ventana a 60 por 20 como mínimo.") + "\n"
+		}
+		return m.language.text().enlarge + "\n"
 	}
+	t := m.language.text()
 	switch m.screen {
+	case languageScreen:
+		first, second := "  English", "  Español"
+		if m.language == Spanish {
+			second = "> Español"
+		} else {
+			first = "> English"
+		}
+		instruction := "↑/↓: move / mover   Enter: select / elegir   Esc: quit / salir"
+		if m.width == 60 {
+			instruction = wrapLine(instruction)
+		}
+		return title.Render("Language / Idioma") + "\n" + first + "\n" + second + "\n" + hint.Render(instruction)
 	case existing:
-		return title.Render("Identity exists") + "\nIdentity file: " + m.path + "\nUnlocking is not available yet.\n" + hint.Render("Any key: exit")
+		return title.Render(t.existingTitle) + "\n" + wrapLine(t.fileLabel+m.path) + "\n" + t.existingBody + "\n" + hint.Render(t.exitHint)
 	case welcome:
-		return title.Render("Creating an identity") + "\n\nQrypt will give you two secrets.\n\nPassphrase (7 words)\n  You type it every time you open Qrypt on this device.\n\nRecovery phrase (24 words)\n  It rebuilds your identity if you lose this device\n  or forget the passphrase.\n\nWrite both on paper. They are shown only now,\nand nobody can reset them.\n\n" + hint.Render("Enter: create   Esc: quit")
+		return title.Render(t.welcomeTitle) + "\n\n" + t.welcomeBody + "\n\n" + hint.Render(t.welcomeHint)
 	case waitingSeal:
-		return title.Render("Creating an identity") + "\nGenerating and sealing your identity. Please wait."
+		return title.Render(t.welcomeTitle) + "\n" + t.generating
 	case passphrase:
 		return m.passphraseView()
 	case confirmPassphrase:
-		return title.Render("Confirm passphrase") + "\nType the 7 words in order (visible):\n" + wrapLine(m.input) + "\n" + m.message + "\n" + hint.Render("Enter: check  Esc: back")
+		return title.Render(t.confirmPassTitle) + "\n" + t.confirmPassPrompt + "\n" + wrapLine(m.input) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
 	case waitingOpen:
-		return title.Render("Confirm passphrase") + "\nChecking your passphrase. Please wait."
+		return title.Render(t.confirmPassTitle) + "\n" + t.checking
 	case recovery:
 		return m.recoveryView()
 	case confirmRecovery:
-		return title.Render("Confirm recovery phrase") + fmt.Sprintf("\nWord %d of 3\nType word %d:\n", m.index+1, m.positions[m.index]+1) + wrapLine(m.input) + "\n" + m.message + "\n" + hint.Render("Enter: check  Esc: back")
+		return title.Render(t.confirmRecoveryTitle) + "\n" + t.wordProgress(m.index+1) + "\n" + t.wordPrompt(m.positions[m.index]+1) + "\n" + wrapLine(m.input) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
 	case saving:
-		return title.Render("Saving") + "\nSaving your identity. Please wait."
+		return title.Render(t.savingTitle) + "\n" + t.savingBody
 	case done:
-		return title.Render("Done") + "\nYour identity is ready.\n" + wrapLine("Identity file: "+m.path) + "\nKeep both papers safe.\n" + hint.Render("Any key: exit")
+		return title.Render(t.doneTitle) + "\n" + t.doneBody + "\n" + wrapLine(t.fileLabel+m.path) + "\n" + t.doneOutro + "\n" + hint.Render(t.exitHint)
 	case notSaved:
-		return title.Render("Not saved") + "\nQrypt could not save your identity:\n" + wrapLine(m.message) + "\nNothing was saved.\nThe words you wrote down belong to no identity.\nDiscard them.\n" + hint.Render("Any key: exit")
+		return title.Render(t.failedTitle) + "\n" + t.failedBody + "\n" + wrapLine(m.message) + "\n" + t.failedOutro + "\n" + t.discard + "\n" + hint.Render(t.exitHint)
 	}
 	return ""
 }
@@ -319,12 +357,14 @@ func (m Model) passphraseView() string {
 	for i, word := range strings.Fields(m.pass) {
 		lines = append(lines, fmt.Sprintf("%d. %s", i+1, word))
 	}
-	return title.Render("Passphrase") + "\nWrite these 7 words on paper, in order.\n" + secret.Render(strings.Join(lines, "\n")) + "\nYou will type them on the next screen.\n" + hint.Render("Enter: continue  Ctrl+C: quit")
+	t := m.language.text()
+	return title.Render(t.passTitle) + "\n" + t.passIntro + "\n" + secret.Render(strings.Join(lines, "\n")) + "\n" + t.passOutro + "\n" + hint.Render(t.secretHint)
 }
 func (m Model) recoveryView() string {
 	var lines []string
 	for i := 0; i < 8; i++ {
 		lines = append(lines, fmt.Sprintf("%-17s %-17s %s", fmt.Sprintf("%d. %s", i+1, m.words[i]), fmt.Sprintf("%d. %s", i+9, m.words[i+8]), fmt.Sprintf("%d. %s", i+17, m.words[i+16])))
 	}
-	return title.Render("Recovery phrase") + "\nWrite these 24 words on paper, in order.\n" + secret.Render(strings.Join(lines, "\n")) + "\nKeep the paper somewhere safe, away from this device.\nDo not store it in a photo, a note or a file.\n" + hint.Render("Enter: continue  Ctrl+C: quit")
+	t := m.language.text()
+	return title.Render(t.recoveryTitle) + "\n" + t.recoveryIntro + "\n" + secret.Render(strings.Join(lines, "\n")) + "\n" + t.recoveryOutro + "\n" + hint.Render(t.secretHint)
 }

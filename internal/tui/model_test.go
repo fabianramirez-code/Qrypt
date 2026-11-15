@@ -29,7 +29,8 @@ func fixture(t *testing.T) (Model, string, []string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(path)
+	m := New(path, English)
+	m = send(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	m.generate = func() (*identity.Identity, error) { return id, nil }
 	m.pick = func() [3]int { return [3]int{2, 11, 23} }
 	words := strings.Fields(id.RecoveryPhrase())
@@ -97,6 +98,76 @@ func absence(t *testing.T, path string) {
 	}
 }
 
+func TestLanguageSelection(t *testing.T) {
+	for _, tc := range []struct {
+		preferred Language
+		marker    string
+		welcome   string
+	}{{English, "> English", "Creating an identity"}, {Spanish, "> Español", "Crear una identidad"}} {
+		t.Run(tc.marker, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config", "identity")
+			m := send(t, New(path, tc.preferred), tea.WindowSizeMsg{Width: 80, Height: 24})
+			if !m.View().AltScreen || !strings.Contains(plain(m), "Language / Idioma") || !strings.Contains(plain(m), tc.marker) || !strings.Contains(plain(m), "↑/↓: move / mover   Enter: select / elegir   Esc: quit / salir") {
+				t.Fatal(plain(m))
+			}
+			absence(t, path)
+			if tc.preferred == English {
+				m = key(t, m, tea.KeyUp)
+				if !strings.Contains(plain(m), "> English") {
+					t.Fatal("up wrapped")
+				}
+				m = key(t, m, tea.KeyDown)
+				if !strings.Contains(plain(m), "> Español") {
+					t.Fatal("down did not move")
+				}
+				m = key(t, m, tea.KeyDown)
+				if !strings.Contains(plain(m), "> Español") {
+					t.Fatal("down wrapped")
+				}
+				m = key(t, m, tea.KeyUp)
+			} else {
+				m = key(t, m, tea.KeyDown)
+				if !strings.Contains(plain(m), "> Español") {
+					t.Fatal("down wrapped")
+				}
+				m = key(t, m, tea.KeyUp)
+				m = key(t, m, tea.KeyDown)
+			}
+			m = enter(t, m)
+			if !strings.Contains(plain(m), tc.welcome) {
+				t.Fatal(plain(m))
+			}
+			absence(t, path)
+		})
+	}
+}
+
+func TestLanguageQuit(t *testing.T) {
+	for _, code := range []tea.KeyPressMsg{{Code: tea.KeyEsc}, {Code: 'c', Mod: tea.ModCtrl}} {
+		path := filepath.Join(t.TempDir(), "config", "identity")
+		m := New(path, English)
+		next, cmd := m.Update(code)
+		if cmd == nil || next.(Model).ExitStatus() != 1 {
+			t.Fatalf("quit key %v", code)
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Fatal("not a quit command")
+		}
+		absence(t, path)
+	}
+}
+
+func TestLanguageTag(t *testing.T) {
+	for _, tc := range []struct {
+		tag  string
+		want Language
+	}{{"es", Spanish}, {"es-MX", Spanish}, {"es_ES.UTF-8", Spanish}, {"ES-ar", Spanish}, {"es.UTF-8", Spanish}, {"", English}, {"C", English}, {"en-US", English}, {"en_GB.UTF-8", English}, {"pt-BR", English}, {"est", English}, {"eslovaco", English}} {
+		if got := FromTag(tc.tag); got != tc.want {
+			t.Errorf("%q: got %v, want %v", tc.tag, got, tc.want)
+		}
+	}
+}
+
 func TestExisting(t *testing.T) {
 	m, path, _ := fixture(t)
 	data := []byte("existing")
@@ -106,9 +177,10 @@ func TestExisting(t *testing.T) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	m = New(path)
+	m = New(path, English)
+	m = enter(t, m)
 	m = send(t, m, tea.WindowSizeMsg{Width: 80, Height: 24})
-	if !strings.Contains(plain(m), path) || !strings.Contains(plain(m), "not available") {
+	if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), path) || !strings.Contains(plain(m), "not available") {
 		t.Fatal(plain(m))
 	}
 	m = enter(t, m)
@@ -428,7 +500,7 @@ func TestSaveFailure(t *testing.T) {
 		}
 	}
 	t.Logf("Step 8 (80x24):\n%s", v)
-	for _, s := range []string{"Not saved", "Qrypt could not save your identity:", "identity file already exists", "Nothing was saved", "The words you wrote down belong to no identity.", "Discard them."} {
+	for _, s := range []string{"Not saved", "Qrypt could not save your identity:", "An identity file already exists.", "Nothing was saved", "The words you wrote down belong to no identity.", "Discard them."} {
 		if !strings.Contains(v, s) {
 			t.Fatal(v)
 		}
@@ -470,7 +542,7 @@ func TestCtrlCExitStatuses(t *testing.T) {
 	if err != nil || loaded.RecoveryPhrase() != strings.Join(words, " ") {
 		t.Fatalf("saved identity does not open: %v", err)
 	}
-	check("existing", New(path), 0)
+	check("existing", enter(t, New(path, English)), 0)
 
 	failed, failedPath, failedWords := fixture(t)
 	failed, _ = toCheck(t, failed)
@@ -625,7 +697,9 @@ func TestAltScreen(t *testing.T) {
 	if !failed.View().AltScreen || !strings.Contains(plain(failed), "Not saved") {
 		t.Fatal("not saved has no alternate screen")
 	}
-	m = New(path)
+	m = New(path, English)
+	check("language")
+	m = enter(t, m)
 	check("existing identity")
 }
 

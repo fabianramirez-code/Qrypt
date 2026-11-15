@@ -8,6 +8,18 @@ import (
 	"testing"
 )
 
+func TestSystemLanguageTag(t *testing.T) {
+	t.Logf("system language tag: %s", systemLanguageTag())
+}
+
+func TestPathFailure(t *testing.T) {
+	got := pathFailure(os.ErrNotExist)
+	want := "Qrypt could not find the configuration directory / Qrypt no encontró el directorio de configuración: file does not exist"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func TestRefusal(t *testing.T) {
 	dir := t.TempDir()
 	in, err := os.CreateTemp(dir, "in")
@@ -25,7 +37,7 @@ func TestRefusal(t *testing.T) {
 	if code := run(in, out, &stderr, path); code != 1 {
 		t.Fatalf("exit status %d", code)
 	}
-	if lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n"); len(lines) != 1 || !strings.Contains(lines[0], "interactive terminal") || !strings.Contains(lines[0], "Windows Terminal") {
+	if lines := strings.Split(strings.TrimSuffix(stderr.String(), "\n"), "\n"); len(lines) != 1 || lines[0] != "Qrypt needs an interactive terminal (on Windows: Windows Terminal, PowerShell or cmd). / Qrypt necesita una terminal interactiva." {
 		t.Fatalf("stderr %q", stderr.String())
 	}
 	data, err := os.ReadFile(out.Name())
