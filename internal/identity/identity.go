@@ -283,33 +283,40 @@ func DefaultPath() (string, error) {
 	return filepath.Join(configDir, "qrypt", "identity"), nil
 }
 
-// Save writes one valid identity file, creating its parent directory but never overwriting a file.
-// A failed write or sync removes the new file; created files and directories are owner-only on Unix.
+// Save validates and writes a whole identity file or none at the destination, never overwriting one.
+// It creates the parent directory and writes to a same-directory temporary file before linking it.
 func Save(path string, sealed []byte) error {
 	if len(sealed) != fileSize || !bytes.Equal(sealed[:magicSize], []byte(magic)) {
 		return ErrInvalidFormat
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if sealed[versionOffset] != version {
+		return ErrUnsupportedVersion
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if errors.Is(err, os.ErrExist) {
-		return ErrAlreadyExists
-	}
+	file, err := os.CreateTemp(dir, ".identity-*")
 	if err != nil {
 		return err
 	}
+	defer os.Remove(file.Name())
 	_, writeErr := file.Write(sealed)
 	if writeErr == nil {
 		writeErr = file.Sync()
 	}
 	closeErr := file.Close()
-	if writeErr != nil || closeErr != nil {
-		_ = os.Remove(path)
-		if writeErr != nil {
-			return writeErr
-		}
+	if writeErr != nil {
+		return writeErr
+	}
+	if closeErr != nil {
 		return closeErr
+	}
+	if err := os.Link(file.Name(), path); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return ErrAlreadyExists
+		}
+		return err
 	}
 	return nil
 }

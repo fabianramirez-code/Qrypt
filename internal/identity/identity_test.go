@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -101,8 +102,11 @@ func TestDerivedKeysWork(t *testing.T) {
 		t.Fatal(e)
 	}
 	expected, e := hkdf.Key(sha256.New, seed(), nil, "qrypt/v1/identity/kem/mlkem768-x25519", 32)
-	if e != nil || !bytes.Equal(derived, expected) {
-		t.Fatalf("X-Wing private key does not match HKDF seed: %v", e)
+	if e != nil {
+		t.Fatalf("derive X-Wing HKDF seed: %v", e)
+	}
+	if !bytes.Equal(derived, expected) {
+		t.Fatal("X-Wing private key does not match HKDF seed")
 	}
 	recreated, e := hpke.MLKEM768X25519().NewPrivateKey(expected)
 	if e != nil {
@@ -259,14 +263,21 @@ func TestStorage(t *testing.T) {
 	if e := identity.Save(path, content); e != nil {
 		t.Fatal(e)
 	}
+	checkOnlyIdentity(t, path)
 	got, e := os.ReadFile(path)
 	if e != nil || !bytes.Equal(got, content) {
 		t.Fatalf("saved: %v", e)
 	}
-	if e := identity.Save(path, content); !errors.Is(e, identity.ErrAlreadyExists) {
+	other := bytes.Clone(content)
+	other[8] ^= 1
+	if e := identity.Save(path, other); !errors.Is(e, identity.ErrAlreadyExists) {
 		t.Fatalf("overwrite: %v", e)
 	}
-	got, _ = os.ReadFile(path)
+	checkOnlyIdentity(t, path)
+	got, e = os.ReadFile(path)
+	if e != nil {
+		t.Fatal(e)
+	}
 	if !bytes.Equal(got, content) {
 		t.Fatal("overwritten")
 	}
@@ -311,6 +322,20 @@ func TestStorage(t *testing.T) {
 			}
 		})
 	}
+	t.Run("unsupported version", func(t *testing.T) {
+		parent := filepath.Join(t.TempDir(), "uncreated")
+		path := filepath.Join(parent, "identity")
+		invalid := bytes.Clone(content)
+		invalid[7] = 0x02
+		if err := identity.Save(path, invalid); !errors.Is(err, identity.ErrUnsupportedVersion) {
+			t.Fatalf("Save unsupported version: %v", err)
+		}
+		for _, p := range []string{path, parent} {
+			if _, err := os.Stat(p); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("created %s: %v", p, err)
+			}
+		}
+	})
 	if _, e := identity.Load(filepath.Join(t.TempDir(), "absent"), []byte("pass")); !errors.Is(e, fs.ErrNotExist) {
 		t.Fatalf("missing: %v", e)
 	}
@@ -322,6 +347,62 @@ func TestStorage(t *testing.T) {
 	if e != nil || actual != filepath.Join(config, "qrypt", "identity") {
 		t.Fatalf("default path: %v", e)
 	}
+}
+
+func checkOnlyIdentity(t *testing.T, path string) {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(path) {
+		t.Fatalf("directory entries: %v, want only identity", entries)
+	}
+}
+
+func TestSaveConcurrent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "private", "identity")
+	const workers = 8
+	var data [workers][]byte
+	var results [workers]error
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range data {
+		data[i] = make([]byte, 96)
+		copy(data[i], "QRYPTID")
+		data[i][7] = 0x01
+		data[i][8] = byte(i + 1)
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			results[i] = identity.Save(path, data[i])
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	winner := -1
+	for i, err := range results {
+		if err == nil {
+			if winner != -1 {
+				t.Fatalf("multiple successful saves: %d and %d", winner, i)
+			}
+			winner = i
+		} else if !errors.Is(err, identity.ErrAlreadyExists) {
+			t.Fatalf("save %d: %v, want ErrAlreadyExists", i, err)
+		}
+	}
+	if winner == -1 {
+		t.Fatal("no successful save")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, data[winner]) {
+		t.Fatal("saved bytes differ from successful caller")
+	}
+	checkOnlyIdentity(t, path)
 }
 
 //go:embed bip39_english.txt
