@@ -47,7 +47,8 @@ The encryption pair is X-Wing, a published combination of X25519 and ML-KEM-768.
 
 All keys of an identity are derived from **one random seed**.
 
-- The seed is stored in a local identity file, encrypted with a key derived from the user's passphrase with Argon2id. Argon2id makes every passphrase guess slow and expensive.
+- The seed is stored in a local identity file, encrypted with a key derived from a passphrase with Argon2id. Argon2id makes every passphrase guess slow and expensive.
+- Qrypt generates the passphrase: 7 random words. The user does not choose it, because people choose weak passphrases.
 - The identity file lives in the user's configuration directory. It is never stored in a repository.
 - The seed is shown once, at creation, as a **recovery phrase** to write on paper.
 

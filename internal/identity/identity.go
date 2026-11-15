@@ -44,14 +44,15 @@ const (
 	argonMemory  = 256 * 1024 // KiB (256 MiB).
 	argonThreads = 4
 
-	recoveryWordCount = 24
-	wordListSize      = 2048
-	bitsPerWord       = 11
-	bitsPerByte       = 8
-	checksumSize      = 1
-	kemLabel          = "qrypt/v1/identity/kem/mlkem768-x25519"
-	ed25519Label      = "qrypt/v1/identity/sig/ed25519"
-	mldsa65Label      = "qrypt/v1/identity/sig/mldsa65"
+	recoveryWordCount   = 24
+	passphraseWordCount = 7
+	wordListSize        = 2048
+	bitsPerWord         = 11
+	bitsPerByte         = 8
+	checksumSize        = 1
+	kemLabel            = "qrypt/v1/identity/kem/mlkem768-x25519"
+	ed25519Label        = "qrypt/v1/identity/sig/ed25519"
+	mldsa65Label        = "qrypt/v1/identity/sig/mldsa65"
 )
 
 var (
@@ -63,8 +64,10 @@ var (
 	ErrUnknownWord = errors.New("recovery: unrecognized value (not in BIP39 dictionary)")
 	// ErrChecksum means the recovery input has an invalid BIP39 checksum.
 	ErrChecksum = errors.New("recovery: checksum mismatch")
-	// ErrEmptyPassphrase means a passphrase was required but not provided.
-	ErrEmptyPassphrase = errors.New("empty passphrase")
+	// ErrPassphraseWordCount means the passphrase does not contain exactly seven words.
+	ErrPassphraseWordCount = errors.New("passphrase: expected exactly 7 words")
+	// ErrPassphraseUnknownWord means a passphrase word is absent from the BIP39 list.
+	ErrPassphraseUnknownWord = errors.New("passphrase: unrecognized word (not in BIP39 dictionary)")
 	// ErrInvalidFormat means the identity file has the wrong size or magic.
 	ErrInvalidFormat = errors.New("invalid identity file format")
 	// ErrUnsupportedVersion means the identity file has an unknown version.
@@ -232,26 +235,71 @@ func passphraseAEAD(passphrase, salt []byte) (cipher.AEAD, error) {
 	return chacha20poly1305.NewX(key)
 }
 
-// Seal encrypts the seed into a 96-byte version-1 identity file with fresh salt and nonce.
-func (id *Identity) Seal(passphrase []byte) ([]byte, error) {
-	if len(passphrase) == 0 {
-		return nil, ErrEmptyPassphrase
+// generatePassphrase draws independent 11-bit indices from crypto/rand.
+// Every index is equally likely because the BIP39 list has exactly 2^11 words.
+func generatePassphrase() (string, error) {
+	phrase := make([]byte, 0, passphraseWordCount*9)
+	defer clear(phrase)
+	var random [2]byte
+	defer clear(random[:])
+	for i := 0; i < passphraseWordCount; i++ {
+		if _, err := rand.Read(random[:]); err != nil {
+			return "", err
+		}
+		if i != 0 {
+			phrase = append(phrase, ' ')
+		}
+		index := (int(random[0])<<8 | int(random[1])) & (wordListSize - 1)
+		phrase = append(phrase, words[index]...)
 	}
+	return string(phrase), nil
+}
+
+// normalizePassphrase validates and canonicalizes typed words without retaining
+// a string copy of the caller's secret. The caller clears the returned bytes.
+func normalizePassphrase(passphrase []byte) ([]byte, error) {
+	lower := bytes.ToLower(passphrase)
+	defer clear(lower)
+	parts := bytes.Fields(lower)
+	if len(parts) != passphraseWordCount {
+		return nil, ErrPassphraseWordCount
+	}
+	for _, word := range parts {
+		// A map lookup keyed by string(word) does not allocate, so no string
+		// copy of the typed word is created.
+		if _, found := wordIndex[string(word)]; !found {
+			return nil, ErrPassphraseUnknownWord
+		}
+	}
+	return bytes.Join(parts, []byte(" ")), nil
+}
+
+// Seal encrypts the seed into a 96-byte version-1 identity file with fresh salt and nonce.
+// It generates a new seven-word passphrase on every call; the returned passphrase
+// is secret and must only be shown to the user.
+func (id *Identity) Seal() (sealed []byte, passphrase string, err error) {
+	passphrase, err = generatePassphrase()
+	if err != nil {
+		return nil, "", err
+	}
+	canonical := []byte(passphrase)
+	defer clear(canonical)
 	file := make([]byte, fileSize)
 	copy(file, magic)
 	file[versionOffset] = version
 	if _, err := rand.Read(file[saltOffset:ciphertextOffset]); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	aead, err := passphraseAEAD(passphrase, file[saltOffset:nonceOffset])
+	aead, err := passphraseAEAD(canonical, file[saltOffset:nonceOffset])
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	aead.Seal(file[ciphertextOffset:ciphertextOffset], file[nonceOffset:ciphertextOffset], id.seed, file[:nonceOffset])
-	return file, nil
+	return file, passphrase, nil
 }
 
-// Open decrypts a version-1 identity file or returns a format, version, or decryption error.
+// Open checks file format first, then validates and canonicalizes seven passphrase
+// words, ignoring case and extra whitespace, before deriving the decryption key.
 func Open(file, passphrase []byte) (*Identity, error) {
 	if len(file) != fileSize || !bytes.Equal(file[:magicSize], []byte(magic)) {
 		return nil, ErrInvalidFormat
@@ -259,10 +307,12 @@ func Open(file, passphrase []byte) (*Identity, error) {
 	if file[versionOffset] != version {
 		return nil, ErrUnsupportedVersion
 	}
-	if len(passphrase) == 0 {
-		return nil, ErrEmptyPassphrase
+	canonical, err := normalizePassphrase(passphrase)
+	if err != nil {
+		return nil, err
 	}
-	aead, err := passphraseAEAD(passphrase, file[saltOffset:nonceOffset])
+	defer clear(canonical)
+	aead, err := passphraseAEAD(canonical, file[saltOffset:nonceOffset])
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +371,8 @@ func Save(path string, sealed []byte) error {
 	return nil
 }
 
-// Load reads at most 97 bytes from disk and opens the identity file.
+// Load reads at most 97 bytes from disk and opens the identity file, checking
+// its format before validating the seven passphrase words.
 func Load(path string, passphrase []byte) (*Identity, error) {
 	file, err := os.Open(path)
 	if err != nil {

@@ -15,6 +15,10 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
+// Fixed seed 000102...1f, salt a0a1...af, nonce b0b1...c7,
+// and the seven-word passphrase "abandon ability able about above absent absorb".
+const goldenFile = "5152595054494401a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c713861e71bae6ac5a4e8415e95078abf7e129613fc8e67824dc680d6800b81cba46a3119dd4c4da2177bd1966edc0661b"
+
 // TestSpecConformance independently applies the fixed constructions in docs/identity.md.
 // It intentionally shares no derivation, file-layout, or passphrase helpers with the package.
 func TestSpecConformance(t *testing.T) {
@@ -86,7 +90,7 @@ func TestSpecConformance(t *testing.T) {
 	file = append(file, 0x01)
 	file = append(file, salt...)
 	file = append(file, nonce...)
-	key := argon2.IDKey([]byte("golden-passphrase"), salt, 3, 262144, 4, 32)
+	key := argon2.IDKey([]byte("abandon ability able about above absent absorb"), salt, 3, 262144, 4, 32)
 	aead, err := chacha20poly1305.NewX(key)
 	clear(key)
 	if err != nil {

@@ -1,4 +1,4 @@
-package identity_test
+package identity
 
 import (
 	"bytes"
@@ -6,12 +6,26 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/fabianramirez-code/qrypt/internal/identity"
+	"strings"
 )
 
-// Fixed seed 000102...1f, salt a0a1...af, nonce b0b1...c7,
-// and the UTF-8 passphrase "golden-passphrase".
-const goldenFile = "5152595054494401a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7ebbe5a42dad5572934945f3729176ee71ac8e5aa7e4c64d2daf5f365038ca77fec2c74d9f6b0094d0ab17264a237e244"
+const goldenFile = "5152595054494401a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c713861e71bae6ac5a4e8415e95078abf7e129613fc8e67824dc680d6800b81cba46a3119dd4c4da2177bd1966edc0661b"
+
+func TestPassphraseGeneratorDistribution(t *testing.T) {
+	seen := make(map[string]bool)
+	for i := 0; i < 8572; i++ {
+		phrase, err := generatePassphrase()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, word := range strings.Fields(phrase) {
+			seen[word] = true
+		}
+	}
+	if len(seen) != 2048 {
+		t.Fatalf("generator reached %d of 2048 words", len(seen))
+	}
+}
 
 func TestGoldenFile(t *testing.T) {
 	file, err := hex.DecodeString(goldenFile)
@@ -32,7 +46,7 @@ func TestGoldenFile(t *testing.T) {
 	if !bytes.Equal(file[24:48], nonce) {
 		t.Fatal("nonce changed")
 	}
-	id, err := identity.Open(file, []byte("golden-passphrase"))
+	id, err := Open(file, []byte("abandon ability able about above absent absorb"))
 	if err != nil {
 		t.Fatal(err)
 	}

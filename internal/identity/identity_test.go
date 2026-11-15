@@ -197,19 +197,33 @@ func TestRecovery(t *testing.T) {
 
 func TestSealOpen(t *testing.T) {
 	id := mustID(t, seed())
-	if _, e := id.Seal(nil); !errors.Is(e, identity.ErrEmptyPassphrase) {
-		t.Fatalf("empty passphrase: %v", e)
-	}
-	pass := []byte("test-passphrase")
 	start := time.Now()
-	a, e := id.Seal(pass)
+	a, pass, e := id.Seal()
 	if e != nil {
 		t.Fatal(e)
 	}
 	t.Logf("one Seal: %s", time.Since(start))
-	b, e := id.Seal(pass)
+	b, otherPass, e := id.Seal()
 	if e != nil {
 		t.Fatal(e)
+	}
+	if pass == otherPass {
+		t.Fatal("reused passphrase")
+	}
+	list := make(map[string]bool)
+	for _, word := range strings.Fields(string(embeddedWords)) {
+		list[word] = true
+	}
+	for _, phrase := range []string{pass, otherPass} {
+		parts := strings.Split(phrase, " ")
+		if len(parts) != 7 || phrase != strings.ToLower(phrase) {
+			t.Fatal("noncanonical passphrase")
+		}
+		for _, word := range parts {
+			if !list[word] {
+				t.Fatal("generated word outside official list")
+			}
+		}
 	}
 	if len(a) != 96 || string(a[:7]) != "QRYPTID" || a[7] != 1 {
 		t.Fatal("layout")
@@ -219,37 +233,66 @@ func TestSealOpen(t *testing.T) {
 			t.Fatalf("reused random field: %v", span)
 		}
 	}
-	opened, e := identity.Open(a, pass)
+	opened, e := identity.Open(a, []byte(pass))
 	if e != nil {
 		t.Fatal(e)
 	}
 	same(t, id.PublicKeys(), opened.PublicKeys())
-	if _, e := identity.Open(a, nil); !errors.Is(e, identity.ErrEmptyPassphrase) {
-		t.Fatalf("empty passphrase: %v", e)
+	mixed := []byte(" \t" + strings.ToUpper(strings.Join(strings.Fields(pass), "  \n")) + "\t \n")
+	opened, e = identity.Open(a, mixed)
+	if e != nil {
+		t.Fatal(e)
 	}
-	if _, e := identity.Open(a, []byte("wrong")); !errors.Is(e, identity.ErrDecryption) {
-		t.Fatalf("wrong passphrase: %v", e)
+	same(t, id.PublicKeys(), opened.PublicKeys())
+	// The rejected passphrases are fixed, not derived from the generated one.
+	// Their words appear in no error message, so the leak check below cannot
+	// fail by chance when a random list word such as "word" or "must" happens
+	// to be part of a message.
+	fixed := []string{"zebra", "zero", "zone", "zoo", "zebra", "zero", "zone"}
+	wrong := strings.Join(fixed, " ")
+	cases := []struct {
+		name, phrase string
+		want         error
+	}{
+		{"empty", "", identity.ErrPassphraseWordCount},
+		{"six", strings.Join(fixed[:6], " "), identity.ErrPassphraseWordCount},
+		{"eight", wrong + " zoo", identity.ErrPassphraseWordCount},
+		{"unknown", "qzxv " + strings.Join(fixed[1:], " "), identity.ErrPassphraseUnknownWord},
+		{"wrong", wrong, identity.ErrDecryption},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := identity.Open(a, []byte(tc.phrase))
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("error: got %v, want %v", err, tc.want)
+			}
+			for _, word := range strings.Fields(tc.phrase) {
+				if strings.Contains(err.Error(), word) {
+					t.Fatal("error leaked passphrase word")
+				}
+			}
+		})
 	}
 	for _, offset := range []int{8, 24, 48} {
 		bad := bytes.Clone(a)
 		bad[offset] ^= 1
-		if _, e := identity.Open(bad, pass); !errors.Is(e, identity.ErrDecryption) {
+		if _, e := identity.Open(bad, []byte(pass)); !errors.Is(e, identity.ErrDecryption) {
 			t.Fatalf("tamper %d: %v", offset, e)
 		}
 	}
 	for _, n := range []int{0, 95, 97} {
-		if _, e := identity.Open(make([]byte, n), pass); !errors.Is(e, identity.ErrInvalidFormat) {
+		if _, e := identity.Open(make([]byte, n), nil); !errors.Is(e, identity.ErrInvalidFormat) {
 			t.Fatalf("length %d: %v", n, e)
 		}
 	}
 	bad := bytes.Clone(a)
 	bad[0] ^= 1
-	if _, e := identity.Open(bad, pass); !errors.Is(e, identity.ErrInvalidFormat) {
+	if _, e := identity.Open(bad, nil); !errors.Is(e, identity.ErrInvalidFormat) {
 		t.Fatal(e)
 	}
 	bad = bytes.Clone(a)
 	bad[7] = 2
-	if _, e := identity.Open(bad, pass); !errors.Is(e, identity.ErrUnsupportedVersion) {
+	if _, e := identity.Open(bad, nil); !errors.Is(e, identity.ErrUnsupportedVersion) {
 		t.Fatal(e)
 	}
 }
@@ -433,8 +476,7 @@ func TestOfficialWordList(t *testing.T) {
 
 func TestLoadRoundTrip(t *testing.T) {
 	id := mustID(t, seed())
-	pass := []byte("test-passphrase")
-	data, e := id.Seal(pass)
+	data, pass, e := id.Seal()
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -442,7 +484,7 @@ func TestLoadRoundTrip(t *testing.T) {
 	if e = identity.Save(path, data); e != nil {
 		t.Fatal(e)
 	}
-	got, e := identity.Load(path, pass)
+	got, e := identity.Load(path, []byte(pass))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -452,7 +494,7 @@ func TestLoadRoundTrip(t *testing.T) {
 		if e := os.WriteFile(p, make([]byte, n), 0600); e != nil {
 			t.Fatal(e)
 		}
-		if _, e := identity.Load(p, pass); !errors.Is(e, identity.ErrInvalidFormat) {
+		if _, e := identity.Load(p, []byte(pass)); !errors.Is(e, identity.ErrInvalidFormat) {
 			t.Fatalf("length %d: %v", n, e)
 		}
 	}
