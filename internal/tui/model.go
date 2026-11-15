@@ -1,4 +1,4 @@
-// Package tui implements the alternate-screen identity creation flow.
+// Package tui implements the alternate-screen identity creation and unlock flows.
 package tui
 
 import (
@@ -27,7 +27,10 @@ const (
 	saving
 	done
 	notSaved
-	existing
+	unlock
+	checkingUnlock
+	unlocked
+	cannotOpen
 )
 
 type sealedMsg struct {
@@ -38,8 +41,9 @@ type sealedMsg struct {
 }
 type openedMsg struct{ err error }
 type savedMsg struct{ err error }
+type unlockedMsg struct{ err error }
 
-// Model holds the state of a single identity-creation session.
+// Model holds the state of a single identity creation or unlock session.
 type Model struct {
 	path          string
 	language      Language
@@ -53,6 +57,7 @@ type Model struct {
 	words         []string
 	input         string
 	message       string
+	visible       bool
 	positions     [3]int
 	index         int
 	generate      func() (*identity.Identity, error)
@@ -63,7 +68,7 @@ type Model struct {
 func New(path string, preferred Language) Model {
 	m := Model{path: path, language: preferred, status: 1, generate: identity.Generate, pick: randomPositions}
 	if _, err := os.Stat(path); err == nil {
-		m.start = existing
+		m.start = unlock
 	} else if !errors.Is(err, os.ErrNotExist) {
 		m.start = notSaved
 		m.message = err.Error()
@@ -81,7 +86,7 @@ func randomPositions() [3]int {
 // ExitStatus reports the result to use after the Bubble Tea program ends.
 func (m Model) ExitStatus() int { return m.status }
 
-// Init returns no command: creation starts only after Enter.
+// Init returns no command: work starts only after Enter.
 func (m Model) Init() tea.Cmd { return nil }
 
 // Update processes terminal input and completion of slow work.
@@ -111,6 +116,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = recovery
 		}
 		m.input = ""
+	case unlockedMsg:
+		if m.screen != checkingUnlock {
+			return m, nil
+		}
+		switch {
+		case v.err == nil:
+			m.input = ""
+			m.message = ""
+			m.screen = unlocked
+			m.status = 0
+		case errors.Is(v.err, identity.ErrPassphraseWordCount), errors.Is(v.err, identity.ErrPassphraseUnknownWord), errors.Is(v.err, identity.ErrDecryption):
+			m.screen = unlock
+			m.message = unlockError(v.err, m.language.text())
+		default:
+			m.input = ""
+			m.screen = cannotOpen
+			m.message = openFailure(v.err, m.language.text())
+		}
 	case savedMsg:
 		if m.screen != saving {
 			return m, nil
@@ -123,21 +146,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = 0
 		}
 	case tea.PasteMsg:
-		if m.screen == confirmPassphrase || m.screen == confirmRecovery {
+		if m.screen == confirmPassphrase || m.screen == confirmRecovery || m.screen == unlock {
 			m.message = m.language.text().pasted
 		}
 	case tea.KeyPressMsg:
-		if m.screen == saving {
+		if m.screen == saving || m.screen == checkingUnlock && !(v.Code == 'c' && v.Mod&tea.ModCtrl != 0) {
 			return m, nil
 		}
 		if v.Code == 'c' && v.Mod&tea.ModCtrl != 0 {
 			m.clearSecrets()
-			if m.screen != done && m.screen != existing {
+			if m.screen != done && m.screen != unlocked {
 				m.status = 1
 			}
 			return m, tea.Quit
 		}
-		if m.screen == done || m.screen == notSaved || m.screen == existing {
+		if m.screen == done || m.screen == notSaved || m.screen == unlocked || m.screen == cannotOpen {
 			return m, tea.Quit
 		}
 		switch m.screen {
@@ -151,10 +174,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.language = Spanish
 			case tea.KeyEnter:
 				m.screen = m.start
-				if m.screen == existing {
-					m.status = 0
+			}
+		case unlock:
+			if v.Code == tea.KeyEsc {
+				m.input = ""
+				return m, tea.Quit
+			}
+			if v.Code == tea.KeyTab {
+				m.visible = !m.visible
+				return m, nil
+			}
+			if v.Code == tea.KeyEnter {
+				typed := []byte(m.input)
+				path := m.path
+				m.message = ""
+				m.screen = checkingUnlock
+				return m, func() tea.Msg {
+					_, err := identity.Load(path, typed)
+					clear(typed)
+					return unlockedMsg{err: err}
 				}
 			}
+			m.editInput(v)
 		case welcome:
 			if v.Code == tea.KeyEsc {
 				return m, tea.Quit
@@ -258,6 +299,26 @@ func passError(err error, text texts) string {
 		return text.wrongPass
 	}
 }
+func unlockError(err error, text texts) string {
+	switch {
+	case errors.Is(err, identity.ErrPassphraseWordCount):
+		return text.wordCount
+	case errors.Is(err, identity.ErrPassphraseUnknownWord):
+		return text.unknownWord
+	default:
+		return text.unlockWrongPass
+	}
+}
+func openFailure(err error, text texts) string {
+	switch {
+	case errors.Is(err, identity.ErrInvalidFormat):
+		return text.invalidIdentity
+	case errors.Is(err, identity.ErrUnsupportedVersion):
+		return text.newerIdentity
+	default:
+		return err.Error()
+	}
+}
 func (m *Model) clearSecrets() {
 	m.id = nil
 	clear(m.sealed)
@@ -310,8 +371,18 @@ func (m Model) viewContent() string {
 			instruction = wrapLine(instruction)
 		}
 		return title.Render("Language / Idioma") + "\n" + first + "\n" + second + "\n" + hint.Render(instruction)
-	case existing:
-		return title.Render(t.existingTitle) + "\n" + wrapLine(t.fileLabel+m.path) + "\n" + t.existingBody + "\n" + hint.Render(t.exitHint)
+	case unlock:
+		field := m.input
+		if !m.visible {
+			field = strings.Repeat("*", len([]rune(field)))
+		}
+		return title.Render(t.unlockTitle) + "\n" + t.unlockPrompt + "\n" + wrapWidth(field, m.width) + "\n" + t.typedWords(len(strings.Fields(m.input))) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.unlockHint)
+	case checkingUnlock:
+		return title.Render(t.unlockTitle) + "\n" + t.checking
+	case unlocked:
+		return title.Render(t.unlockedTitle) + "\n" + t.unlockedBody + "\n" + t.unlockedOutro + "\n" + hint.Render(t.exitHint)
+	case cannotOpen:
+		return title.Render(t.cannotOpenTitle) + "\n" + wrapLine(m.message) + "\n" + wrapLine(t.fileLabel+m.path) + "\n" + hint.Render(t.exitHint)
 	case welcome:
 		return title.Render(t.welcomeTitle) + "\n\n" + t.welcomeBody + "\n\n" + hint.Render(t.welcomeHint)
 	case waitingSeal:
@@ -343,6 +414,21 @@ func wrapLine(text string) string {
 	for _, char := range text {
 		cellWidth := lipgloss.Width(string(char))
 		if width+cellWidth > 60 {
+			result.WriteByte('\n')
+			width = 0
+		}
+		result.WriteRune(char)
+		width += cellWidth
+	}
+	return result.String()
+}
+
+func wrapWidth(text string, maxWidth int) string {
+	var result strings.Builder
+	width := 0
+	for _, char := range text {
+		cellWidth := lipgloss.Width(string(char))
+		if width+cellWidth > maxWidth {
 			result.WriteByte('\n')
 			width = 0
 		}

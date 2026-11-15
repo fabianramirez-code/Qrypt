@@ -52,7 +52,7 @@ func TestMinimumWidthAllScreens(t *testing.T) {
 		m.pass = strings.Join(words[:7], " ")
 		m.positions = [3]int{2, 11, 23}
 		m = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 20})
-		for state := languageScreen; state <= existing; state++ {
+		for state := languageScreen; state <= cannotOpen; state++ {
 			m.screen = state
 			requireView(t, m)
 		}
@@ -161,8 +161,8 @@ func TestSpanishErrorsAndOtherScreens(t *testing.T) {
 	t.Logf("Not saved:\n%s", plain(m))
 	existing := send(t, New(path, Spanish), tea.WindowSizeMsg{Width: 80, Height: 24})
 	existing = enter(t, existing)
-	requireView(t, existing, "Ya existe una identidad", "Abrirla todavía no está disponible.")
-	t.Logf("Existing:\n%s", strings.ReplaceAll(plain(existing), wrapLine("Archivo de identidad: "+path), "Archivo de identidad: <path>"))
+	requireView(t, existing, "Abrir Qrypt", "Palabras escritas: 0 de 7")
+	t.Logf("Unlock:\n%s", plain(existing))
 	small := send(t, existing, tea.WindowSizeMsg{Width: 59, Height: 19})
 	requireView(t, small, "Agranda la ventana a 60 columnas por 20 filas como mínimo.")
 	if !strings.Contains(strings.ReplaceAll(plain(send(t, New(path, Spanish), tea.WindowSizeMsg{Width: 59, Height: 19})), "\n", ""), "Enlarge the window to at least 60 by 20. / Agranda la ventana a 60 por 20 como mínimo.") {

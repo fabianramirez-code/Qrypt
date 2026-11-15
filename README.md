@@ -2,7 +2,7 @@
 
 An ultralight, secure, TUI-based secrets manager designed to run 100% on top of Git repositories as its storage and identity backend, with no need for complex centralized servers.
 
-> **Status:** early stage. Qrypt can create an identity; it cannot unlock one or store secrets yet. Nothing is audited: do not rely on Qrypt for real secrets. The design is documented in [`docs/`](docs/).
+> **Status:** early stage. Qrypt can create an identity and unlock it; it cannot store secrets yet. Nothing is audited: do not rely on Qrypt for real secrets. The design is documented in [`docs/`](docs/).
 
 ## Key Features
 
@@ -54,6 +54,8 @@ go run ./cmd/qrypt
 Qrypt first asks for the language of the interface: English or Spanish.
 
 The first run creates your identity. It shows your passphrase and your recovery phrase so you can write them on paper, and it saves nothing until you have confirmed both. The words of both phrases are always in English. See [Terminal interface](docs/tui.md).
+
+On later runs Qrypt asks for your passphrase to unlock the identity.
 
 At this stage you can delete the identity file to start over. Its location is shown at the end.
 

@@ -3,16 +3,19 @@ package tui
 import "fmt"
 
 type texts struct {
-	welcomeTitle, welcomeBody, welcomeHint                   string
-	generating, passTitle, passIntro, passOutro, secretHint  string
-	confirmPassTitle, confirmPassPrompt, checkHint, checking string
-	recoveryTitle, recoveryIntro, recoveryOutro              string
-	confirmRecoveryTitle, savingTitle, savingBody            string
-	doneTitle, doneBody, fileLabel, doneOutro, exitHint      string
-	failedTitle, failedBody, failedOutro, discard            string
-	existingTitle, existingBody, enlarge                     string
-	wordCount, unknownWord, wrongPass, pasted, alreadyExists string
-	wordProgress, wordPrompt, wrongWord                      func(int) string
+	welcomeTitle, welcomeBody, welcomeHint                      string
+	generating, passTitle, passIntro, passOutro, secretHint     string
+	confirmPassTitle, confirmPassPrompt, checkHint, checking    string
+	recoveryTitle, recoveryIntro, recoveryOutro                 string
+	confirmRecoveryTitle, savingTitle, savingBody               string
+	doneTitle, doneBody, fileLabel, doneOutro, exitHint         string
+	failedTitle, failedBody, failedOutro, discard               string
+	enlarge, unlockTitle, unlockPrompt, unlockHint              string
+	unlockedTitle, unlockedBody, unlockedOutro, cannotOpenTitle string
+	unlockWrongPass, invalidIdentity, newerIdentity             string
+	wordCount, unknownWord, wrongPass, pasted, alreadyExists    string
+	wordProgress, wordPrompt, wrongWord                         func(int) string
+	typedWords                                                  func(int) string
 }
 
 var english = texts{
@@ -23,8 +26,12 @@ var english = texts{
 	confirmRecoveryTitle: "Confirm recovery phrase", savingTitle: "Saving", savingBody: "Saving your identity. Please wait.",
 	doneTitle: "Done", doneBody: "Your identity is ready.", fileLabel: "Identity file: ", doneOutro: "Keep both papers safe.", exitHint: "Any key: exit",
 	failedTitle: "Not saved", failedBody: "Qrypt could not save your identity:", failedOutro: "Nothing was saved.\nThe words you wrote down belong to no identity.", discard: "Discard them.",
-	existingTitle: "Identity exists", existingBody: "Unlocking is not available yet.", enlarge: "Enlarge the window to at least 60 columns by 20 rows.",
-	wordCount: "Type exactly 7 words.", unknownWord: "One of the words is not valid. Check the spelling.", wrongPass: "That is not the passphrase shown. Check your paper.", pasted: "Pasting is not accepted. Type the words from your paper.", alreadyExists: "An identity file already exists.",
+	enlarge:     "Enlarge the window to at least 60 columns by 20 rows.",
+	unlockTitle: "Unlock Qrypt", unlockPrompt: "Type your passphrase (7 words):", unlockHint: "Enter: unlock  Tab: show/hide  Esc: quit",
+	unlockedTitle: "Unlocked", unlockedBody: "Your passphrase is correct.", unlockedOutro: "Storing secrets is not available yet.", cannotOpenTitle: "Cannot open the identity",
+	unlockWrongPass: "Wrong passphrase, or the identity file is damaged.", invalidIdentity: "The identity file is not a valid Qrypt identity.", newerIdentity: "This identity was created by a newer version of Qrypt.",
+	typedWords: func(n int) string { return fmt.Sprintf("Words typed: %d of 7", n) },
+	wordCount:  "Type exactly 7 words.", unknownWord: "One of the words is not valid. Check the spelling.", wrongPass: "That is not the passphrase shown. Check your paper.", pasted: "Pasting is not accepted. Type the words from your paper.", alreadyExists: "An identity file already exists.",
 	wordProgress: func(i int) string { return fmt.Sprintf("Word %d of 3", i) }, wordPrompt: func(i int) string { return fmt.Sprintf("Type word %d:", i) }, wrongWord: func(i int) string { return fmt.Sprintf("That is not word %d. Check your paper.", i) },
 }
 
@@ -36,7 +43,11 @@ var spanish = texts{
 	confirmRecoveryTitle: "Confirmar frase de recuperación", savingTitle: "Guardando", savingBody: "Guardando tu identidad. Espera un momento.",
 	doneTitle: "Listo", doneBody: "Tu identidad está lista.", fileLabel: "Archivo de identidad: ", doneOutro: "Guarda bien los dos papeles.", exitHint: "Cualquier tecla: salir",
 	failedTitle: "No se guardó", failedBody: "Qrypt no pudo guardar tu identidad:", failedOutro: "No se guardó nada.\nLas palabras que anotaste no pertenecen a ninguna identidad.", discard: "Deséchalas.",
-	existingTitle: "Ya existe una identidad", existingBody: "Abrirla todavía no está disponible.", enlarge: "Agranda la ventana a 60 columnas por 20 filas como mínimo.",
-	wordCount: "Escribe exactamente 7 palabras.", unknownWord: "Una de las palabras no es válida. Revisa cómo está escrita.", wrongPass: "Esa no es la frase de contraseña mostrada. Revisa tu papel.", pasted: "No se acepta pegar. Escribe las palabras de tu papel.", alreadyExists: "Ya existe un archivo de identidad.",
+	enlarge:     "Agranda la ventana a 60 columnas por 20 filas como mínimo.",
+	unlockTitle: "Abrir Qrypt", unlockPrompt: "Escribe tu frase de contraseña (7 palabras):", unlockHint: "Enter: abrir  Tab: mostrar/ocultar  Esc: salir",
+	unlockedTitle: "Identidad abierta", unlockedBody: "Tu frase de contraseña es correcta.", unlockedOutro: "Guardar secretos todavía no está disponible.", cannotOpenTitle: "No se puede abrir la identidad",
+	unlockWrongPass: "Frase incorrecta, o el archivo de identidad está dañado.", invalidIdentity: "El archivo de identidad no es una identidad válida de Qrypt.", newerIdentity: "Esta identidad es de una versión más nueva de Qrypt.",
+	typedWords: func(n int) string { return fmt.Sprintf("Palabras escritas: %d de 7", n) },
+	wordCount:  "Escribe exactamente 7 palabras.", unknownWord: "Una de las palabras no es válida. Revisa cómo está escrita.", wrongPass: "Esa no es la frase de contraseña mostrada. Revisa tu papel.", pasted: "No se acepta pegar. Escribe las palabras de tu papel.", alreadyExists: "Ya existe un archivo de identidad.",
 	wordProgress: func(i int) string { return fmt.Sprintf("Palabra %d de 3", i) }, wordPrompt: func(i int) string { return fmt.Sprintf("Escribe la palabra %d:", i) }, wrongWord: func(i int) string { return fmt.Sprintf("Esa no es la palabra %d. Revisa tu papel.", i) },
 }

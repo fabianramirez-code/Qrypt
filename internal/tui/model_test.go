@@ -168,30 +168,6 @@ func TestLanguageTag(t *testing.T) {
 	}
 }
 
-func TestExisting(t *testing.T) {
-	m, path, _ := fixture(t)
-	data := []byte("existing")
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	m = New(path, English)
-	m = enter(t, m)
-	m = send(t, m, tea.WindowSizeMsg{Width: 80, Height: 24})
-	if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), path) || !strings.Contains(plain(m), "not available") {
-		t.Fatal(plain(m))
-	}
-	m = enter(t, m)
-	if m.ExitStatus() != 0 {
-		t.Fatal(m.ExitStatus())
-	}
-	after, err := os.ReadFile(path)
-	if err != nil || string(after) != string(data) {
-		t.Fatal(err)
-	}
-}
 func TestFullFlow(t *testing.T) {
 	m, path, words := fixture(t)
 	capture := func(step int, view string) {
@@ -542,7 +518,7 @@ func TestCtrlCExitStatuses(t *testing.T) {
 	if err != nil || loaded.RecoveryPhrase() != strings.Join(words, " ") {
 		t.Fatalf("saved identity does not open: %v", err)
 	}
-	check("existing", enter(t, New(path, English)), 0)
+	check("unlock", enter(t, New(path, English)), 1)
 
 	failed, failedPath, failedWords := fixture(t)
 	failed, _ = toCheck(t, failed)
@@ -629,7 +605,7 @@ func TestPasteOtherScreens(t *testing.T) {
 	m, _, words := fixture(t)
 	m.words = words
 	m.pass = "abandon abandon abandon abandon abandon abandon abandon"
-	for _, screen := range []screen{welcome, waitingSeal, passphrase, waitingOpen, recovery, saving, done, notSaved, existing} {
+	for _, screen := range []screen{welcome, waitingSeal, passphrase, waitingOpen, recovery, saving, done, notSaved, unlocked, cannotOpen} {
 		m.screen = screen
 		before := m.View().Content
 		next, cmd := m.Update(tea.PasteMsg{Content: "ignored"})
@@ -700,7 +676,7 @@ func TestAltScreen(t *testing.T) {
 	m = New(path, English)
 	check("language")
 	m = enter(t, m)
-	check("existing identity")
+	check("unlock")
 }
 
 func TestWindowSize(t *testing.T) {
