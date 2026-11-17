@@ -126,22 +126,22 @@ func TestInvalidNamesAreRejectedAndLeaveTheVaultUnchanged(t *testing.T) {
 		if err := v.Put(name, []byte("x")); !errors.Is(err, vault.ErrInvalidName) {
 			t.Fatalf("Put(%q) = %v", name, err)
 		}
+		if !sameSnapshot(before, snapshot(t, dir)) {
+			t.Fatal("rejected name changed files")
+		}
 	}
 	if err := v.Put(strings.Repeat("é", 127), []byte("x")); err != nil {
 		t.Fatalf("255-byte name rejected: %v", err)
 	}
+	afterValid := snapshot(t, dir)
 	if err := v.Put("keep", []byte("2")); !errors.Is(err, vault.ErrNameExists) {
 		t.Fatalf("duplicate Put = %v", err)
 	}
-	delete(before, "")
-	after := snapshot(t, dir)
-	for path, content := range before {
-		if after[path] != content {
-			t.Fatalf("%s changed after rejected input", path)
-		}
+	if !sameSnapshot(afterValid, snapshot(t, dir)) {
+		t.Fatal("duplicate changed files")
 	}
-	if len(after) != len(before)+1 {
-		t.Fatalf("rejected input left files: %d before, %d after", len(before), len(after))
+	if len(afterValid) != len(before)+1 {
+		t.Fatalf("valid insertion file count: %d before, %d after", len(before), len(afterValid))
 	}
 }
 
@@ -220,10 +220,10 @@ func TestListDoesNotNeedValues(t *testing.T) {
 	if err := os.WriteFile(file, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if names, err := v.List(); err != nil || !slices.Equal(names, []string{"a"}) {
-		t.Fatalf("List with damaged value = %v, %v", names, err)
+	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
+		t.Fatalf("List with damaged value = %v", err)
 	}
-	if _, err := v.Get("a"); !errors.Is(err, vault.ErrDecryption) {
+	if _, err := v.Get("a"); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("Get with damaged value = %v", err)
 	}
 }
@@ -247,14 +247,14 @@ func TestTamperingIsDetected(t *testing.T) {
 	}
 	for _, data := range [][]byte{original[:len(original)-1], append(bytes.Clone(original), 0), original[:10], {}} {
 		_ = os.WriteFile(file, data, 0600)
-		if _, err := v.List(); !errors.Is(err, vault.ErrInvalidFormat) {
+		if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
 			t.Fatalf("size %d: List = %v", len(data), err)
 		}
 	}
 	data := bytes.Clone(original)
 	data[7] = 2
 	_ = os.WriteFile(file, data, 0600)
-	if _, err := v.List(); !errors.Is(err, vault.ErrUnsupportedVersion) {
+	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("unknown version: %v", err)
 	}
 }
@@ -269,7 +269,7 @@ func TestFileIsBoundToItsNameScopeAndRole(t *testing.T) {
 	if err := os.Rename(file, renamed); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := v.List(); !errors.Is(err, vault.ErrDecryption) {
+	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("renamed file = %v", err)
 	}
 	_ = os.Remove(renamed)
@@ -283,7 +283,7 @@ func TestFileIsBoundToItsNameScopeAndRole(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(otherDir, "secrets", filepath.Base(file)), data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.List(); !errors.Is(err, vault.ErrDecryption) {
+	if _, err := other.List(); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("file from another scope = %v", err)
 	}
 
@@ -292,7 +292,7 @@ func TestFileIsBoundToItsNameScopeAndRole(t *testing.T) {
 	swapped := bytes.Clone(data)
 	copy(swapped[8:32], data[304:328])
 	_ = os.WriteFile(file, swapped, 0600)
-	if _, err := v.List(); !errors.Is(err, vault.ErrDecryption) {
+	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("swapped nonce = %v", err)
 	}
 }

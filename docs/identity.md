@@ -46,7 +46,7 @@ X-Wing is a published hybrid of ML-KEM-768 and X25519: the `MLKEM768-X25519` KEM
 
 ### Signing key pairs
 
-Qrypt derives two independent signing key pairs: Ed25519 (32-byte public key) and ML-DSA-65 (1,952-byte public key). How the two signatures are combined is decided with the signing feature.
+Qrypt derives two independent signing key pairs: Ed25519 (32-byte public key) and ML-DSA-65 (1,952-byte public key). A signed object carries both signatures over the same message and is valid only if both verify, as the vault [manifest](vault.md#6-integrity) does.
 
 ## 4. Identity file
 

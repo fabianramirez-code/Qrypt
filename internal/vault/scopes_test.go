@@ -104,7 +104,7 @@ func TestScopeNameFormatAndIntegrity(t *testing.T) {
 	if e := os.WriteFile(path, next, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := v.Name(); !errors.Is(e, vault.ErrDecryption) {
+	if _, e := v.Name(); !errors.Is(e, vault.ErrIntegrity) {
 		t.Fatalf("tamper: %v", e)
 	}
 }
@@ -133,7 +133,7 @@ func TestScopeNameValidationAndBinding(t *testing.T) {
 	if e := os.WriteFile(filepath.Join(root, "scopes", b.ID(), "name"), from, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := b.Name(); !errors.Is(e, vault.ErrDecryption) {
+	if _, e := b.Name(); !errors.Is(e, vault.ErrIntegrity) {
 		t.Fatalf("foreign name: %v", e)
 	}
 }
@@ -180,7 +180,7 @@ func TestScopeManagement(t *testing.T) {
 	if e := os.WriteFile(filepath.Join(root, "scopes", personal.ID(), "secrets", filepath.Base(foreign)), blob, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := personal.List(); !errors.Is(e, vault.ErrDecryption) {
+	if _, e := personal.List(); !errors.Is(e, vault.ErrIntegrity) {
 		t.Fatalf("foreign ciphertext: %v", e)
 	}
 	if e := os.Remove(filepath.Join(root, "scopes", personal.ID(), "secrets", filepath.Base(foreign))); e != nil {
@@ -232,7 +232,7 @@ func TestOpenScopesRejectsDamagedOrForeign(t *testing.T) {
 	if e := os.WriteFile(path, broken, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if list, e := vault.OpenScopes(root, id); list != nil || !errors.Is(e, vault.ErrDecryption) {
+	if list, e := vault.OpenScopes(root, id); list != nil || !errors.Is(e, vault.ErrIntegrity) {
 		t.Fatalf("damaged: %v %v", list, e)
 	}
 	if e := os.WriteFile(path, original, 0600); e != nil {

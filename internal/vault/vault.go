@@ -20,6 +20,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"crypto/ed25519"
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -116,6 +118,11 @@ type Vault struct {
 	nameKey      []byte
 	valueKey     []byte
 	scopeNameKey []byte
+	edSigning    ed25519.PrivateKey
+	mlSeed       []byte
+	edPublic     []byte
+	mlPublic     []byte
+	manifest     Manifest
 }
 
 func derive(scopeKey []byte, label string) []byte {
@@ -126,14 +133,20 @@ func derive(scopeKey []byte, label string) []byte {
 	return key
 }
 
-func newVault(dir string, scopeID, scopeKey []byte) *Vault {
-	return &Vault{
+func newVault(dir string, scopeID, scopeKey []byte, id *identity.Identity) *Vault {
+	ed := id.Ed25519PrivateKey()
+	ml := id.MLDSA65PrivateKey()
+	public := id.PublicKeys()
+	v := &Vault{
 		dir:          dir,
 		scopeID:      scopeID,
 		nameKey:      derive(scopeKey, nameLabel),
 		valueKey:     derive(scopeKey, valueLabel),
 		scopeNameKey: derive(scopeKey, scopeNameLabel),
+		edSigning:    ed, mlSeed: ml.Seed(), edPublic: public.Ed25519, mlPublic: public.MLDSA65,
 	}
+	*ml = mldsa65.PrivateKey{}
+	return v
 }
 
 func wrapInfo(scopeID []byte) []byte {
@@ -178,7 +191,12 @@ func Create(dir string, id *identity.Identity) (*Vault, error) {
 	if err := writeNew(filepath.Join(dir, scopeName), file); err != nil {
 		return nil, err
 	}
-	return newVault(dir, scopeID, scopeKey), nil
+	v := newVault(dir, scopeID, scopeKey, id)
+	if err := v.openManifest(); err != nil {
+		v.Close()
+		return nil, err
+	}
+	return v, nil
 }
 
 // Open reads the scope file in dir and unwraps the scope key with the identity.
@@ -206,7 +224,12 @@ func Open(dir string, id *identity.Identity) (*Vault, error) {
 		return nil, ErrDecryption
 	}
 	defer clear(scopeKey)
-	return newVault(dir, scopeID, scopeKey), nil
+	v := newVault(dir, scopeID, scopeKey, id)
+	if err := v.openManifest(); err != nil {
+		v.Close()
+		return nil, err
+	}
+	return v, nil
 }
 
 // Close erases the keys held in memory. The vault cannot be used afterward.
@@ -214,6 +237,9 @@ func (v *Vault) Close() {
 	clear(v.nameKey)
 	clear(v.valueKey)
 	clear(v.scopeNameKey)
+	clear(v.edSigning)
+	clear(v.mlSeed)
+	v.edSigning, v.mlSeed = nil, nil
 	v.nameKey, v.valueKey, v.scopeNameKey = nil, nil, nil
 }
 
@@ -376,6 +402,9 @@ func (v *Vault) scan() ([]entry, error) {
 	if v.nameKey == nil {
 		return nil, ErrClosed
 	}
+	if err := v.checkDisk(); err != nil {
+		return nil, err
+	}
 	files, err := os.ReadDir(filepath.Join(v.dir, secretDir))
 	if err != nil {
 		return nil, err
@@ -388,6 +417,9 @@ func (v *Vault) scan() ([]entry, error) {
 		}
 		file, err := readLimited(v.secretPath(id), maxSecretFile)
 		if err != nil {
+			return nil, err
+		}
+		if err := v.verifyFile(id, file); err != nil {
 			return nil, err
 		}
 		name, err := v.decodeName(id, file)
@@ -454,7 +486,9 @@ func (v *Vault) Put(name string, value []byte) error {
 	if err != nil {
 		return err
 	}
-	return writeNew(v.secretPath(id), file)
+	m := v.nextManifest()
+	m.Files[hex.EncodeToString(id)] = sha256.Sum256(file)
+	return v.change(m, func() error { return writeNew(v.secretPath(id), file) })
 }
 
 // Update replaces the value of an existing secret, keeping its file name.
@@ -470,7 +504,9 @@ func (v *Vault) Update(name string, value []byte) error {
 	if err != nil {
 		return err
 	}
-	return writeReplacing(v.secretPath(id), file)
+	m := v.nextManifest()
+	m.Files[hex.EncodeToString(id)] = sha256.Sum256(file)
+	return v.change(m, func() error { return writeReplacing(v.secretPath(id), file) })
 }
 
 // Get returns the value of a secret, decrypting only that file's value.
@@ -481,6 +517,9 @@ func (v *Vault) Get(name string) ([]byte, error) {
 	}
 	file, err := readLimited(v.secretPath(id), maxSecretFile)
 	if err != nil {
+		return nil, err
+	}
+	if err := v.verifyFile(id, file); err != nil {
 		return nil, err
 	}
 	return v.decodeValue(id, file)
@@ -506,7 +545,9 @@ func (v *Vault) Delete(name string) error {
 	if err != nil {
 		return err
 	}
-	return os.Remove(v.secretPath(id))
+	m := v.nextManifest()
+	delete(m.Files, hex.EncodeToString(id))
+	return v.change(m, func() error { return os.Remove(v.secretPath(id)) })
 }
 
 func readLimited(path string, max int) ([]byte, error) {

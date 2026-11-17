@@ -3,6 +3,7 @@ package vault
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -36,6 +37,13 @@ func (v *Vault) Name() (string, error) {
 	if v.scopeNameKey == nil {
 		return "", ErrClosed
 	}
+	if err := v.checkDisk(); err != nil {
+		return "", err
+	}
+	return v.nameUnchecked()
+}
+
+func (v *Vault) nameUnchecked() (string, error) {
 	file, err := readLimited(filepath.Join(v.dir, scopeNameFile), valueNonceOffset)
 	if errors.Is(err, os.ErrNotExist) {
 		return "Personal", nil
@@ -90,7 +98,12 @@ func (v *Vault) SetName(name string) error {
 	file = append(file, formatVersion)
 	file = append(file, nonce...)
 	file = append(file, sealed...)
-	return writeReplacing(filepath.Join(v.dir, scopeNameFile), file)
+	if err := v.ready(); err != nil {
+		return err
+	}
+	m := v.nextManifest()
+	m.NameHash = sha256.Sum256(file)
+	return v.change(m, func() error { return writeReplacing(filepath.Join(v.dir, scopeNameFile), file) })
 }
 
 // moveEarlierLayout moves the original root-level scope and secrets directory,
@@ -99,12 +112,14 @@ func moveEarlierLayout(root string, id *identity.Identity) error {
 	oldScope := filepath.Join(root, scopeName)
 	_, err := os.Stat(oldScope)
 	if err == nil {
-		v, err := Open(root, id)
+		raw, err := readLimited(oldScope, scopeFileSize)
 		if err != nil {
 			return err
 		}
-		defer v.Close()
-		dest := filepath.Join(root, "scopes", v.ID())
+		if len(raw) != scopeFileSize || string(raw[:7]) != scopeMagic {
+			return ErrInvalidFormat
+		}
+		dest := filepath.Join(root, "scopes", hex.EncodeToString(raw[8:24]))
 		if err := os.MkdirAll(dest, 0700); err != nil {
 			return err
 		}
@@ -117,11 +132,21 @@ func moveEarlierLayout(root string, id *identity.Identity) error {
 		if err := os.Rename(oldScope, target); err != nil {
 			return err
 		}
+		for _, entry := range []string{scopeNameFile, "manifest", "manifest.next"} {
+			from := filepath.Join(root, entry)
+			if _, e := os.Stat(from); e == nil {
+				if e = os.Rename(from, filepath.Join(dest, entry)); e != nil {
+					return e
+				}
+			} else if !errors.Is(e, os.ErrNotExist) {
+				return e
+			}
+		}
 		oldSecrets := filepath.Join(root, secretDir)
-		if _, err := os.Stat(oldSecrets); err == nil {
+		if _, e := os.Stat(oldSecrets); e == nil {
 			return os.Rename(oldSecrets, filepath.Join(dest, secretDir))
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return err
+		} else if !errors.Is(e, os.ErrNotExist) {
+			return e
 		}
 		return nil
 	}
@@ -157,15 +182,13 @@ func moveEarlierLayout(root string, id *identity.Identity) error {
 			if dest != "" {
 				return ErrInvalidFormat
 			}
-			v, e := Open(path, id)
+			raw, e := readLimited(filepath.Join(path, scopeName), scopeFileSize)
 			if e != nil {
 				return e
 			}
-			if v.ID() != d.Name() {
-				v.Close()
+			if len(raw) != scopeFileSize || hex.EncodeToString(raw[8:24]) != d.Name() {
 				return ErrInvalidFormat
 			}
-			v.Close()
 			dest = path
 		} else if err != nil {
 			return err
@@ -174,7 +197,20 @@ func moveEarlierLayout(root string, id *identity.Identity) error {
 	if dest == "" {
 		return ErrInvalidFormat
 	}
-	return os.Rename(oldSecrets, filepath.Join(dest, secretDir))
+	if err := os.Rename(oldSecrets, filepath.Join(dest, secretDir)); err != nil {
+		return err
+	}
+	for _, entry := range []string{scopeNameFile, "manifest", "manifest.next"} {
+		from := filepath.Join(root, entry)
+		if _, e := os.Stat(from); e == nil {
+			if e = os.Rename(from, filepath.Join(dest, entry)); e != nil {
+				return e
+			}
+		} else if !errors.Is(e, os.ErrNotExist) {
+			return e
+		}
+	}
+	return nil
 }
 
 func validScopeID(s string) bool {
@@ -348,6 +384,9 @@ func RemoveScope(v *Vault) error {
 	}
 	if secrets != 0 {
 		return ErrScopeNotEmpty
+	}
+	if err := v.checkDisk(); err != nil {
+		return err
 	}
 	// One rename takes the scope out of the vault; a crash while its files are
 	// being removed then leaves only an ignored directory, never half a scope.

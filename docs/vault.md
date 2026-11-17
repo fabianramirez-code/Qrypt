@@ -141,7 +141,80 @@ vault/
 - **Owner only.** The directories are created with mode `0700` and the files with mode `0600`. On Windows these modes have no effect, and the files rely on the permissions of the user profile.
 - **Deleting.** Deleting a secret removes its file. Qrypt does not overwrite the bytes first, because overwriting is not reliable on modern storage. Anyone who copied the file earlier can still read it, which is why removed access always requires changing the real secret.
 
-## 6. What the files reveal
+## 6. Integrity
+
+Encryption stops anyone from reading or altering a file. It does not stop someone who can write to the vault from deleting a file, or from putting back an older copy of one. Each scope therefore has a **manifest**: a signed description of the files the scope holds now. Qrypt keeps no history: the manifest describes the current state only.
+
+### Manifest file
+
+The file `manifest` in the scope directory:
+
+| Offset | Size  | Field                                                                              |
+| ------ | ----- | ---------------------------------------------------------------------------------- |
+| 0      | 7     | Magic: the ASCII bytes `QRYPTSM`                                                   |
+| 7      | 1     | Version: `0x01`                                                                    |
+| 8      | 16    | Scope id                                                                           |
+| 24     | 8     | Generation, as a big-endian 64-bit integer. The first manifest of a scope is 1.    |
+| 32     | 32    | SHA-256 of the scope name file, or 32 zero bytes when the scope has no name file   |
+| 64     | 4     | Entry count, as a big-endian 32-bit integer                                        |
+| 68     | 48×n  | Entries, in ascending order of file id: the file id (16 bytes) and the SHA-256 of that secret file (32 bytes) |
+| …      | 64    | Ed25519 signature                                                                  |
+| …      | 3,309 | ML-DSA-65 signature                                                                |
+
+- **What is signed:** the ASCII label `qrypt/v1/vault/manifest` followed by every byte of the file before the signatures. Both signatures cover the same message.
+- **Both signatures are required.** A manifest is valid only if the Ed25519 signature and the ML-DSA-65 signature both verify. An attacker must break both algorithms to forge one.
+- **Keys:** the signing keys of the [identity](identity.md#signing-key-pairs) that is the scope's member. ML-DSA-65 is used in its deterministic variant, with an empty context string.
+- **Not secret.** The manifest holds only what the directory already shows: how many files there are and their opaque names.
+
+### Writing
+
+Every change to a scope (adding, updating or deleting a secret, naming the scope) produces a manifest with the generation raised by one. So that a crash can never leave a scope that looks tampered with, Qrypt writes in this order:
+
+1. The new manifest, describing the scope as it will be, under the name `manifest.next`.
+2. The change itself, which is already whole or not at all.
+3. `manifest.next` renamed over `manifest`.
+
+### Reading
+
+When Qrypt opens a scope it checks both signatures of the manifest, hashes the scope's files, and compares:
+
+- **The files match the manifest:** the scope is intact. A leftover `manifest.next` is removed.
+- **The files match a valid `manifest.next` whose generation is one more than the manifest's:** a change was interrupted after step 2. Qrypt completes it with the rename of step 3.
+- **Anything else:** the scope has a problem, described below.
+
+While a scope is open, every file Qrypt reads is checked against the manifest again, and a listing checks that no file is missing or unexpected.
+
+Temporary files, with the extension `.tmp`, are not part of the scope and are ignored.
+
+### Local record
+
+A manifest proves that a state was written by the identity. It cannot prove that the state is the latest one: an older manifest with its older files is just as valid. To detect that, Qrypt keeps a record **outside the vault**, in the file `state` next to the identity file. For each scope it holds the scope id, the last generation seen, and the SHA-256 of that manifest.
+
+| The manifest's generation is…                                   | Qrypt concludes                                                        |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Higher than the record                                          | A newer state, for example written on another device. Accepted.        |
+| Equal to the record, with the same hash                         | Unchanged. Accepted.                                                   |
+| Equal to the record, with a different hash                      | Problem: two different states claim the same generation.               |
+| Lower than the record                                           | Problem: the scope was rolled back to an older state.                  |
+| Recorded scope whose directory or manifest is missing           | Problem: the scope was removed outside Qrypt.                          |
+| A scope with a manifest and no record                           | First time on this device. Accepted and recorded.                      |
+| A scope with no manifest and no record                          | Created before manifests existed. Qrypt writes its first manifest.     |
+
+The record is written whole or not at all, after each change. It holds no secret.
+
+### Problems and accepting
+
+A scope with a problem is not opened. Qrypt reports what it found: how many files are missing, unexpected, changed, or cannot be decrypted, or the two generations of a rollback. It cannot name a missing secret, because the name was inside the missing file. The other scopes open normally.
+
+Damage happens without an attack: a disk error, an interrupted synchronization tool. So the user may **accept** the scope as it is now, after an explicit confirmation. Accepting:
+
+- removes the files that cannot be decrypted with the scope's keys, because they hold nothing readable and would make every listing fail;
+- signs a new manifest for the files that remain, with a generation higher than both the old manifest's and the record's;
+- updates the record. For a scope that was removed, it deletes its record.
+
+Accepting never brings a file back. Whatever was lost stays lost.
+
+## 7. What the files reveal
 
 An attacker who copies the vault learns:
 
@@ -151,15 +224,17 @@ An attacker who copies the vault learns:
 
 They learn nothing about names or values without the scope key, which needs the identity.
 
-## 7. Limits
+## 8. Limits
 
-- **Tampering and rollback are not detected yet.** Anyone able to write to the vault can delete a file or put back an older copy of one. A person who can write can also build a scope file wrapped to their own key. The AEAD stops them from changing what a file says, not from replacing the whole vault. Detecting this needs the signed member list and chained log of the [threat model](threat-model.md#3-tampering-with-the-vault-repository), which are not part of version 1.
+- **The local record is not protected.** Someone who can write to the user's configuration directory can change or delete the record, and with it hide a rollback. Integrity protects a vault that travels (a mirror, a synchronized folder), not a device that an attacker controls.
+- **A first open cannot detect a rollback.** On a device with no record, Qrypt checks that the scope was signed by the identity, but it cannot know whether it is the latest state.
+- **A whole vault with its record.** Putting back an older vault together with its older record is not detected.
 - **Listing opens every name.** To list secrets or check that a name is free, Qrypt reads every file in the scope and decrypts the 256-byte name segments, not the values. The [threat model](threat-model.md#1-infected-device) already accepts that an infected device can read what the program holds in memory.
-- **One damaged file stops listing.** If a name segment fails to decrypt, Qrypt reports the error instead of skipping the file, so damage is never hidden. Showing other secrets still needs the listing, so a damaged file has to be repaired or removed by hand in version 1.
+- **One damaged file stops its scope** until the user [accepts](#problems-and-accepting) the scope without it. Damage is never hidden and never repaired silently.
 - **One writer at a time.** Two programs adding the same name at the same moment can both succeed. Version 1 does not lock the vault.
 - **Secrets in memory:** see the limit described in the [threat model](threat-model.md#1-infected-device).
 
-## 8. Libraries
+## 9. Libraries
 
 No new dependency. HPKE with X-Wing, HKDF-SHA-256, SHA-256, and the random generator come from the Go standard library; XChaCha20-Poly1305 comes from `golang.org/x/crypto`, already used by the identity.
 
@@ -168,5 +243,4 @@ The implementation is the package `internal/vault`. Its tests rebuild a scope fi
 ## Open questions
 
 - **Members:** adding and removing members, and trusting their public keys.
-- **Signatures and the change log:** how the Ed25519 and ML-DSA-65 signatures are combined and what they cover.
-- **Synchronization:** how the vault moves between devices and a repository.
+- **Several devices:** merging changes made on two devices. Today a [mirror](mirror.md) carries the state of one device.

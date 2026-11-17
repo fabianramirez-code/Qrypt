@@ -154,7 +154,7 @@ The focused-pane footer hints include the focus keys (Tab/Right forward, Shift+T
 - **Pasting is accepted** in the name and value fields. A pasted value with a line break is rejected, because values typed here are one line. Values of several lines need a later import feature.
 - **Limits are checked when the user presses Enter.** A name must follow the [vault rules](vault.md#name) and a value may be at most 64 KiB. Rejected input leaves the vault unchanged and keeps what was typed.
 - **Deleting needs a Y.** Deleting is permanent: the file is removed and Qrypt keeps no copy.
-- **A damaged vault file** makes the list fail, as [documented](vault.md#7-limits). The screen says so and Qrypt exits with status 1.
+- **A damaged vault file** makes the list fail, as [documented](vault.md#8-limits). The screen says so and Qrypt exits with status 1.
 - **Messages never repeat a value.**
 
 ## Copying and locking

@@ -93,4 +93,4 @@ These are not decided yet:
 
 - **Vault format:** file layout in the repository, exact scope boundaries (for example, whether categories get their own key), and how names and other metadata are encrypted.
 - **Trust in public keys:** how a client verifies that a public key really belongs to a member. See the [threat model](threat-model.md#3-tampering-with-the-vault-repository).
-- **Constructions for the vault:** the AEAD for secrets, how scope keys are wrapped, and how the two signatures are combined. The identity constructions are already fixed in [Identity](identity.md). Qrypt uses published, publicly reviewed constructions rather than custom ones.
+- **Constructions for several members:** the vault constructions for one member are fixed in [Vault](vault.md), including how the two signatures are combined. Wrapping a scope key for other people and signing the member list are not decided yet.

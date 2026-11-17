@@ -161,7 +161,7 @@ func TestVaultAddShowEditAndDelete(t *testing.T) {
 		t.Fatalf("delete did not return empty list: %q", plain(m))
 	}
 	after := vaultFiles(t, dir)
-	if len(after) != 2 || len(before) != 3 { // Scope and encrypted name files remain.
+	if len(after) != 3 || len(before) != 4 { // The scope, name and manifest files remain.
 		t.Fatalf("deleted item file remains: %d -> %d files", len(before), len(after))
 	}
 }

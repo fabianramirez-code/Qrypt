@@ -19,7 +19,7 @@ Ordered from most to least likely.
 | --- | ------------------------------------------ | --------------------------------------------------------------- |
 | 1   | Infected device                            | Limit what is exposed while unlocked                            |
 | 2   | Weak passphrase or exposed recovery phrase | Argon2id, generated passphrase, recovery phrase on paper only   |
-| 3   | Tampering with the vault repository        | Signed member list and a chained log                            |
+| 3   | Tampering with the vault repository        | Signed member list and a signed manifest per scope              |
 | 4   | Git history keeps old access               | Rotate scope keys and the real secrets                          |
 | 5   | Mistakes in Qrypt's own cryptographic code | Published constructions, official test vectors, external review |
 | 6   | Supply chain                               | Few pinned dependencies, signed releases                        |
@@ -59,7 +59,7 @@ The recovery phrase is worse: it is the complete key and bypasses the passphrase
 **Defense:**
 
 - A signed member list, verified against a trust root stored on the user's machine.
-- A chained log of changes, so a client can detect a rollback.
+- A signed [manifest](vault.md#6-integrity) of the current state of each scope, and a record on the user's device of the last generation seen, so a client can detect a removed file or a rollback. Qrypt keeps no log of past states.
 
 ## 4. Git history keeps old access
 
