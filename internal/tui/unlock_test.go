@@ -42,6 +42,11 @@ func unlockFixture(t *testing.T, language Language) (Model, string, string, []by
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			expected = 0
 		}
+		for _, e := range entries {
+			if e.Name() == "vault" {
+				expected++
+			}
+		}
 		if len(entries) != expected {
 			t.Errorf("unexpected directory entries: %d", len(entries))
 		}
@@ -119,7 +124,7 @@ func TestUnlockSuccessAndExit(t *testing.T) {
 		t.Fatal("waiting accepted key")
 	}
 	m = finishCheck(t, m, cmd)
-	requireUnlock(t, m, "Identidad abierta", "Tu frase de contraseña es correcta.", "Guardar secretos todavía no está disponible.", "Cualquier tecla: salir")
+	requireUnlock(t, m, "Bóveda de Qrypt", "Aún no hay nada guardado.", "Esc: bloquear")
 	if strings.Contains(plain(m), "*") || strings.Contains(plain(m), pass) || m.input != "" || m.id != nil {
 		t.Fatal("secret retained")
 	}
@@ -127,8 +132,8 @@ func TestUnlockSuccessAndExit(t *testing.T) {
 	if err != nil || !bytes.Equal(after, data) {
 		t.Fatal("file changed", err)
 	}
-	next, quit := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if quit == nil || next.(Model).ExitStatus() != 0 {
+	next, quit := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	if quit == nil || next.(Model).ExitStatus() != 0 || next.(Model).vlt != nil {
 		t.Fatal("success exit")
 	}
 	next, quit = m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
@@ -170,7 +175,7 @@ func TestUnlockRejectionsAndPaste(t *testing.T) {
 	m = key(t, m, tea.KeyBackspace)
 	m, cmd := beginCheck(t, m, pass)
 	m = finishCheck(t, m, cmd)
-	requireUnlock(t, m, "Unlocked")
+	requireUnlock(t, m, "Qrypt vault")
 }
 
 func TestUnlockCannotOpen(t *testing.T) {
@@ -282,7 +287,7 @@ func TestUnlockRenderSpanish(t *testing.T) {
 	}
 	m, check = beginCheck(t, m, pass)
 	m = finishCheck(t, m, check)
-	show("Unlocked")
+	show("Qrypt vault")
 	data[0] ^= 0xff
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)

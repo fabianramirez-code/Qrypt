@@ -211,6 +211,11 @@ func (v *Vault) Close() {
 	v.nameKey, v.valueKey = nil, nil
 }
 
+// ValidateName reports whether name can be used as a secret name.
+func ValidateName(name string) error {
+	return validateName(name)
+}
+
 func validateName(name string) error {
 	if len(name) == 0 || len(name) > MaxNameSize || !utf8.ValidString(name) {
 		return ErrInvalidName

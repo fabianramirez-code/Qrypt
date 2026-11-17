@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
+	"github.com/fabianramirez-code/qrypt/internal/vault"
 )
 
 type screen int
@@ -29,7 +30,13 @@ const (
 	notSaved
 	unlock
 	checkingUnlock
-	unlocked
+	vaultList
+	vaultItem
+	vaultAddName
+	vaultAddValue
+	vaultEdit
+	vaultDelete
+	vaultFailed
 	cannotOpen
 	restoreIntro
 	restoreWord
@@ -54,7 +61,10 @@ type rebuiltMsg struct {
 	pass   string
 	err    error
 }
-type unlockedMsg struct{ err error }
+type unlockedMsg struct {
+	id  *identity.Identity
+	err error
+}
 
 // Model holds the state of a single identity creation, unlock, or restore session.
 type Model struct {
@@ -77,6 +87,12 @@ type Model struct {
 	restoreOrigin screen
 	restoreWords  []string
 	backup        string
+	vlt           *vault.Vault
+	names         []string
+	cursor        int
+	item          string
+	itemValue     []byte
+	newName       string
 	generate      func() (*identity.Identity, error)
 	pick          func() [3]int
 }
@@ -164,8 +180,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case v.err == nil:
 			m.input = ""
 			m.message = ""
-			m.screen = unlocked
-			m.status = 0
+			m.openVault(v.id)
 		case errors.Is(v.err, identity.ErrPassphraseWordCount), errors.Is(v.err, identity.ErrPassphraseUnknownWord), errors.Is(v.err, identity.ErrDecryption):
 			m.screen = unlock
 			m.message = unlockError(v.err, m.language.text())
@@ -197,24 +212,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		if m.screen == confirmPassphrase || m.screen == confirmRecovery || m.screen == unlock || m.screen == restoreWord {
 			m.message = m.language.text().pasted
+		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit {
+			m.vaultPaste(v.Content)
 		}
 	case tea.KeyPressMsg:
 		if m.screen == saving || (m.screen == checkingUnlock || m.screen == rebuilding) && !(v.Code == 'c' && v.Mod&tea.ModCtrl != 0) {
 			return m, nil
 		}
 		if v.Code == 'c' && v.Mod&tea.ModCtrl != 0 {
+			opened := m.vlt != nil
 			if m.restoring && m.screen != restored && m.screen != notRestored {
 				m.resetRestore()
 			} else {
 				m.clearSecrets()
 			}
-			if m.screen != done && m.screen != unlocked && m.screen != restored {
+			if !opened && m.screen != done && m.screen != restored {
 				m.status = 1
 			}
 			return m, tea.Quit
 		}
-		if m.screen == done || m.screen == notSaved || m.screen == unlocked || m.screen == cannotOpen || m.screen == restored || m.screen == notRestored {
+		if m.screen == done || m.screen == notSaved || m.screen == vaultFailed || m.screen == cannotOpen || m.screen == restored || m.screen == notRestored {
 			return m, tea.Quit
+		}
+		if isVaultScreen(m.screen) {
+			return m.vaultKey(v)
 		}
 		switch m.screen {
 		case languageScreen:
@@ -247,9 +268,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.message = ""
 				m.screen = checkingUnlock
 				return m, func() tea.Msg {
-					_, err := identity.Load(path, typed)
+					id, err := identity.Load(path, typed)
 					clear(typed)
-					return unlockedMsg{err: err}
+					return unlockedMsg{id: id, err: err}
 				}
 			}
 			m.editInput(v)
@@ -402,6 +423,8 @@ func (m *Model) clearSecrets() {
 	m.restoreWords = nil
 	m.input = ""
 	m.visible = false
+	m.closeVault()
+	m.newName = ""
 }
 func (m *Model) fail(err error) {
 	m.screen = notSaved
@@ -454,8 +477,20 @@ func (m Model) viewContent() string {
 		return title.Render(t.unlockTitle) + "\n" + t.unlockPrompt + "\n" + wrapWidth(field, m.width) + "\n" + t.typedWords(len(strings.Fields(m.input))) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.unlockHint) + "\n" + hint.Render(t.unlockRestoreHint)
 	case checkingUnlock:
 		return title.Render(t.unlockTitle) + "\n" + t.checking
-	case unlocked:
-		return title.Render(t.unlockedTitle) + "\n" + t.unlockedBody + "\n" + t.unlockedOutro + "\n" + hint.Render(t.exitHint)
+	case vaultList:
+		return m.listView(t)
+	case vaultItem:
+		return title.Render(t.itemTitle) + "\n" + wrapLine(m.item) + "\n" + m.itemValueView(t) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.itemHint)
+	case vaultAddName:
+		return title.Render(t.addTitle) + "\n" + t.namePrompt + "\n" + wrapWidth(m.input, m.width) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.addNameHint)
+	case vaultAddValue:
+		return title.Render(t.addTitle) + "\n" + wrapLine(m.newName) + "\n" + t.valuePrompt + "\n" + wrapWidth(hide(m.input, m.visible), m.width) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.valueHint)
+	case vaultEdit:
+		return title.Render(t.editTitle) + "\n" + wrapLine(m.item) + "\n" + t.valuePrompt + "\n" + wrapWidth(hide(m.input, m.visible), m.width) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.valueHint)
+	case vaultDelete:
+		return title.Render(t.deleteTitle) + "\n" + wrapLine(m.selectedName()) + "\n" + t.deleteQuestion + "\n" + hint.Render(t.deleteHint)
+	case vaultFailed:
+		return title.Render(t.vaultFailedTitle) + "\n" + wrapLine(m.message) + "\n" + wrapLine(t.vaultLabel+vaultDir(m.path)) + "\n" + hint.Render(t.exitHint)
 	case cannotOpen:
 		return title.Render(t.cannotOpenTitle) + "\n" + wrapLine(m.message) + "\n" + wrapLine(t.fileLabel+m.path) + "\n" + hint.Render(t.exitHint)
 	case welcome:

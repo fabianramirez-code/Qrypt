@@ -605,7 +605,7 @@ func TestPasteOtherScreens(t *testing.T) {
 	m, _, words := fixture(t)
 	m.words = words
 	m.pass = "abandon abandon abandon abandon abandon abandon abandon"
-	for _, screen := range []screen{welcome, waitingSeal, passphrase, waitingOpen, recovery, saving, done, notSaved, unlocked, cannotOpen} {
+	for _, screen := range []screen{welcome, waitingSeal, passphrase, waitingOpen, recovery, saving, done, notSaved, vaultList, cannotOpen} {
 		m.screen = screen
 		before := m.View().Content
 		next, cmd := m.Update(tea.PasteMsg{Content: "ignored"})

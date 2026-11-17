@@ -11,7 +11,11 @@ type texts struct {
 	doneTitle, doneBody, fileLabel, doneOutro, exitHint                                            string
 	failedTitle, failedBody, failedOutro, discard                                                  string
 	enlarge, unlockTitle, unlockPrompt, unlockHint                                                 string
-	unlockedTitle, unlockedBody, unlockedOutro, cannotOpenTitle                                    string
+	cannotOpenTitle                                                                                string
+	listTitle, noItems, listHint, listEmptyHint, itemTitle, itemHint, tooLong                      string
+	addTitle, namePrompt, addNameHint, valuePrompt, valueHint, editTitle                           string
+	deleteTitle, deleteQuestion, deleteHint, vaultFailedTitle, vaultLabel                          string
+	invalidName, nameExists, valueTooLarge, lineBreak, vaultDamaged                                string
 	unlockWrongPass, invalidIdentity, newerIdentity                                                string
 	wordCount, unknownWord, wrongPass, pasted, alreadyExists                                       string
 	wordProgress, wordPrompt, wrongWord                                                            func(int) string
@@ -34,7 +38,11 @@ var english = texts{
 	failedTitle: "Not saved", failedBody: "Qrypt could not save your identity:", failedOutro: "Nothing was saved.\nThe words you wrote down belong to no identity.", discard: "Discard them.",
 	enlarge:     "Enlarge the window to at least 60 columns by 20 rows.",
 	unlockTitle: "Unlock Qrypt", unlockPrompt: "Type your passphrase (7 words):", unlockHint: "Enter: unlock  Tab: show/hide  Esc: quit", unlockRestoreHint: "Forgot the passphrase? Ctrl+R: restore",
-	unlockedTitle: "Unlocked", unlockedBody: "Your passphrase is correct.", unlockedOutro: "Storing secrets is not available yet.", cannotOpenTitle: "Cannot open the identity",
+	cannotOpenTitle: "Cannot open the identity",
+	listTitle:       "Qrypt vault", noItems: "Nothing stored yet. Press A to add an item.", listHint: "Up/Down: move  Enter: open  A: add  D: delete  Esc: lock", listEmptyHint: "A: add  Esc: lock", itemTitle: "Item", itemHint: "Tab: show/hide  E: edit  Esc: back", tooLong: "The value is too long to show here.",
+	addTitle: "Add an item", namePrompt: "Name:", addNameHint: "Enter: next  Esc: back", valuePrompt: "Value (hidden):", valueHint: "Enter: save  Tab: show/hide  Esc: back", editTitle: "Edit value",
+	deleteTitle: "Delete this item?", deleteQuestion: "This cannot be undone.", deleteHint: "Y: delete  Any other key: cancel", vaultFailedTitle: "Cannot use the vault", vaultLabel: "Vault: ",
+	invalidName: "That name is not valid. Use 1 to 255 characters, with no control characters.", nameExists: "An item with that name already exists.", valueTooLarge: "That value is too large. The limit is 64 KiB.", lineBreak: "Values are one line. Remove the line break.", vaultDamaged: "A vault file is damaged, or the vault belongs to another identity.",
 	unlockWrongPass: "Wrong passphrase, or the identity file is damaged.", invalidIdentity: "The identity file is not a valid Qrypt identity.", newerIdentity: "This identity was created by a newer version of Qrypt.",
 	typedWords: func(n int) string { return fmt.Sprintf("Words typed: %d of 7", n) },
 	wordCount:  "Type exactly 7 words.", unknownWord: "One of the words is not valid. Check the spelling.", wrongPass: "That is not the passphrase shown. Check your paper.", pasted: "Pasting is not accepted. Type the words from your paper.", alreadyExists: "An identity file already exists.",
@@ -56,7 +64,11 @@ var spanish = texts{
 	failedTitle: "No se guardó", failedBody: "Qrypt no pudo guardar tu identidad:", failedOutro: "No se guardó nada.\nLas palabras que anotaste no pertenecen a ninguna identidad.", discard: "Deséchalas.",
 	enlarge:     "Agranda la ventana a 60 columnas por 20 filas como mínimo.",
 	unlockTitle: "Abrir Qrypt", unlockPrompt: "Escribe tu frase de contraseña (7 palabras):", unlockHint: "Enter: abrir  Tab: mostrar/ocultar  Esc: salir", unlockRestoreHint: "¿Olvidaste la frase? Ctrl+R: restaurar",
-	unlockedTitle: "Identidad abierta", unlockedBody: "Tu frase de contraseña es correcta.", unlockedOutro: "Guardar secretos todavía no está disponible.", cannotOpenTitle: "No se puede abrir la identidad",
+	cannotOpenTitle: "No se puede abrir la identidad",
+	listTitle:       "Bóveda de Qrypt", noItems: "Aún no hay nada guardado. Pulsa A para añadir algo.", listHint: "↑/↓ mover  Enter abrir  A añadir  D borrar  Esc bloquear", listEmptyHint: "A: añadir  Esc: bloquear", itemTitle: "Elemento", itemHint: "Tab: mostrar/ocultar  E: editar  Esc: volver", tooLong: "El valor es demasiado largo para mostrarlo aquí.",
+	addTitle: "Añadir un elemento", namePrompt: "Nombre:", addNameHint: "Enter: siguiente  Esc: volver", valuePrompt: "Valor (oculto):", valueHint: "Enter: guardar  Tab: mostrar/ocultar  Esc: volver", editTitle: "Editar valor",
+	deleteTitle: "¿Borrar este elemento?", deleteQuestion: "No se puede deshacer.", deleteHint: "Y: borrar  Cualquier otra tecla: cancelar", vaultFailedTitle: "No se puede usar la bóveda", vaultLabel: "Bóveda: ",
+	invalidName: "Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.", nameExists: "Ya existe un elemento con ese nombre.", valueTooLarge: "Ese valor es demasiado grande. El límite es 64 KiB.", lineBreak: "Los valores son de una línea. Quita el salto de línea.", vaultDamaged: "Un archivo de la bóveda está dañado, o la bóveda es de otra identidad.",
 	unlockWrongPass: "Frase incorrecta, o el archivo de identidad está dañado.", invalidIdentity: "El archivo de identidad no es una identidad válida de Qrypt.", newerIdentity: "Esta identidad es de una versión más nueva de Qrypt.",
 	typedWords: func(n int) string { return fmt.Sprintf("Palabras escritas: %d de 7", n) },
 	wordCount:  "Escribe exactamente 7 palabras.", unknownWord: "Una de las palabras no es válida. Revisa cómo está escrita.", wrongPass: "Esa no es la frase de contraseña mostrada. Revisa tu papel.", pasted: "No se acepta pegar. Escribe las palabras de tu papel.", alreadyExists: "Ya existe un archivo de identidad.",

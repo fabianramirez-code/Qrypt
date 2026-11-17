@@ -2,7 +2,7 @@
 
 An ultralight, secure, TUI-based secrets manager designed to run 100% on top of Git repositories as its storage and identity backend, with no need for complex centralized servers.
 
-> **Status:** early stage. Qrypt can create an identity and unlock it; it cannot store secrets yet. Nothing is audited: do not rely on Qrypt for real secrets. The design is documented in [`docs/`](docs/).
+> **Status:** early stage. Qrypt can create, unlock and restore an identity, and store, view, edit and delete items in a local vault. Nothing is audited: do not rely on Qrypt for real secrets. The design is documented in [`docs/`](docs/).
 
 ## Key Features
 

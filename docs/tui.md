@@ -1,18 +1,18 @@
 # Terminal Interface
 
-What the `qrypt` program shows and how it behaves. So far it has three flows: creating an identity, unlocking it, and restoring it from its recovery phrase.
+What the `qrypt` program shows and how it behaves. It has four flows: creating an identity, unlocking it, restoring it from its recovery phrase, and managing the stored items once it is unlocked.
 
-> **Status:** early stage. After unlocking there is nothing to do yet, because storing secrets is not implemented.
+> **Status:** early stage. Items are stored in a [vault](vault.md) that is not audited yet. Do not store real passwords with Qrypt yet.
 
 ## Rules for every screen
 
 - **Alternate screen only.** Qrypt draws on the terminal's alternate screen, which disappears when the program exits. A passphrase or a recovery phrase never stays in the terminal's scrollback.
 - **Interactive terminal required.** If standard input or standard output is not a terminal, Qrypt prints one line to standard error, exits with status 1, and does nothing else. Secrets can never be piped into a file or into another program.
-- **Nothing else receives secrets.** No logs, no clipboard, and nothing on standard output or standard error after the program exits.
+- **Nothing else receives secrets.** No logs, no clipboard, and nothing on standard output or standard error after the program exits. Copying a value to the clipboard is not offered yet.
 - **Ctrl+C quits** at once, on every screen except while the identity file is being written (the Saving step of creating and of restoring). That write takes an instant and is never interrupted, so the exit status always matches what is on disk.
 - **Small windows.** If the window is smaller than 60 columns by 20 rows, or its size is not known yet, Qrypt shows only a request to enlarge it. Secrets are never shown cut off.
 - **Two languages.** The interface is in English or in Spanish. See [Language](#language).
-- **Typed, not pasted.** Fields for a passphrase or a recovery word ignore pasted text. Pasting would mean that a secret had been copied to the clipboard.
+- **Typed, not pasted.** Fields for a passphrase or a recovery word ignore pasted text. Pasting would mean that a secret had been copied to the clipboard. The fields of the [vault screens](#managing-the-vault) are the exception, because a user must be able to paste a token they were given.
 - **Messages never repeat what the user typed.**
 
 ## Language
@@ -70,7 +70,7 @@ Unlocking writes nothing to disk and never changes the identity file.
 | Step | Screen                                                                                                | The user does            | Then                                                                                                                                                                                                                                                              |
 | ---- | ----------------------------------------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1    | **Unlock.** A field for the passphrase, hidden as it is typed, and a count of the words typed so far. | Types the 7 words, Enter | Qrypt opens the identity file with what was typed, which takes a moment. If it opens, step 2. If the passphrase is rejected, the screen says why and the user tries again. If the file cannot be used, step 3. Ctrl+R starts "Restoring an identity". Esc quits. |
-| 2    | **Unlocked.** Says that the passphrase is correct and that storing secrets is not available yet.      | Any key                  | Exits with status 0.                                                                                                                                                                                                                                              |
+| 2    | **Vault.** The list of [managing the vault](#managing-the-vault). If the identity has no vault yet, Qrypt creates it first. |                          | Quitting from there exits with status 0.                                                                                                                                                                                                                          |
 | 3    | **Cannot open.** Says why and where the identity file is.                                             | Any key                  | Exits with status 1.                                                                                                                                                                                                                                              |
 
 Quitting at step 1, or while the passphrase is being checked, exits with status 1.
@@ -103,9 +103,44 @@ Quitting before step 6 exits with status 1.
 - **No recovery phrase is shown.** The user already has it, so this flow never displays it.
 - **Each word is checked as it is entered.** A typing mistake is caught at that word, not after all 24.
 
+## Managing the vault
+
+After unlocking, Qrypt opens the [vault](vault.md#4-storage) next to the identity file, and creates it if it does not exist. The first time, this writes the vault's scope file; nothing else is written until the user adds an item. If the vault cannot be opened, the screen says why and Qrypt exits with status 1.
+
+| Screen     | Shows                                                                                      | Keys                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| **List**   | The names of all items in byte order, one selected, or a line saying there are none yet.    | Up and Down move, Enter opens the selected item, A adds, D deletes, Esc locks and exits.    |
+| **Item**   | The name and the value, hidden as `*` until revealed.                                      | Tab shows or hides the value, E edits it, Esc returns to the list.                          |
+| **Add**    | Two steps: the name, then the value, each in a text field.                                 | Enter accepts a step, Esc goes back one step and, at the name, returns to the list.         |
+| **Edit**   | The name and a field for the new value.                                                    | Enter saves, Esc returns to the item without changing it.                                   |
+| **Delete** | The name, and a question to confirm.                                                       | Y deletes. Any other key cancels.                                                           |
+
+- **Locking.** Esc on the list, and Ctrl+C anywhere, erase the keys from memory and exit with status 0 once the vault was opened. Writes to the vault finish before the next key is read, and each file is written whole or not at all, so quitting never leaves a half-written file.
+- **Values are hidden by default** and shown only with Tab on the Item screen. Leaving the screen hides them again. The value field of Add and Edit is hidden as it is typed, and Tab shows or hides it.
+- **Names are visible** in the list and in the name field. A name too long for one row is cut with `…` in the list; the Item screen shows it whole.
+- **A long value is not cut off.** If a value has more than 300 characters, the Item screen says that it is too long to show instead of showing part of it.
+- **Pasting is accepted** in the name and value fields. A pasted value with a line break is rejected, because values typed here are one line. Values of several lines need a later import feature.
+- **Limits are checked when the user presses Enter.** A name must follow the [vault rules](vault.md#name) and a value may be at most 64 KiB. Rejected input leaves the vault unchanged and keeps what was typed.
+- **Deleting needs a Y.** Deleting is permanent: the file is removed and Qrypt keeps no copy.
+- **A damaged vault file** makes the list fail, as [documented](vault.md#6-limits). The screen says so and Qrypt exits with status 1.
+- **Messages never repeat a value.**
+
 ## Messages
 
-### When a passphrase or a recovery word is rejected
+### Vault
+
+| Cause                                            | English                                                                        | Spanish                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Name empty, too long, or with control characters | `That name is not valid. Use 1 to 255 characters, with no control characters.` | `Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.` |
+| Name already used                                | `An item with that name already exists.`                                       | `Ya existe un elemento con ese nombre.`                                          |
+| Value too large                                  | `That value is too large. The limit is 64 KiB.`                                | `Ese valor es demasiado grande. El límite es 64 KiB.`                            |
+| Pasted value with a line break                   | `Values are one line. Remove the line break.`                                  | `Los valores son de una línea. Quita el salto de línea.`                         |
+| Vault file damaged, or another identity's vault  | `A vault file is damaged, or the vault belongs to another identity.`           | `Un archivo de la bóveda está dañado, o la bóveda es de otra identidad.`         |
+| Anything else                                    | As the system reports it                                                       | As the system reports it                                                         |
+
+### Identity
+
+#### When a passphrase or a recovery word is rejected
 
 | Cause                                                           | English                                                    | Spanish                                                       |
 | --------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------- |
@@ -120,7 +155,7 @@ Quitting before step 6 exits with status 1.
 
 When unlocking, Qrypt cannot tell a wrong passphrase from a damaged file, so one message covers both.
 
-### On the Cannot open screen
+#### On the Cannot open screen
 
 | Cause                                             | English                                                  | Spanish                                                        |
 | ------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------- |
