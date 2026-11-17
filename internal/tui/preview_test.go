@@ -27,7 +27,7 @@ func TestPreviewScreensAndExit(t *testing.T) {
 			m.copyFn = func(string) error { return nil }
 			m.clearFn = func(string) error { return nil }
 			m = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 20})
-			if !strings.Contains(plain(m), "Language / Idioma") || strings.Contains(plain(m), tc.banner) {
+			if !strings.Contains(plain(m), "LANGUAGE / IDIOMA") || strings.Contains(plain(m), tc.banner) {
 				t.Fatal("not language first", plain(m))
 			}
 			m = enter(t, m)

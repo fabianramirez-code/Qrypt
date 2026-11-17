@@ -39,34 +39,48 @@ func (m *Model) savePreferences() {
 }
 
 func (m Model) languageView() string {
-	first, second := "  English", "  Español"
-	if m.language == Spanish {
-		second = "> Español"
-	} else {
-		first = "> English"
+	var languageRows, themeRows []string
+	for i, name := range []string{"English", "Español"} {
+		selected := (i == 0 && m.language == English) || (i == 1 && m.language == Spanish)
+		languageRows = append(languageRows, m.choiceRow(name, i, selected, !m.themeList))
 	}
-	rows := []string{m.styles.title.Render("Language / Idioma"), first, second, "Theme / Tema"}
 	for i := 0; i < 7; i++ {
 		name := "Edit colors / Editar colores"
 		if i < 6 {
 			name = themeChoice(i)
 		}
-		marker := "  "
-		if i == m.themeIndex {
-			marker = "> "
-		}
-		row := marker + name
-		if m.themeList && i == m.themeIndex {
-			row = m.styles.selected.Render(row)
-		}
-		rows = append(rows, row)
+		themeRows = append(themeRows, m.choiceRow(name, i, i == m.themeIndex, m.themeList))
+	}
+	// Both panels have the same height so their borders line up.
+	for len(languageRows) < len(themeRows) {
+		languageRows = append(languageRows, "")
+	}
+	join := func(rows []string) string { return strings.Join(rows, "\n") }
+	left := strings.Split(m.panel("LANGUAGE / IDIOMA", join(languageRows), 25, !m.themeList, true), "\n")
+	right := strings.Split(m.panel("THEME / TEMA", join(themeRows), 34, m.themeList, true), "\n")
+	var rows []string
+	for i := range left {
+		rows = append(rows, left[i]+" "+right[i])
 	}
 	if m.settingsError {
 		rows = append(rows, "Settings could not be read / No se pudieron leer los ajustes.")
 	}
-	rows = append(rows, m.styles.hint.Render("↑/↓: move / mover   Tab: list / lista"),
-		m.styles.hint.Render("Enter: select / elegir   Esc: quit / salir"))
 	return strings.Join(rows, "\n")
+}
+
+func (m Model) choiceRow(name string, index int, selected, focused bool) string {
+	marker := "  "
+	if selected {
+		marker = "> "
+	}
+	row := marker + name
+	if selected && focused {
+		return m.styles.selected.Render(row)
+	}
+	if index%2 == 1 || !focused {
+		return m.styles.dim.Render(row)
+	}
+	return m.styles.text.Render(row)
 }
 
 func cloneSettings(s settings.Settings) settings.Settings {
@@ -81,9 +95,9 @@ func cloneSettings(s settings.Settings) settings.Settings {
 func (m *Model) openColorEditor() {
 	m.beforeEdit = cloneSettings(m.settings)
 	m.editorOrigin = m.themeName
-	base, ok := theme.ByName(m.themeName, true)
+	base, ok := theme.ByName(m.themeName, m.darkBackground)
 	if !ok {
-		base, _ = theme.ByName("green", true)
+		base, _ = theme.ByName("green", m.darkBackground)
 		base = theme.Custom(base, m.settings.Colors)
 	}
 	m.editorPalette = base
@@ -193,6 +207,8 @@ func (m Model) colorView() string {
 		}
 		if i == m.colorIndex {
 			row = m.styles.selected.Render(row)
+		} else if i%2 == 1 {
+			row = m.styles.dim.Render(row)
 		}
 		lines = append(lines, row)
 	}

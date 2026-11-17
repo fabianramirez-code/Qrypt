@@ -17,7 +17,40 @@ import (
 var ansi = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 var numbered = regexp.MustCompile(`(?m)\b(?:1|2|7|24)\. \w+`)
 
-func plain(m Model) string { return ansi.ReplaceAllString(m.View().Content, "") }
+// framed is the screen exactly as drawn, without color sequences.
+func framed(m Model) string { return ansi.ReplaceAllString(m.View().Content, "") }
+
+// plain is the screen's text without the frame: logo, title line, panel borders and bottom bar.
+// Content assertions use it; the frame itself is asserted through framed.
+func plain(m Model) string {
+	logoRows := map[string]bool{"◆ Qrypt": true}
+	for _, row := range strings.Split(logo, "\n") {
+		logoRows[strings.TrimRight(row, " \r")] = true
+	}
+	var out []string
+	header := false
+	for _, line := range strings.Split(framed(m), "\n") {
+		if logoRows[line] && line != "" {
+			continue
+		}
+		if r := []rune(line); len(r) > 0 && strings.ContainsRune("╭╰├┏┗┣", r[0]) {
+			header = r[0] == '╭' || r[0] == '┏'
+			continue
+		}
+		for _, edge := range []string{"│", "┃"} {
+			if strings.HasPrefix(line, edge+" ") && strings.HasSuffix(line, edge) {
+				line = strings.TrimRight(strings.TrimSuffix(strings.TrimPrefix(line, edge+" "), edge), " ")
+				if header {
+					line = strings.TrimSpace(line) // The title is centered in its cell.
+				}
+				break
+			}
+		}
+		header = false
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
 func fixture(t *testing.T) (Model, string, []string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config", "identity")
@@ -107,7 +140,7 @@ func TestLanguageSelection(t *testing.T) {
 		t.Run(tc.marker, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config", "identity")
 			m := send(t, New(path, tc.preferred), tea.WindowSizeMsg{Width: 80, Height: 24})
-			if !m.View().AltScreen || !strings.Contains(plain(m), "Language / Idioma") || !strings.Contains(plain(m), tc.marker) || !strings.Contains(plain(m), "↑/↓: move / mover   Tab: list / lista") || !strings.Contains(plain(m), "Enter: select / elegir   Esc: quit / salir") {
+			if !m.View().AltScreen || !strings.Contains(plain(m), "LANGUAGE / IDIOMA") || !strings.Contains(plain(m), tc.marker) || !strings.Contains(plain(m), "←/→/Tab: list / lista") || !strings.Contains(plain(m), "Enter: select / elegir   Esc: quit / salir") {
 				t.Fatal(plain(m))
 			}
 			absence(t, path)

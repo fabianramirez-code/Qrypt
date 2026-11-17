@@ -2,7 +2,7 @@
 
 How Qrypt remembers the interface language and theme, and how a user edits colors. Decided with the user: settings are saved in a file.
 
-> **Status:** implemented. Terminal background detection is not available; `auto` uses `green` on a dark background.
+> **Status:** implemented. `auto` requests the terminal background color; without a reply, it uses the dark `green` palette.
 
 ## What is stored
 
@@ -48,7 +48,7 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 | `violet`   | Violet accent.                                                                        |
 | `mono`     | No hue: bold, dim and reverse video only. Sober, and the safest on odd terminals.     |
 | `contrast` | White on black with saturated colors, and thick borders. Meets WCAG AAA for text.     |
-| `auto`     | Uses the dark-background `green` fallback where terminal background detection is unavailable. |
+| `auto`     | Uses the light `green` palette on a light terminal background and the dark palette otherwise. Without a response it defaults to dark. |
 
 - Every built-in theme keeps text at a contrast ratio of at least 4.5:1 against its background, and a test checks it.
 - Meaning never depends on color alone: errors and successes also carry words, and the selected row also carries the `>` marker.
@@ -67,7 +67,7 @@ The user edits a theme from the first screen. Choosing `Edit colors` copies the 
 
 Language and theme are chosen on the same first screen, as today but with a second list.
 
-- Up and Down move within a list. Tab switches between the language list and the theme list. Enter continues. Esc quits with status 1.
+- LANGUAGE and THEME appear in side-by-side bordered panels. Up and Down move within the focused panel; Left and Right or Tab switch panels. Both selections keep a `>` marker, and only the focused selection is highlighted. Enter continues. Esc quits with status 1.
 - The theme preview is live: moving in the theme list recolors the screen at once.
 - The saved choice is selected in advance. Without a settings file, the language comes from the system and the theme is `green`.
 - Continuing saves the language and theme only if they differ from what is stored.
@@ -80,5 +80,4 @@ Language and theme are chosen on the same first screen, as today but with a seco
 
 ## Open questions
 
-- Terminal background detection is not currently available; `auto` falls back to `green` on a dark background.
 - Importing and exporting a custom theme file.

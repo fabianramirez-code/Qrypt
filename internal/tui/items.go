@@ -312,7 +312,7 @@ func (m Model) listView(t texts) string {
 	if len(m.names) == 0 {
 		return title.Render(t.listTitle) + "\n" + wrapLine(t.noItems) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listEmptyHint)
 	}
-	rows := max(m.height-8, 3)
+	rows := max(m.height-12, 3)
 	first := max(min(m.cursor-rows/2, len(m.names)-rows), 0)
 	var lines []string
 	for i := first; i < min(first+rows, len(m.names)); i++ {

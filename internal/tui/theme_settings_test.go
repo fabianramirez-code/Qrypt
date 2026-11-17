@@ -15,8 +15,8 @@ import (
 func TestSettingsSelectionAndPersistence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity")
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
-	if !strings.Contains(plain(m), "> green") {
-		t.Fatal(plain(m))
+	if !strings.Contains(framed(m), "> green") {
+		t.Fatal(framed(m))
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(path), "settings")); !os.IsNotExist(err) {
 		t.Fatal(err)
@@ -24,8 +24,8 @@ func TestSettingsSelectionAndPersistence(t *testing.T) {
 	original := m.View().Content
 	m = key(t, m, tea.KeyTab)
 	m = key(t, m, tea.KeyDown)
-	if !strings.Contains(plain(m), "> violet") || original == m.View().Content {
-		t.Fatal("theme preview did not recolor", plain(m))
+	if !strings.Contains(framed(m), "> violet") || original == m.View().Content {
+		t.Fatal("theme preview did not recolor", framed(m))
 	}
 	m = enter(t, m)
 	saved, err := os.ReadFile(filepath.Join(filepath.Dir(path), "settings"))
@@ -33,8 +33,8 @@ func TestSettingsSelectionAndPersistence(t *testing.T) {
 		t.Fatalf("settings %q: %v", saved, err)
 	}
 	next := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
-	if !strings.Contains(plain(next), "> violet") {
-		t.Fatal(plain(next))
+	if !strings.Contains(framed(next), "> violet") {
+		t.Fatal(framed(next))
 	}
 }
 
@@ -42,18 +42,18 @@ func TestTabSwitchesListsAndNoChangeWritesNothing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config", "identity")
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
 	m = key(t, m, tea.KeyDown)
-	if !strings.Contains(plain(m), "> Español") || !strings.Contains(plain(m), "> green") {
-		t.Fatal(plain(m))
+	if !strings.Contains(framed(m), "> Español") || !strings.Contains(framed(m), "> green") {
+		t.Fatal(framed(m))
 	}
 	m = key(t, m, tea.KeyTab)
 	m = key(t, m, tea.KeyDown)
-	if !strings.Contains(plain(m), "> violet") || !strings.Contains(plain(m), "> Español") {
-		t.Fatal(plain(m))
+	if !strings.Contains(framed(m), "> violet") || !strings.Contains(framed(m), "> Español") {
+		t.Fatal(framed(m))
 	}
 	m = key(t, m, tea.KeyTab)
 	m = key(t, m, tea.KeyUp)
-	if !strings.Contains(plain(m), "> English") || !strings.Contains(plain(m), "> violet") {
-		t.Fatal(plain(m))
+	if !strings.Contains(framed(m), "> English") || !strings.Contains(framed(m), "> violet") {
+		t.Fatal(framed(m))
 	}
 	m = key(t, m, tea.KeyTab)
 	m = key(t, m, tea.KeyUp)
@@ -70,8 +70,8 @@ func TestUnreadableSettingsNotice(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
-	if !strings.Contains(plain(m), "Settings could not be read") || !strings.Contains(plain(m), "> green") {
-		t.Fatal(plain(m))
+	if !strings.Contains(framed(m), "Settings could not be read") || !strings.Contains(framed(m), "> green") {
+		t.Fatal(framed(m))
 	}
 	m = enter(t, m)
 	data, err := os.ReadFile(filepath.Join(dir, "settings"))
@@ -89,8 +89,8 @@ func editor(t *testing.T) (Model, string) {
 		m = key(t, m, tea.KeyDown)
 	}
 	m = enter(t, m)
-	if !strings.Contains(plain(m), "accent") {
-		t.Fatal(plain(m))
+	if !strings.Contains(framed(m), "accent") {
+		t.Fatal(framed(m))
 	}
 	return m, filepath.Join(filepath.Dir(path), "settings")
 }
@@ -99,13 +99,13 @@ func TestCustomColors(t *testing.T) {
 	m, path := editor(t)
 	m = typeText(t, m, "#ff0000")
 	m = enter(t, m)
-	if !strings.Contains(plain(m), "#ff0000") {
-		t.Fatal(plain(m))
+	if !strings.Contains(framed(m), "#ff0000") {
+		t.Fatal(framed(m))
 	}
 	m = typeText(t, m, "#xyzxyz")
 	m = enter(t, m)
-	if !strings.Contains(plain(m), "#ff0000") || !strings.Contains(plain(m), "invalid hex") {
-		t.Fatal(plain(m))
+	if !strings.Contains(framed(m), "#ff0000") || !strings.Contains(framed(m), "invalid hex") {
+		t.Fatal(framed(m))
 	}
 	m = key(t, m, tea.KeyEsc)
 	s, err := settings.Load(path)
@@ -119,8 +119,8 @@ func TestEditorRejectsLowContrastAndBothResets(t *testing.T) {
 	original := m.settings.Colors["accent"]
 	m = typeText(t, m, "#010101")
 	m = enter(t, m)
-	if !strings.Contains(plain(m), "contrast below 3:1") || m.settings.Colors["accent"] != original {
-		t.Fatal("low contrast changed role", plain(m))
+	if !strings.Contains(framed(m), "contrast below 3:1") || m.settings.Colors["accent"] != original {
+		t.Fatal("low contrast changed role", framed(m))
 	}
 	m = key(t, m, tea.KeyBackspace)
 	for range "#010101" {
@@ -129,7 +129,7 @@ func TestEditorRejectsLowContrastAndBothResets(t *testing.T) {
 	m = typeText(t, m, "#ff0000")
 	m = enter(t, m)
 	if m.settings.Colors["accent"] != "#ff0000" {
-		t.Fatal(plain(m))
+		t.Fatal(framed(m))
 	}
 	m = send(t, m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	if m.settings.Colors["accent"] != original {

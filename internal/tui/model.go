@@ -95,6 +95,7 @@ type Model struct {
 	settingsPath    string
 	settings        settings.Settings
 	settingsError   bool
+	darkBackground  bool
 	themeName       string
 	styles          styles
 	themeList       bool
@@ -145,7 +146,7 @@ type Model struct {
 
 // New constructs a session for the explicit identity path without writing to disk.
 func New(path string, preferred Language) Model {
-	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
+	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
 	loaded, err := settings.Load(m.settingsPath)
 	m.settings = loaded
 	m.settingsError = err != nil
@@ -183,14 +184,17 @@ func randomPositions() [3]int {
 // ExitStatus reports the result to use after the Bubble Tea program ends.
 func (m Model) ExitStatus() int { return m.status }
 
-// Init returns no command: work starts only after Enter.
-func (m Model) Init() tea.Cmd { return nil }
+// Init requests the terminal background; identity work starts only after Enter.
+func (m Model) Init() tea.Cmd { return tea.RequestBackgroundColor }
 
 // Update processes terminal input and completion of slow work.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = v.Width, v.Height
+	case tea.BackgroundColorMsg:
+		m.darkBackground = v.IsDark()
+		m.refreshStyles()
 	case sealedMsg:
 		if m.screen != waitingSeal {
 			return m, nil
@@ -331,6 +335,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case tea.KeyTab:
 				m.themeList = !m.themeList
+			case tea.KeyLeft:
+				m.themeList = false
+			case tea.KeyRight:
+				m.themeList = true
 			case tea.KeyUp, tea.KeyDown:
 				if m.themeList {
 					step := 1
@@ -555,10 +563,12 @@ func (m *Model) fail(err error) {
 
 type styles struct {
 	text, title, hint, secret, selected, error, success, warning, border lipgloss.Style
+	accent, dim                                                          lipgloss.Style
+	palette                                                              theme.Theme
 }
 
 func (m *Model) refreshStyles() {
-	palette, ok := theme.ByName(m.themeName, true) // Auto falls back to green on dark terminals.
+	palette, ok := theme.ByName(m.themeName, m.darkBackground)
 	if !ok {
 		palette, _ = theme.ByName("green", true)
 		palette = theme.Custom(palette, m.settings.Colors)
@@ -570,6 +580,7 @@ func (m *Model) refreshStyles() {
 		selected: lipgloss.NewStyle().Reverse(true),
 		error:    lipgloss.NewStyle().Bold(true), success: lipgloss.NewStyle().Bold(true),
 		warning: lipgloss.NewStyle().Bold(true), border: lipgloss.NewStyle(),
+		accent: lipgloss.NewStyle().Bold(true), dim: lipgloss.NewStyle().Faint(true), palette: palette,
 	}
 	if m.themeName != "mono" {
 		m.styles.text = m.styles.text.Foreground(lipgloss.Color(hexColor(palette.Text)))
@@ -580,6 +591,8 @@ func (m *Model) refreshStyles() {
 		m.styles.success = m.styles.success.Foreground(lipgloss.Color(hexColor(palette.Success)))
 		m.styles.warning = m.styles.warning.Foreground(lipgloss.Color(hexColor(palette.Warning)))
 		m.styles.border = m.styles.border.Foreground(lipgloss.Color(hexColor(palette.Border)))
+		m.styles.accent = m.styles.accent.Foreground(lipgloss.Color(hexColor(palette.Accent)))
+		m.styles.dim = m.styles.dim.Foreground(lipgloss.Color(hexColor(palette.Dim)))
 		m.styles.secret = m.styles.secret.BorderForeground(lipgloss.Color(hexColor(palette.Border)))
 	}
 }
@@ -667,13 +680,13 @@ func (m Model) viewContent() string {
 	case passphrase:
 		return m.passphraseView()
 	case confirmPassphrase:
-		return title.Render(t.confirmPassTitle) + "\n" + t.confirmPassPrompt + "\n" + wrapLine(m.input) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
+		return title.Render(t.confirmPassTitle) + "\n" + t.confirmPassPrompt + "\n" + wrapWidth(m.input, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
 	case waitingOpen:
 		return title.Render(t.confirmPassTitle) + "\n" + t.checking
 	case recovery:
 		return m.recoveryView()
 	case confirmRecovery:
-		return title.Render(t.confirmRecoveryTitle) + "\n" + t.wordProgress(m.index+1) + "\n" + t.wordPrompt(m.positions[m.index]+1) + "\n" + wrapLine(m.input) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
+		return title.Render(t.confirmRecoveryTitle) + "\n" + t.wordProgress(m.index+1) + "\n" + t.wordPrompt(m.positions[m.index]+1) + "\n" + wrapWidth(m.input, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
 	case saving:
 		return title.Render(t.savingTitle) + "\n" + t.savingBody
 	case restored:
@@ -724,7 +737,7 @@ func wrapWidth(text string, maxWidth int) string {
 }
 
 func (m Model) passphraseView() string {
-	title, hint, secret := m.styles.title, m.styles.hint, m.styles.secret
+	title, hint, secret := m.styles.title, m.styles.hint, lipgloss.NewStyle().Bold(true)
 	var lines []string
 	for i, word := range strings.Fields(m.pass) {
 		lines = append(lines, fmt.Sprintf("%d. %s", i+1, word))
@@ -737,7 +750,7 @@ func (m Model) passphraseView() string {
 	return title.Render(passTitle) + "\n" + t.passIntro + "\n" + secret.Render(strings.Join(lines, "\n")) + "\n" + t.passOutro + "\n" + hint.Render(t.secretHint)
 }
 func (m Model) recoveryView() string {
-	title, hint, secret := m.styles.title, m.styles.hint, m.styles.secret
+	title, hint, secret := m.styles.title, m.styles.hint, lipgloss.NewStyle().Bold(true)
 	var lines []string
 	for i := 0; i < 8; i++ {
 		lines = append(lines, fmt.Sprintf("%-17s %-17s %s", fmt.Sprintf("%d. %s", i+1, m.words[i]), fmt.Sprintf("%d. %s", i+9, m.words[i+8]), fmt.Sprintf("%d. %s", i+17, m.words[i+16])))
