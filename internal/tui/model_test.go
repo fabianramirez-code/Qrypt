@@ -107,7 +107,7 @@ func TestLanguageSelection(t *testing.T) {
 		t.Run(tc.marker, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config", "identity")
 			m := send(t, New(path, tc.preferred), tea.WindowSizeMsg{Width: 80, Height: 24})
-			if !m.View().AltScreen || !strings.Contains(plain(m), "Language / Idioma") || !strings.Contains(plain(m), tc.marker) || !strings.Contains(plain(m), "↑/↓: move / mover   Enter: select / elegir   Esc: quit / salir") {
+			if !m.View().AltScreen || !strings.Contains(plain(m), "Language / Idioma") || !strings.Contains(plain(m), tc.marker) || !strings.Contains(plain(m), "↑/↓: move / mover   Tab: list / lista") || !strings.Contains(plain(m), "Enter: select / elegir   Esc: quit / salir") {
 				t.Fatal(plain(m))
 			}
 			absence(t, path)

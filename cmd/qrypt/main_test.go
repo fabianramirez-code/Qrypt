@@ -75,6 +75,35 @@ func TestPreviewCleanupOnExitAndError(t *testing.T) {
 	}
 }
 
+func TestPreviewSettingsStayInTemporaryDirectory(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "settings")
+	if err := os.WriteFile(outside, []byte("untouched"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var temporary string
+	code, err := runPreview(func(m tui.Model, path string) (tui.Model, error) {
+		temporary = filepath.Dir(path)
+		next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+		next, _ = next.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+		next, _ = next.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		next, _ = next.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+		if _, err := os.Stat(filepath.Join(temporary, "settings")); err != nil {
+			t.Errorf("preview settings not in temporary directory: %v", err)
+		}
+		return next.(tui.Model), nil
+	})
+	if err != nil || code != 0 {
+		t.Fatalf("preview: code %d, error %v", code, err)
+	}
+	if _, err := os.Stat(temporary); !os.IsNotExist(err) {
+		t.Fatalf("temporary directory remains: %v", err)
+	}
+	data, err := os.ReadFile(outside)
+	if err != nil || string(data) != "untouched" {
+		t.Fatalf("outside settings changed: %q %v", data, err)
+	}
+}
+
 func TestSystemLanguageTag(t *testing.T) {
 	t.Logf("system language tag: %s", systemLanguageTag())
 }

@@ -17,13 +17,17 @@ What the `qrypt` program shows and how it behaves. It has four flows: creating a
 
 ## Language
 
-Qrypt asks for the language every time it starts. It is the first screen.
+Qrypt offers language and theme on the first screen every time it starts.
 
-- **The screen shows both languages at once.** Up and Down move, Enter selects, and Esc quits with status 1.
+- **The screen shows both languages at once.** Up and Down move within the active list, Tab switches between language and theme, Enter continues, and Esc quits with status 1. Selecting `Edit colors` opens the custom color editor; Ctrl+R resets one role, Ctrl+A resets all roles, and Esc saves any changes and returns.
 - **The system language is selected in advance:** Spanish if the system language is Spanish, English otherwise. On Windows Qrypt reads the user's preferred display language. On other systems it reads `LC_ALL`, `LC_MESSAGES` and `LANG`, in that order.
 - **The choice is remembered** in a [settings file](settings.md), written only when the user changes it. The saved language is selected in advance. A settings file that cannot be read is ignored. The same screen also chooses the theme; see [Settings and themes](settings.md). Starting and quitting without a change writes nothing, so quitting before an identity is saved still leaves no identity file and no vault.
 - **Only the interface is translated.** The passphrase and the recovery phrase are always English words, in both languages. An identity therefore has one format, and its words can be typed on any keyboard. The Spanish Welcome screen says that the words are in English.
 - **Before the choice, both languages.** The language screen, the request to enlarge the window while no language is chosen, and the lines printed when Qrypt cannot start are in English and in Spanish.
+
+## Look
+
+Every full-size screen has a small Qrypt title bar and a bottom key bar separated by a rule; the recovery words retain their rounded bordered panel. The light frame leaves room for the 24 recovery words at 60 by 20. Themes change color and borders, not the words or keys. `green` is the default; moving through themes on the first screen previews each one live. The `mono` theme uses bold, faint and reverse rather than colored text. See [Settings and themes](settings.md) for saved choices and custom colors.
 
 ## Starting
 

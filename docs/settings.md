@@ -2,7 +2,7 @@
 
 How Qrypt remembers the interface language and theme, and how a user edits colors. Decided with the user: settings are saved in a file.
 
-> **Status:** design only. Not implemented yet.
+> **Status:** implemented. Terminal background detection is not available; `auto` uses `green` on a dark background.
 
 ## What is stored
 
@@ -48,7 +48,7 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 | `violet`   | Violet accent.                                                                        |
 | `mono`     | No hue: bold, dim and reverse video only. Sober, and the safest on odd terminals.     |
 | `contrast` | White on black with saturated colors, and thick borders. Meets WCAG AAA for text.     |
-| `auto`     | Follows the terminal's light or dark background and picks readable colors for each.   |
+| `auto`     | Uses the dark-background `green` fallback where terminal background detection is unavailable. |
 
 - Every built-in theme keeps text at a contrast ratio of at least 4.5:1 against its background, and a test checks it.
 - Meaning never depends on color alone: errors and successes also carry words, and the selected row also carries the `>` marker.
@@ -60,7 +60,7 @@ The user edits a theme from the first screen. Choosing `Edit colors` copies the 
 
 - **Input:** a hex value `#rrggbb`, typed. Qrypt shows a swatch next to it, and the role's sample text in that color.
 - **Checks before accepting:** the value is valid hex, and for `text`, `dim`, `accent`, `success`, `error` and `warning` the contrast against the theme background is at least 3:1. A color that fails is rejected with a message, never silently changed.
-- **Reset:** a key restores the role, and another restores the whole theme.
+- **Reset:** Ctrl+R restores the selected role, and Ctrl+A restores the whole theme.
 - **Saved as the user leaves the editor**, and only if something changed.
 
 ## The first screen
@@ -80,5 +80,5 @@ Language and theme are chosen on the same first screen, as today but with a seco
 
 ## Open questions
 
-- Whether `auto` can read the terminal background on every terminal Qrypt supports. Where it cannot, it falls back to `green` on a dark background.
+- Terminal background detection is not currently available; `auto` falls back to `green` on a dark background.
 - Importing and exporting a custom theme file.

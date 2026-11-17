@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/fabianramirez-code/qrypt/internal/clipboard"
-
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/fabianramirez-code/qrypt/internal/clipboard"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
+	"github.com/fabianramirez-code/qrypt/internal/settings"
+	"github.com/fabianramirez-code/qrypt/internal/tui/theme"
 	"github.com/fabianramirez-code/qrypt/internal/vault"
 )
 
@@ -46,6 +48,7 @@ const (
 	rebuilding
 	restored
 	notRestored
+	colorEditor
 )
 
 type sealedMsg struct {
@@ -88,48 +91,79 @@ type unlockedMsg struct {
 
 // Model holds the state of a single identity creation, unlock, or restore session.
 type Model struct {
-	path          string
-	preview       bool
-	previewID     *identity.Identity
-	language      Language
-	start         screen
-	screen        screen
-	width, height int
-	status        int
-	id            *identity.Identity
-	sealed        []byte
-	pass          string
-	words         []string
-	input         string
-	message       string
-	visible       bool
-	positions     [3]int
-	index         int
-	restoring     bool
-	restoreOrigin screen
-	restoreWords  []string
-	backup        string
-	vlt           *vault.Vault
-	names         []string
-	cursor        int
-	item          string
-	itemValue     []byte
-	newName       string
-	generate      func() (*identity.Identity, error)
-	pick          func() [3]int
-	copyFn        func(string) error
-	clearFn       func(string) error
-	now           func() time.Time
-	lastKey       time.Time
-	copyValue     string
-	copyActive    bool
-	copyToken     uint64
-	copyFallback  bool
+	path            string
+	settingsPath    string
+	settings        settings.Settings
+	settingsError   bool
+	themeName       string
+	styles          styles
+	themeList       bool
+	themeIndex      int
+	colorIndex      int
+	beforeEdit      settings.Settings
+	editorColors    map[string]string
+	editorOrigin    string
+	editorPalette   theme.Theme
+	preview         bool
+	previewID       *identity.Identity
+	language        Language
+	initialLanguage Language
+	start           screen
+	screen          screen
+	width, height   int
+	status          int
+	id              *identity.Identity
+	sealed          []byte
+	pass            string
+	words           []string
+	input           string
+	message         string
+	visible         bool
+	positions       [3]int
+	index           int
+	restoring       bool
+	restoreOrigin   screen
+	restoreWords    []string
+	backup          string
+	vlt             *vault.Vault
+	names           []string
+	cursor          int
+	item            string
+	itemValue       []byte
+	newName         string
+	generate        func() (*identity.Identity, error)
+	pick            func() [3]int
+	copyFn          func(string) error
+	clearFn         func(string) error
+	now             func() time.Time
+	lastKey         time.Time
+	copyValue       string
+	copyActive      bool
+	copyToken       uint64
+	copyFallback    bool
 }
 
 // New constructs a session for the explicit identity path without writing to disk.
 func New(path string, preferred Language) Model {
-	m := Model{path: path, language: preferred, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
+	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
+	loaded, err := settings.Load(m.settingsPath)
+	m.settings = loaded
+	m.settingsError = err != nil
+	if m.settings.Language == "es" {
+		m.language = Spanish
+	} else if m.settings.Language == "en" {
+		m.language = English
+	}
+	if m.settings.Theme != "" {
+		m.themeName = m.settings.Theme
+	}
+	m.initialLanguage = m.language
+	for i := 0; i < 6; i++ {
+		if themeChoice(i) == m.themeName {
+			m.themeIndex = i
+		}
+	}
+	m.refreshStyles()
 	if _, err := os.Stat(path); err == nil {
 		m.start = unlock
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -295,11 +329,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch v.Code {
 			case tea.KeyEsc:
 				return m, tea.Quit
-			case tea.KeyUp:
-				m.language = English
-			case tea.KeyDown:
-				m.language = Spanish
+			case tea.KeyTab:
+				m.themeList = !m.themeList
+			case tea.KeyUp, tea.KeyDown:
+				if m.themeList {
+					step := 1
+					if v.Code == tea.KeyUp {
+						step = -1
+					}
+					m.themeIndex = max(0, min(6, m.themeIndex+step))
+					if m.themeIndex < 6 {
+						m.themeName = themeChoice(m.themeIndex)
+						m.refreshStyles()
+					}
+				} else if v.Code == tea.KeyUp {
+					m.language = English
+				} else {
+					m.language = Spanish
+				}
 			case tea.KeyEnter:
+				if m.themeList && m.themeIndex == 6 {
+					m.openColorEditor()
+					break
+				}
+				m.savePreferences()
 				if m.preview {
 					m.startPreview()
 					if m.vlt != nil {
@@ -309,6 +362,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.screen = m.start
 				}
 			}
+		case colorEditor:
+			m.colorKey(v)
 		case unlock:
 			if v.Code == 'r' && v.Mod&tea.ModCtrl != 0 {
 				m.beginRestore(unlock)
@@ -498,15 +553,55 @@ func (m *Model) fail(err error) {
 	m.clearSecrets()
 }
 
-var title = lipgloss.NewStyle().Bold(true)
-var hint = lipgloss.NewStyle().Faint(true)
-var secret = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+type styles struct {
+	text, title, hint, secret, selected, error, success, warning, border lipgloss.Style
+}
+
+func (m *Model) refreshStyles() {
+	palette, ok := theme.ByName(m.themeName, true) // Auto falls back to green on dark terminals.
+	if !ok {
+		palette, _ = theme.ByName("green", true)
+		palette = theme.Custom(palette, m.settings.Colors)
+	}
+	m.styles = styles{
+		text: lipgloss.NewStyle(), title: lipgloss.NewStyle().Bold(true),
+		hint:     lipgloss.NewStyle().Faint(true),
+		secret:   lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1),
+		selected: lipgloss.NewStyle().Reverse(true),
+		error:    lipgloss.NewStyle().Bold(true), success: lipgloss.NewStyle().Bold(true),
+		warning: lipgloss.NewStyle().Bold(true), border: lipgloss.NewStyle(),
+	}
+	if m.themeName != "mono" {
+		m.styles.text = m.styles.text.Foreground(lipgloss.Color(hexColor(palette.Text)))
+		m.styles.title = m.styles.title.Foreground(lipgloss.Color(hexColor(palette.Accent)))
+		m.styles.hint = m.styles.hint.Foreground(lipgloss.Color(hexColor(palette.Dim)))
+		m.styles.selected = m.styles.selected.Foreground(lipgloss.Color(hexColor(palette.Accent)))
+		m.styles.error = m.styles.error.Foreground(lipgloss.Color(hexColor(palette.Error)))
+		m.styles.success = m.styles.success.Foreground(lipgloss.Color(hexColor(palette.Success)))
+		m.styles.warning = m.styles.warning.Foreground(lipgloss.Color(hexColor(palette.Warning)))
+		m.styles.border = m.styles.border.Foreground(lipgloss.Color(hexColor(palette.Border)))
+		m.styles.secret = m.styles.secret.BorderForeground(lipgloss.Color(hexColor(palette.Border)))
+	}
+}
 
 // View renders every state on the alternate screen, including small and waiting screens.
 func (m Model) View() tea.View {
 	content := m.viewContent()
 	if m.preview && (isVaultScreen(m.screen) || m.screen == vaultFailed) {
 		content += "\n" + m.language.text().previewBanner
+	}
+	if m.width >= 60 && m.height >= 20 {
+		if m.message != "" && m.screen != languageScreen {
+			messageStyle := m.styles.error
+			if m.message == m.language.text().copied {
+				messageStyle = m.styles.warning
+			}
+			content = strings.Replace(content, wrapLine(m.message), messageStyle.Render(wrapLine(m.message)), 1)
+		}
+		if m.preview && (isVaultScreen(m.screen) || m.screen == vaultFailed) {
+			content = strings.Replace(content, m.language.text().previewBanner, m.styles.warning.Render(m.language.text().previewBanner), 1)
+		}
+		content = m.frame(content)
 	}
 	view := tea.NewView(content)
 	view.AltScreen = true
@@ -521,25 +616,18 @@ func (m Model) viewContent() string {
 		return m.language.text().enlarge + "\n"
 	}
 	t := m.language.text()
+	title, hint := m.styles.title, m.styles.hint
 	switch m.screen {
 	case languageScreen:
-		first, second := "  English", "  Español"
-		if m.language == Spanish {
-			second = "> Español"
-		} else {
-			first = "> English"
-		}
-		instruction := "↑/↓: move / mover   Enter: select / elegir   Esc: quit / salir"
-		if m.width == 60 {
-			instruction = wrapLine(instruction)
-		}
-		return title.Render("Language / Idioma") + "\n" + first + "\n" + second + "\n" + hint.Render(instruction)
+		return m.languageView()
+	case colorEditor:
+		return m.colorView()
 	case unlock:
 		field := m.input
 		if !m.visible {
 			field = strings.Repeat("*", len([]rune(field)))
 		}
-		return title.Render(t.unlockTitle) + "\n" + t.unlockPrompt + "\n" + wrapWidth(field, m.width) + "\n" + t.typedWords(len(strings.Fields(m.input))) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.unlockHint) + "\n" + hint.Render(t.unlockRestoreHint)
+		return title.Render(t.unlockTitle) + "\n" + t.unlockPrompt + "\n" + wrapWidth(field, m.innerWidth()) + "\n" + t.typedWords(len(strings.Fields(m.input))) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.unlockHint) + "\n" + hint.Render(t.unlockRestoreHint)
 	case checkingUnlock:
 		return title.Render(t.unlockTitle) + "\n" + t.checking
 	case vaultList:
@@ -547,11 +635,11 @@ func (m Model) viewContent() string {
 	case vaultItem:
 		return title.Render(t.itemTitle) + "\n" + wrapLine(m.item) + "\n" + m.itemValueView(t) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.itemHint)
 	case vaultAddName:
-		return title.Render(t.addTitle) + "\n" + t.namePrompt + "\n" + wrapWidth(m.input, m.width) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.addNameHint)
+		return title.Render(t.addTitle) + "\n" + t.namePrompt + "\n" + wrapWidth(m.input, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.addNameHint)
 	case vaultAddValue:
-		return title.Render(t.addTitle) + "\n" + wrapLine(m.newName) + "\n" + t.valuePrompt + "\n" + wrapWidth(hide(m.input, m.visible), m.width) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.valueHint)
+		return title.Render(t.addTitle) + "\n" + wrapLine(m.newName) + "\n" + t.valuePrompt + "\n" + wrapWidth(hide(m.input, m.visible), m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.valueHint)
 	case vaultEdit:
-		return title.Render(t.editTitle) + "\n" + wrapLine(m.item) + "\n" + t.valuePrompt + "\n" + wrapWidth(hide(m.input, m.visible), m.width) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.valueHint)
+		return title.Render(t.editTitle) + "\n" + wrapLine(m.item) + "\n" + t.valuePrompt + "\n" + wrapWidth(hide(m.input, m.visible), m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.valueHint)
 	case vaultDelete:
 		return title.Render(t.deleteTitle) + "\n" + wrapLine(m.selectedName()) + "\n" + t.deleteQuestion + "\n" + hint.Render(t.deleteHint)
 	case vaultFailed:
@@ -573,7 +661,7 @@ func (m Model) viewContent() string {
 		if !m.visible {
 			field = strings.Repeat("*", len([]rune(field)))
 		}
-		return title.Render(t.restoreWordTitle) + "\n" + t.restoreProgress(m.index+1) + "\n" + t.restorePrompt(m.index+1) + "\n" + wrapWidth(field, m.width) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.restoreWordHint)
+		return title.Render(t.restoreWordTitle) + "\n" + t.restoreProgress(m.index+1) + "\n" + t.restorePrompt(m.index+1) + "\n" + wrapWidth(field, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.restoreWordHint)
 	case rebuilding:
 		return title.Render(t.restoreTitle) + "\n" + t.rebuilding
 	case passphrase:
@@ -636,6 +724,7 @@ func wrapWidth(text string, maxWidth int) string {
 }
 
 func (m Model) passphraseView() string {
+	title, hint, secret := m.styles.title, m.styles.hint, m.styles.secret
 	var lines []string
 	for i, word := range strings.Fields(m.pass) {
 		lines = append(lines, fmt.Sprintf("%d. %s", i+1, word))
@@ -648,6 +737,7 @@ func (m Model) passphraseView() string {
 	return title.Render(passTitle) + "\n" + t.passIntro + "\n" + secret.Render(strings.Join(lines, "\n")) + "\n" + t.passOutro + "\n" + hint.Render(t.secretHint)
 }
 func (m Model) recoveryView() string {
+	title, hint, secret := m.styles.title, m.styles.hint, m.styles.secret
 	var lines []string
 	for i := 0; i < 8; i++ {
 		lines = append(lines, fmt.Sprintf("%-17s %-17s %s", fmt.Sprintf("%d. %s", i+1, m.words[i]), fmt.Sprintf("%d. %s", i+9, m.words[i+8]), fmt.Sprintf("%d. %s", i+17, m.words[i+16])))

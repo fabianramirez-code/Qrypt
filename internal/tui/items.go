@@ -291,7 +291,12 @@ func hide(text string, revealed bool) string {
 	if revealed {
 		return text
 	}
-	return strings.Repeat("*", len([]rune(text)))
+	count := len([]rune(text))
+	if count > maxShownRunes {
+		// Only the mask is abbreviated; the entered value remains intact.
+		return strings.Repeat("*", maxShownRunes) + "…"
+	}
+	return strings.Repeat("*", count)
 }
 
 func (m Model) itemValueView(t texts) string {
@@ -299,10 +304,11 @@ func (m Model) itemValueView(t texts) string {
 	if runes > maxShownRunes {
 		return t.tooLong
 	}
-	return wrapWidth(hide(string(m.itemValue), m.visible), m.width)
+	return wrapWidth(hide(string(m.itemValue), m.visible), m.innerWidth())
 }
 
 func (m Model) listView(t texts) string {
+	title, hint := m.styles.title, m.styles.hint
 	if len(m.names) == 0 {
 		return title.Render(t.listTitle) + "\n" + wrapLine(t.noItems) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listEmptyHint)
 	}
@@ -314,7 +320,11 @@ func (m Model) listView(t texts) string {
 		if i == m.cursor {
 			prefix = "> "
 		}
-		lines = append(lines, firstLine(prefix+m.names[i]))
+		row := firstLine(prefix + m.names[i])
+		if i == m.cursor {
+			row = m.styles.selected.Render(row)
+		}
+		lines = append(lines, row)
 	}
 	return title.Render(t.listTitle) + "\n" + strings.Join(lines, "\n") + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listHint)
 }
