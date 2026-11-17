@@ -31,6 +31,7 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 | ------------------------------------ | -------------------------------------------------------------------- |
 | [Key model](docs/key-model.md)       | Key types, private key protection, and encryption for several people |
 | [Identity](docs/identity.md)         | Exact constructions and the identity file format                     |
+| [Vault](docs/vault.md)               | Exact constructions and the secret file format                       |
 | [Terminal interface](docs/tui.md)    | Screens and the rules they follow                                    |
 | [Threat model](docs/threat-model.md) | Main attack paths and the planned defenses                           |
 
