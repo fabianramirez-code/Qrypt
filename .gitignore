@@ -2,3 +2,4 @@
 *.stackdump
 /dist/
 /go/
+/qrypt.exe
