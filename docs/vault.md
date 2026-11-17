@@ -17,7 +17,7 @@ Version 1 fixes every algorithm and parameter. Nothing is configurable, and the 
 
 ## Scope of version 1
 
-Version 1 has **one scope with one member**: the identity that created it. The files already carry what several members and several scopes will need (a scope id and a list of wrapped keys), so adding them later does not change how a secret file is read. How scopes are named, how members are added or removed, and how public keys are trusted is decided with those features.
+Version 1 has **several scopes, each with one member**: the identity that created it. A scope is what the interface calls a *space*, such as `Personal` or `Work`. Each scope has its own key, so the files of one scope say nothing about another. The files already carry what several members and several scopes will need (a scope id and a list of wrapped keys), so adding them later does not change how a secret file is read. How scopes are named, how members are added or removed, and how public keys are trusted is decided with those features.
 
 ## 1. Scope key
 
@@ -56,7 +56,25 @@ The wrapped scope key is the output of a single-shot HPKE seal (RFC 9180, base m
 - Qrypt rejects a file whose fingerprint does not match the identity's public key, before any decapsulation.
 - If unwrapping fails, Qrypt cannot tell a wrong identity from a damaged file, and reports both as the same error.
 
-## 3. Secret file
+## 3. Scope name file
+
+A scope has a name chosen by the user, such as `Work`. A name can say a lot, so it is stored encrypted, in its own file of 304 bytes:
+
+| Offset | Size | Field                                                   |
+| ------ | ---- | ------------------------------------------------------- |
+| 0      | 7    | Magic: the ASCII bytes `QRYPTSN`                        |
+| 7      | 1    | Version: `0x01`                                         |
+| 8      | 24   | Nonce (random)                                          |
+| 32     | 272  | Sealed name: 256 bytes of padded name and a 16-byte tag |
+
+- **Key:** derived from the scope key like the other subkeys, with the label `qrypt/v1/vault/scope/name`.
+- **Padding and rules:** the same as a [secret's name](#name): valid UTF-8, 1 to 255 bytes, no control characters, padded to 256 bytes.
+- **Encryption:** XChaCha20-Poly1305. The associated data is the first 8 bytes of the file followed by the 16 bytes of the scope id, so a name file cannot be moved to another scope.
+- **Renaming** writes a new file, with a new nonce, and replaces the old one with an atomic rename.
+- **Unique names.** Two scopes of the same vault cannot have the same name, compared byte for byte.
+- **A scope without a name file** is shown with the name `Personal`. This is the case of a vault created before scopes had names.
+
+## 4. Secret file
 
 A secret file holds one secret: its name and its value, each sealed on its own.
 
@@ -84,7 +102,7 @@ The value is the secret's bytes, from 0 to 65,536 bytes. The value segment is th
 
 Each segment is encrypted with XChaCha20-Poly1305: the name with the name key, the value with the value key, each with its own random nonce.
 
-The associated data of both segments is the same: the first 8 bytes of the file (magic and version), the 16 bytes of the scope id, and the 16 bytes of the file id (section 4), followed by a one-byte segment tag: `0x01` for the name, `0x02` for the value. This binds each segment to its scope, to its own file name, and to its role, so a file cannot be copied to another scope, renamed, or have its name and value swapped.
+The associated data of both segments is the same: the first 8 bytes of the file (magic and version), the 16 bytes of the scope id, and the 16 bytes of the file id (section 5), followed by a one-byte segment tag: `0x01` for the name, `0x02` for the value. This binds each segment to its scope, to its own file name, and to its role, so a file cannot be copied to another scope, renamed, or have its name and value swapped.
 
 ### Writing
 
@@ -96,7 +114,7 @@ Both nonces are generated again, at random, every time a secret is written, incl
 - Qrypt decrypts only the segment it needs. Listing decrypts names only. Showing one secret decrypts that file's value only.
 - If decryption fails, Qrypt cannot tell a damaged file from one of another scope, and reports both as the same error.
 
-## 4. Storage
+## 5. Storage
 
 | System  | Default location                                               |
 | ------- | -------------------------------------------------------------- |
@@ -106,28 +124,34 @@ Both nonces are generated again, at random, every time a secret is written, incl
 
 ```text
 vault/
-  scope                  the scope file
-  secrets/
-    3f9c…(32 hex).qrs    one file per secret
+  scopes/
+    7c1e…(32 hex)/         one directory per scope, named with its scope id
+      scope                the scope file
+      name                 the scope name file
+      secrets/
+        3f9c…(32 hex).qrs  one file per secret
 ```
 
 - **Opaque names.** A secret file is named with 32 lowercase hexadecimal characters: its 16-byte **file id**, drawn at random when the secret is created. It says nothing about the secret. The file id does not change when the value is updated.
+- **Opaque scope directories.** A scope directory is named with the 32 lowercase hexadecimal characters of its scope id, which is random and is not secret.
+- **Earlier layout.** A vault created before scopes existed has its `scope` file and its directory of secret files directly in `vault/`. When Qrypt opens such a vault it moves both into the directory of that scope, with two renames, and changes no file. If it is interrupted between the two renames, it finishes the move the next time.
+- **Removing a scope** is only possible when it holds no secret. Qrypt then removes its files and its directory.
 - **Never overwritten by accident.** Creating a vault refuses to write where a scope file already exists. Adding a secret refuses a name already in use.
 - **Written whole or not at all.** Qrypt writes a file under a temporary name in the same directory, syncs it, and then links it to its final name. Updating a secret replaces the file with an atomic rename. After a crash a file is either complete or absent, and an update leaves either the old secret or the new one. A crash can leave a temporary file behind, with the extension `.tmp`; it is safe to delete, and Qrypt ignores it.
 - **Owner only.** The directories are created with mode `0700` and the files with mode `0600`. On Windows these modes have no effect, and the files rely on the permissions of the user profile.
 - **Deleting.** Deleting a secret removes its file. Qrypt does not overwrite the bytes first, because overwriting is not reliable on modern storage. Anyone who copied the file earlier can still read it, which is why removed access always requires changing the real secret.
 
-## 5. What the files reveal
+## 6. What the files reveal
 
 An attacker who copies the vault learns:
 
-- how many secrets there are, and roughly how long each name and value is (values to the nearest 256 bytes; every name looks the same);
+- how many scopes there are, how many secrets each holds, and roughly how long each name and value is (values to the nearest 256 bytes; every name looks the same);
 - when each file was last changed, from the file system;
 - the scope id and the public-key fingerprint of the member.
 
 They learn nothing about names or values without the scope key, which needs the identity.
 
-## 6. Limits
+## 7. Limits
 
 - **Tampering and rollback are not detected yet.** Anyone able to write to the vault can delete a file or put back an older copy of one. A person who can write can also build a scope file wrapped to their own key. The AEAD stops them from changing what a file says, not from replacing the whole vault. Detecting this needs the signed member list and chained log of the [threat model](threat-model.md#3-tampering-with-the-vault-repository), which are not part of version 1.
 - **Listing opens every name.** To list secrets or check that a name is free, Qrypt reads every file in the scope and decrypts the 256-byte name segments, not the values. The [threat model](threat-model.md#1-infected-device) already accepts that an infected device can read what the program holds in memory.
@@ -135,7 +159,7 @@ They learn nothing about names or values without the scope key, which needs the 
 - **One writer at a time.** Two programs adding the same name at the same moment can both succeed. Version 1 does not lock the vault.
 - **Secrets in memory:** see the limit described in the [threat model](threat-model.md#1-infected-device).
 
-## 7. Libraries
+## 8. Libraries
 
 No new dependency. HPKE with X-Wing, HKDF-SHA-256, SHA-256, and the random generator come from the Go standard library; XChaCha20-Poly1305 comes from `golang.org/x/crypto`, already used by the identity.
 
@@ -143,7 +167,6 @@ The implementation is the package `internal/vault`. Its tests rebuild a scope fi
 
 ## Open questions
 
-- **Scopes:** their names, how several scopes coexist, and what a scope is for personal and for work secrets.
 - **Members:** adding and removing members, and trusting their public keys.
 - **Signatures and the change log:** how the Ed25519 and ML-DSA-65 signatures are combined and what they cover.
 - **Synchronization:** how the vault moves between devices and a repository.

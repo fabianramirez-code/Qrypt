@@ -28,6 +28,7 @@ const (
 	keySize = 32
 
 	scopeMagic     = "QRYPTSK"
+	scopeNameMagic = "QRYPTSN"
 	secretMagic    = "QRYPTSE"
 	magicSize      = 7
 	formatVersion  = 0x01
@@ -64,13 +65,15 @@ const (
 	maxValueSealed = ((lengthPrefixSize+MaxValueSize+valueBlock-1)/valueBlock)*valueBlock + tagSize
 	maxSecretFile  = valueOffset + maxValueSealed
 
-	secretExt = ".qrs"
-	scopeName = "scope"
-	secretDir = "secrets"
+	secretExt     = ".qrs"
+	scopeName     = "scope"
+	scopeNameFile = "name"
+	secretDir     = "secrets"
 
-	wrapLabel  = "qrypt/v1/vault/scope-key"
-	nameLabel  = "qrypt/v1/vault/secret/name"
-	valueLabel = "qrypt/v1/vault/secret/value"
+	wrapLabel      = "qrypt/v1/vault/scope-key"
+	nameLabel      = "qrypt/v1/vault/secret/name"
+	valueLabel     = "qrypt/v1/vault/secret/value"
+	scopeNameLabel = "qrypt/v1/vault/scope/name"
 
 	segmentName  byte = 0x01
 	segmentValue byte = 0x02
@@ -108,10 +111,11 @@ func DefaultDir() (string, error) {
 
 // Vault is an open vault holding the scope's derived keys in memory. Call Close when done.
 type Vault struct {
-	dir      string
-	scopeID  []byte
-	nameKey  []byte
-	valueKey []byte
+	dir          string
+	scopeID      []byte
+	nameKey      []byte
+	valueKey     []byte
+	scopeNameKey []byte
 }
 
 func derive(scopeKey []byte, label string) []byte {
@@ -124,10 +128,11 @@ func derive(scopeKey []byte, label string) []byte {
 
 func newVault(dir string, scopeID, scopeKey []byte) *Vault {
 	return &Vault{
-		dir:      dir,
-		scopeID:  scopeID,
-		nameKey:  derive(scopeKey, nameLabel),
-		valueKey: derive(scopeKey, valueLabel),
+		dir:          dir,
+		scopeID:      scopeID,
+		nameKey:      derive(scopeKey, nameLabel),
+		valueKey:     derive(scopeKey, valueLabel),
+		scopeNameKey: derive(scopeKey, scopeNameLabel),
 	}
 }
 
@@ -208,7 +213,8 @@ func Open(dir string, id *identity.Identity) (*Vault, error) {
 func (v *Vault) Close() {
 	clear(v.nameKey)
 	clear(v.valueKey)
-	v.nameKey, v.valueKey = nil, nil
+	clear(v.scopeNameKey)
+	v.nameKey, v.valueKey, v.scopeNameKey = nil, nil, nil
 }
 
 // ValidateName reports whether name can be used as a secret name.
