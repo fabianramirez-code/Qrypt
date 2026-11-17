@@ -117,7 +117,54 @@ func diskUndecryptable(v *Vault) (int, error) {
 	}
 	return count, nil
 }
+
+// undecryptable reports whether err means the content is not readable with these keys.
+func undecryptable(err error) bool {
+	return errors.Is(err, ErrDecryption) || errors.Is(err, ErrInvalidFormat) || errors.Is(err, ErrUnsupportedVersion)
+}
+
+// keyProven reports whether at least one file of the scope decrypts with the
+// scope key, or the scope holds no item at all. When nothing decrypts, the key
+// itself is in doubt (a replaced scope file), so nothing may be removed.
+func keyProven(v *Vault) (bool, error) {
+	if _, err := os.Stat(filepath.Join(v.dir, scopeNameFile)); err == nil {
+		if _, nameErr := v.nameUnchecked(); nameErr == nil {
+			return true, nil
+		} else if !undecryptable(nameErr) {
+			return false, nameErr
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	files, err := os.ReadDir(filepath.Join(v.dir, secretDir))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	items := 0
+	for _, f := range files {
+		fid, ok := parseFileName(f.Name())
+		if !ok || f.IsDir() {
+			continue
+		}
+		items++
+		blob, err := os.ReadFile(filepath.Join(v.dir, secretDir, f.Name()))
+		if err != nil {
+			return false, err
+		}
+		if _, err = v.decodeName(fid, blob); err == nil {
+			return true, nil
+		}
+	}
+	// With no item there is nothing of value to lose: at most a name that cannot be read.
+	return items == 0, nil
+}
+
 func scopeProblem(v *Vault, kind ProblemKind, recorded uint64) (Problem, error) {
+	if proven, err := keyProven(v); err != nil {
+		return Problem{}, err
+	} else if !proven {
+		return Problem{ScopeID: v.ID(), Kind: ProblemUnreadable, Recorded: recorded}, nil
+	}
 	p := *v.problem(kind)
 	p.Recorded = recorded
 	if _, err := os.Stat(filepath.Join(v.dir, scopeNameFile)); errors.Is(err, os.ErrNotExist) {
@@ -190,7 +237,13 @@ func inspectScope(dir, scopeID string, id *identity.Identity, rec recordEntry, h
 			return nil, &p, e
 		}
 	}
-	if _, e := v.nameUnchecked(); e != nil {
+	// Files that match the manifest but cannot be decrypted mean the scope key changed.
+	proven, e := keyProven(v)
+	if e != nil {
+		v.Close()
+		return nil, nil, e
+	}
+	if _, nameErr := v.nameUnchecked(); !proven || nameErr != nil {
 		p, x := scopeProblem(v, ProblemFiles, rec.generation)
 		v.Close()
 		if x != nil {
@@ -244,6 +297,12 @@ func Accept(root, statePath string, id *identity.Identity, scopeID string) error
 	if v.ID() != scopeID {
 		return ErrInvalidFormat
 	}
+	// Never remove anything on the word of a key that decrypts nothing.
+	if proven, err := keyProven(v); err != nil {
+		return err
+	} else if !proven {
+		return ErrScopeUnreadable
+	}
 	raw, err := os.ReadFile(filepath.Join(dir, "manifest"))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -261,6 +320,8 @@ func Accept(root, statePath string, id *identity.Identity, scopeID string) error
 	if name, e := os.ReadFile(namePath); e == nil {
 		if _, e = v.nameUnchecked(); e == nil {
 			m.NameHash = sha256.Sum256(name)
+		} else if !undecryptable(e) {
+			return e // A read error is not a reason to remove the file.
 		} else if e = os.Remove(namePath); e != nil {
 			return e
 		}

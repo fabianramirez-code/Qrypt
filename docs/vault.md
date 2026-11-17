@@ -196,7 +196,8 @@ A manifest proves that a state was written by the identity. It cannot prove that
 | Equal to the record, with the same hash                         | Unchanged. Accepted.                                                   |
 | Equal to the record, with a different hash                      | Problem: two different states claim the same generation.               |
 | Lower than the record                                           | Problem: the scope was rolled back to an older state.                  |
-| Recorded scope whose directory or manifest is missing           | Problem: the scope was removed outside Qrypt.                          |
+| Recorded scope whose directory is missing                       | Problem: the scope was removed outside Qrypt.                          |
+| Recorded scope whose manifest is missing                        | Problem: the manifest was removed. Qrypt does not write a new one.     |
 | A scope with a manifest and no record                           | First time on this device. Accepted and recorded.                      |
 | A scope with no manifest and no record                          | Created before manifests existed. Qrypt writes its first manifest.     |
 
@@ -214,7 +215,14 @@ Damage happens without an attack: a disk error, an interrupted synchronization t
 
 Accepting never brings a file back. Whatever was lost stays lost.
 
-**A scope that cannot be opened at all** is the exception. If its scope file is damaged, or was written for another identity, its key cannot be obtained and nothing in it can be read or signed. Qrypt reports it, leaves every file untouched, and does not offer to accept it: the files may be valid for another identity.
+**A scope whose key is in doubt** is the exception. Qrypt reports it, leaves every file untouched, and does not offer to accept it. This is the case when:
+
+- its scope file is damaged or was written for another identity, so its key cannot be obtained; or
+- the scope holds secrets and not one file decrypts. A scope file replaced by another valid one, wrapping a different key, looks exactly like this. Removing the files would then destroy secrets that the original scope file can still read.
+
+The files may be valid under another key or another identity, so only putting the right scope file back, for example from a [mirror](mirror.md), recovers them.
+
+The record is updated after the manifest. If writing the record fails, the change itself is already saved and Qrypt reports the failure.
 
 ## 7. What the files reveal
 

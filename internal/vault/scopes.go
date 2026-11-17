@@ -434,21 +434,22 @@ func RemoveScope(v *Vault) error {
 	}
 	// One rename takes the scope out of the vault; a crash while its files are
 	// being removed then leaves only an ignored directory, never half a scope.
-	removed := filepath.Join(filepath.Dir(v.dir), ".scope-removed-"+v.ID())
-	if err := os.Rename(v.dir, removed); err != nil {
-		return err
-	}
-	v.Close()
-	if err := os.RemoveAll(removed); err != nil {
-		return err
-	}
+	// The record entry goes first: a crash after it leaves a scope with no entry,
+	// which opens normally, never an entry with no scope, which looks removed.
 	if v.statePath != "" {
 		entries, err := readRecord(v.statePath)
 		if err != nil {
 			return err
 		}
 		delete(entries, v.ID())
-		return writeRecord(v.statePath, entries)
+		if err := writeRecord(v.statePath, entries); err != nil {
+			return err
+		}
 	}
-	return nil
+	removed := filepath.Join(filepath.Dir(v.dir), ".scope-removed-"+v.ID())
+	if err := os.Rename(v.dir, removed); err != nil {
+		return err
+	}
+	v.Close()
+	return os.RemoveAll(removed)
 }
