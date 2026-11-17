@@ -627,6 +627,14 @@ func (m *Model) refreshStyles() {
 
 // View renders every state on the alternate screen, including small and waiting screens.
 func (m Model) View() tea.View {
+	if m.wide() {
+		view := tea.NewView(m.wideView())
+		if m.styles.palette.Surface.A != 0 {
+			view.BackgroundColor = m.styles.palette.Background
+		}
+		view.AltScreen = true
+		return view
+	}
 	content := m.viewContent()
 	if m.preview && (isVaultScreen(m.screen) || m.screen == vaultFailed) {
 		content += "\n" + m.language.text().previewBanner

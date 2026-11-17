@@ -131,6 +131,12 @@ The first screen after unlocking lists the spaces by name, each with the number 
 - **Inside a space**, the screens below work as before, on that space only. Esc on its list returns to Spaces instead of locking. The title of the list is the name of the space.
 - **Moving an item between spaces** is not offered yet.
 
+### Wide mode
+
+At 100 columns by 20 rows or larger, the vault's Spaces, List and Item screens show three bordered panes side by side: spaces and their item counts on the left, the selected space's item names in the center, and the selected item's name and value on the right. At 100 columns the panes are 25, 43 and 30 columns wide, separated by one-column gaps; extra width is distributed at roughly 25/45/30. The pane corresponding to the current screen has the accent border; the others are dim. For now, Enter opens the selected space or item and Esc goes back, as in the single-column flow. The Item screen still uses Tab to reveal or hide a value.
+
+The header has a one-line Qrypt title and the active space name; from 30 rows it shows the six-row logo instead. The two-row footer puts the focused pane's key hints on the left and the current copy notice or error on the right, or the active space's item count when there is no message. When the status cannot fit beside the hints, it uses the second row. The detail pane shows a fixed-length mask and the selected name while unfocused; a value that cannot be displayed whole shows the existing "too long" line, never a cut value. The preview banner remains visible. Add, edit, rename and delete forms still use today's single bordered panel. Below 100 by 20, the existing single-column rendering is unchanged.
+
 ### Items
 
 | Screen     | Shows                                                                                      | Keys                                                                                        |
