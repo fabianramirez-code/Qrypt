@@ -33,7 +33,7 @@ func DefaultPath() (string, error) {
 func validLanguage(s string) bool { return s == "en" || s == "es" }
 func validTheme(s string) bool {
 	switch s {
-	case "cyan", "violet", "mono", "contrast", "auto", "custom":
+	case "green", "violet", "mono", "contrast", "auto", "custom":
 		return true
 	}
 	return false

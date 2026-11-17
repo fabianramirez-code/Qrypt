@@ -65,7 +65,7 @@ func TestValidateRole(t *testing.T) {
 }
 
 func TestBuiltins(t *testing.T) {
-	if !reflect.DeepEqual(Names(), []string{"cyan", "violet", "mono", "contrast", "auto"}) {
+	if !reflect.DeepEqual(Names(), []string{"green", "violet", "mono", "contrast", "auto"}) {
 		t.Fatalf("names: %v", Names())
 	}
 	for _, name := range Names() {
@@ -88,7 +88,7 @@ func TestBuiltins(t *testing.T) {
 }
 
 func TestCustomPreservesBaseAndSkipsInvalid(t *testing.T) {
-	base, _ := ByName("cyan", true)
+	base, _ := ByName("green", true)
 	changed := Custom(base, map[string]string{"accent": "#ffffff", "unknown": "#ffffff", "text": "invalid"})
 	white, _ := ParseHex("#ffffff")
 	if changed.Accent != white || changed.Text != base.Text || changed.Background != base.Background {

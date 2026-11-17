@@ -9,7 +9,7 @@ How Qrypt remembers the interface language and theme, and how a user edits color
 | Setting  | Values                                                              |
 | -------- | ------------------------------------------------------------------- |
 | Language | `en` or `es`                                                        |
-| Theme    | `cyan`, `violet`, `mono`, `contrast`, `auto`, or `custom`           |
+| Theme    | `green`, `violet`, `mono`, `contrast`, `auto`, or `custom`           |
 | Colors   | For `custom` only: the hex value of each color role                 |
 
 The file never holds a secret, a name, a value, a path to the vault, or anything about the identity. It is plain text, so the user can read it and Qrypt can show exactly what it saves.
@@ -25,7 +25,7 @@ The file never holds a secret, a name, a value, a path to the vault, or anything
 - **Written when the user changes something**, not at startup. Starting and quitting without a change writes nothing.
 - **Whole or not at all:** a temporary file in the same directory, synced, then renamed over the old one.
 - **Owner only:** directory `0700`, file `0600`.
-- **Never fatal.** A missing, unreadable, too large (over 4 KiB) or invalid file is ignored: Qrypt starts with the defaults (system language, theme `cyan`) and shows a one-line notice on the first screen. It never overwrites a file it could not read until the user changes a setting.
+- **Never fatal.** A missing, unreadable, too large (over 4 KiB) or invalid file is ignored: Qrypt starts with the defaults (system language, theme `green`) and shows a one-line notice on the first screen. It never overwrites a file it could not read until the user changes a setting.
 - **Format:** one `key=value` per line, UTF-8, for example `language=es`, `theme=custom`, `color.accent=#22d3ee`. Unknown keys are ignored. Invalid values make that one line be ignored.
 
 ## Themes
@@ -44,7 +44,7 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 
 | Theme      | Look                                                                                  |
 | ---------- | ------------------------------------------------------------------------------------- |
-| `cyan`     | Cyan accent. The default.                                                             |
+| `green`    | The green of Gentle Shell (`#68b78d` on dark backgrounds). The default.               |
 | `violet`   | Violet accent.                                                                        |
 | `mono`     | No hue: bold, dim and reverse video only. Sober, and the safest on odd terminals.     |
 | `contrast` | White on black with saturated colors, and thick borders. Meets WCAG AAA for text.     |
@@ -69,7 +69,7 @@ Language and theme are chosen on the same first screen, as today but with a seco
 
 - Up and Down move within a list. Tab switches between the language list and the theme list. Enter continues. Esc quits with status 1.
 - The theme preview is live: moving in the theme list recolors the screen at once.
-- The saved choice is selected in advance. Without a settings file, the language comes from the system and the theme is `cyan`.
+- The saved choice is selected in advance. Without a settings file, the language comes from the system and the theme is `green`.
 - Continuing saves the language and theme only if they differ from what is stored.
 
 ## What does not change
@@ -80,5 +80,5 @@ Language and theme are chosen on the same first screen, as today but with a seco
 
 ## Open questions
 
-- Whether `auto` can read the terminal background on every terminal Qrypt supports. Where it cannot, it falls back to `cyan` on a dark background.
+- Whether `auto` can read the terminal background on every terminal Qrypt supports. Where it cannot, it falls back to `green` on a dark background.
 - Importing and exporting a custom theme file.

@@ -36,7 +36,7 @@ func (t Theme) Lookup(role string) (color.RGBA, bool) {
 }
 
 // Names lists the built-in themes in display order.
-func Names() []string { return []string{"cyan", "violet", "mono", "contrast", "auto"} }
+func Names() []string { return []string{"green", "violet", "mono", "contrast", "auto"} }
 
 // ParseHex parses an opaque #rrggbb color.
 func ParseHex(s string) (color.RGBA, error) {
@@ -55,16 +55,16 @@ func mustHex(s string) color.RGBA { c, _ := ParseHex(s); return c }
 // ByName returns a built-in palette. Auto follows the supplied dark background hint.
 func ByName(name string, dark bool) (Theme, bool) {
 	if name == "auto" {
-		name = "cyan"
+		name = "green"
 	}
-	if name != "cyan" && name != "violet" && name != "mono" && name != "contrast" {
+	if name != "green" && name != "violet" && name != "mono" && name != "contrast" {
 		return Theme{}, false
 	}
 	var t Theme
 	if dark {
 		t = Theme{
 			Background: mustHex("#000000"), Text: mustHex("#f5f5f5"), Dim: mustHex("#a3a3a3"),
-			Accent: mustHex("#22d3ee"), Success: mustHex("#4ade80"), Error: mustHex("#fb7185"),
+			Accent: mustHex("#68b78d"), Success: mustHex("#4ade80"), Error: mustHex("#fb7185"),
 			Warning: mustHex("#facc15"), Border: mustHex("#a3a3a3"),
 		}
 		switch name {
@@ -84,7 +84,7 @@ func ByName(name string, dark bool) (Theme, bool) {
 	} else {
 		t = Theme{
 			Background: mustHex("#ffffff"), Text: mustHex("#171717"), Dim: mustHex("#525252"),
-			Accent: mustHex("#0e7490"), Success: mustHex("#166534"), Error: mustHex("#be123c"),
+			Accent: mustHex("#1f6b47"), Success: mustHex("#166534"), Error: mustHex("#be123c"),
 			Warning: mustHex("#854d0e"), Border: mustHex("#525252"),
 		}
 		switch name {
