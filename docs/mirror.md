@@ -38,8 +38,11 @@ For each scope, Qrypt first reads the manifest the mirror holds:
 | Valid, with a higher generation, or the same generation and different content  | Does not write. The mirror holds changes this device does not have.   |
 | Not valid: not signed by this identity, or damaged                             | Does not write. The folder may belong to another vault.               |
 
+- **Another vault's mirror receives nothing.** If any scope in the mirror has a manifest that this identity did not sign, Qrypt writes nothing at all to that mirror, not even the scopes it lacks.
 - **Order of writes:** new and changed files first, then the manifest, then removal of the files that no longer exist. A mirror interrupted halfway does not match its manifest; the next update repairs it.
-- **Removed scopes** are removed from the mirror, when the device's [record](vault.md#local-record) shows that this device had that scope.
+- **A scope with a [problem](vault.md#problems-and-accepting) is never copied.** The mirror keeps what it had for that scope until the problem is resolved.
+- **Removed scopes** are removed from the mirror at the moment they are removed on the device. If the mirror cannot be reached then, the scope stays in the mirror.
+- **A scope the device does not have** is left alone in the mirror, and Qrypt says that the mirror holds one. Qrypt cannot tell a scope added by another device from one that was removed while the mirror was out of reach, so it never deletes it on its own.
 - **A failed update never blocks the vault.** The change is already saved on the device. Qrypt says that the mirror was not updated and why, and tries again at the next change.
 - **Refusing is deliberate.** Overwriting a mirror that is ahead would destroy changes made elsewhere. Merging the changes of two devices is not offered yet.
 
@@ -48,7 +51,8 @@ For each scope, Qrypt first reads the manifest the mirror holds:
 On a device with an empty vault, Qrypt can bring the vault back from a mirror.
 
 - **Checked before anything is written.** Every scope must have a manifest signed by the identity, and files that match it exactly. If one scope fails, nothing is restored and Qrypt reports which.
-- **Only into an empty vault.** Qrypt restores when the device has no secret. It never merges into, or replaces, a vault that holds something.
+- **Only into an empty vault.** Qrypt restores when the device has no secret. It never merges into, or replaces, a vault that holds something. The empty scopes of the device, such as the `Personal` scope created on first use, are replaced by the scopes of the mirror.
+- **Whole or not at all.** The scopes are first written apart and verified there. Only then do they take their place in the vault.
 - **Limit:** Qrypt can prove that the mirror was written by the identity. On a new device it cannot prove that it is the latest state, because the device has no [record](vault.md#local-record) yet.
 
 ## Adding a place to keep the mirror

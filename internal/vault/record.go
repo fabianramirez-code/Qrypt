@@ -72,6 +72,19 @@ func writeRecord(path string, entries map[string]recordEntry) error {
 	}
 	return writeReplacing(path, []byte(b.String()))
 }
+
+// RecordRestoredScopes replaces the local record after verified staged scopes have
+// been moved into place. It uses the same validation and atomic writer as normal changes.
+func RecordRestoredScopes(statePath string, scopes []*Vault) error {
+	if _, err := readRecord(statePath); err != nil {
+		return err
+	}
+	entries := make(map[string]recordEntry, len(scopes))
+	for _, v := range scopes {
+		entries[v.ID()] = recordEntry{v.Generation(), v.ManifestHash()}
+	}
+	return writeRecord(statePath, entries)
+}
 func recordVault(v *Vault) error {
 	entries, err := readRecord(v.statePath)
 	if err != nil {
