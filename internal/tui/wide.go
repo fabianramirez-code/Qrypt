@@ -4,12 +4,57 @@ import (
 	"strconv"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
 // wide applies only to the three vault navigation screens. Forms retain their panel.
 func (m Model) wide() bool {
 	return m.width >= 100 && m.height >= 20 && (m.screen == spacesList || m.screen == vaultList || m.screen == vaultItem)
+}
+
+// wideKey translates focus navigation to the existing screen handlers.
+func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	{
+		switch {
+		case m.screen == vaultItem && v.Code == tea.KeyRight:
+			// The detail pane is the last one: Right has nowhere to go and must never reveal the value.
+			return m, nil
+		case m.screen == vaultItem && v.Code == tea.KeyTab && v.Mod&tea.ModShift == 0:
+			// Tab wraps to the spaces pane through the same steps as Esc twice,
+			// so the value is cleared and the space is left as the narrow flow leaves it.
+			m.leaveItem()
+			v = tea.KeyPressMsg{Code: tea.KeyEsc}
+		case v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0, v.Code == tea.KeyLeft:
+			if m.screen == spacesList {
+				return m, nil
+			}
+			v = tea.KeyPressMsg{Code: tea.KeyEsc}
+		case v.Code == tea.KeyTab, v.Code == tea.KeyRight:
+			v = tea.KeyPressMsg{Code: tea.KeyEnter}
+		case m.screen == vaultItem && v.Code == tea.KeyEnter:
+			v = tea.KeyPressMsg{Code: tea.KeyTab}
+		}
+		var cmd tea.Cmd
+		var next tea.Model
+		if isSpaceScreen(m.screen) {
+			next, cmd = m.spacesKey(v)
+		} else {
+			next, cmd = m.vaultKey(v)
+		}
+		m = next.(Model)
+		if m.vlt == nil {
+			return m, cmd
+		}
+		if m.screen != spacesList && m.screen != vaultList && m.screen != vaultItem {
+			return m, cmd
+		}
+		m.refreshSpaces()
+		if m.vlt != nil {
+			m.refresh()
+		}
+		return m, cmd
+	}
 }
 
 // wideTrim cuts names and UI text by display cells, never secret values.
@@ -70,12 +115,6 @@ func (m Model) wideView() string {
 		spaces = append(spaces, row)
 	}
 	names := m.names
-	if m.screen == spacesList && m.vlt != nil {
-		// List decrypts names only. Never call Get on an unfocused pane.
-		if listed, err := m.vlt.List(); err == nil {
-			names = listed
-		}
-	}
 	items := make([]string, 0, rows)
 	selected := min(m.cursor, max(0, len(names)-1))
 	if m.screen == spacesList {
@@ -121,16 +160,12 @@ func (m Model) wideView() string {
 		m.panel(t.spacesTitle, pad(spaces), left, m.screen == spacesList, true), " ",
 		m.panel(wideTrim(m.spaceTitle(), center-4), pad(items), center, m.screen == vaultList, true), " ",
 		m.panel(t.itemTitle, pad(detail), right, m.screen == vaultItem, true))
-	hints := t.spacesHint
+	hints := t.wideSpacesHint
 	if m.screen == vaultList {
-		if len(names) == 0 {
-			hints = t.listEmptyHint
-		} else {
-			hints = t.listHint
-		}
+		hints = t.wideListHint
 	}
 	if m.screen == vaultItem {
-		hints = t.itemHint
+		hints = t.wideItemHint
 	}
 	hints = strings.ReplaceAll(hints, "\n", "  ")
 	hints = wideTrim(hints, m.width)

@@ -210,6 +210,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = v.Width, v.Height
+		if m.vlt != nil && isVaultScreen(m.screen) {
+			m.refreshSpaces()
+			if m.vlt != nil {
+				m.refresh()
+			}
+		}
 	case tea.BackgroundColorMsg:
 		m.darkBackground = v.IsDark()
 		m.refreshStyles()
@@ -348,10 +354,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		if isVaultScreen(m.screen) {
+			if m.wide() {
+				return m.wideKey(v)
+			}
 			if isSpaceScreen(m.screen) {
 				return m.spacesKey(v)
 			}
-			return m.vaultKey(v)
+			next, cmd := m.vaultKey(v)
+			m = next.(Model)
+			if m.vlt != nil && m.wide() {
+				m.refreshSpaces()
+			}
+			return m, cmd
 		}
 		switch m.screen {
 		case languageScreen:
