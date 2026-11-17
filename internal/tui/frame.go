@@ -3,6 +3,7 @@ package tui
 import (
 	_ "embed"
 	"image/color"
+	"math"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -49,12 +50,26 @@ func (m Model) panel(title, body string, width int, focused, rule bool) string {
 	return strings.Join(lines, "\n")
 }
 
+// logoPeriod is long enough for the band to leave the logo before it re-enters.
+const logoPeriod = 80
+
+// logoTint is the static left-to-right gradient plus a soft band of light that
+// moves one column per phase, slanted by row.
+func logoTint(accent color.RGBA, col, cols, row, phase int) color.RGBA {
+	ratio := float64(col) / float64(max(cols-1, 1))
+	centre := float64(phase%logoPeriod) - 20 + float64(row)*2
+	d := (float64(col) - centre) / 4
+	t := min(1, ratio*0.42+0.5*math.Exp(-d*d))
+	mix := func(x uint8) uint8 { return uint8(min(255, math.Round(float64(x)*(1-t)+255*t))) }
+	return color.RGBA{R: mix(accent.R), G: mix(accent.G), B: mix(accent.B), A: 255}
+}
+
 func (m Model) logoView() string {
 	// A checkout may convert the embedded file to CRLF line endings.
 	rows := strings.Split(strings.TrimRight(strings.ReplaceAll(logo, "\r", ""), "\n"), "\n")
 	var result []string
 	accent := m.styles.palette.Accent
-	for _, row := range rows {
+	for y, row := range rows {
 		row = strings.TrimRight(row, " ")
 		if m.themeName == "mono" {
 			result = append(result, m.styles.accent.Render(row))
@@ -62,9 +77,7 @@ func (m Model) logoView() string {
 		}
 		var line strings.Builder
 		for i, r := range []rune(row) {
-			ratio := float64(i) / float64(max(len([]rune(row))-1, 1))
-			mix := func(x uint8) uint8 { return uint8(float64(x)*(1-ratio*0.42) + 255*ratio*0.42) }
-			tint := color.RGBA{R: mix(accent.R), G: mix(accent.G), B: mix(accent.B), A: 255}
+			tint := logoTint(accent, i, len([]rune(row)), y, m.logoPhase)
 			line.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(hexColor(tint))).Render(string(r)))
 		}
 		result = append(result, line.String())

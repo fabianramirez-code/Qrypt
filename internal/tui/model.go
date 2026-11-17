@@ -69,9 +69,15 @@ type rebuiltMsg struct {
 }
 type clipboardTickMsg struct{ token uint64 }
 type idleTickMsg struct{}
+type logoTickMsg struct{}
 
 const clipboardLifetime = 30 * time.Second
 const idleLifetime = 5 * time.Minute
+const logoFrame = 66 * time.Millisecond
+
+func logoTick() tea.Cmd {
+	return tea.Tick(logoFrame, func(time.Time) tea.Msg { return logoTickMsg{} })
+}
 
 func idleCheck() tea.Cmd {
 	return tea.Tick(time.Second, func(time.Time) tea.Msg { return idleTickMsg{} })
@@ -138,6 +144,7 @@ type Model struct {
 	clearFn         func(string) error
 	now             func() time.Time
 	lastKey         time.Time
+	logoPhase       int
 	copyValue       string
 	copyActive      bool
 	copyToken       uint64
@@ -185,7 +192,7 @@ func randomPositions() [3]int {
 func (m Model) ExitStatus() int { return m.status }
 
 // Init requests the terminal background; identity work starts only after Enter.
-func (m Model) Init() tea.Cmd { return tea.RequestBackgroundColor }
+func (m Model) Init() tea.Cmd { return tea.Batch(tea.RequestBackgroundColor, logoTick()) }
 
 // Update processes terminal input and completion of slow work.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -284,6 +291,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.vlt != nil && m.copyActive && v.token == m.copyToken {
 			return m, m.clearCopied()
 		}
+	case logoTickMsg:
+		// Never touches lastKey: the animation is not user activity.
+		m.logoPhase++
+		return m, logoTick()
 	case idleTickMsg:
 		if m.vlt != nil {
 			if !m.now().Before(m.lastKey.Add(idleLifetime)) {
