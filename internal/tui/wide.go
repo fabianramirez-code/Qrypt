@@ -43,7 +43,7 @@ func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			next, cmd = m.vaultKey(v)
 		}
 		m = next.(Model)
-		if m.vlt == nil {
+		if m.vlt == nil || m.screen == problemScreen {
 			return m, cmd
 		}
 		if m.screen != spacesList && m.screen != vaultList && m.screen != vaultItem {
@@ -101,13 +101,19 @@ func (m Model) wideView() string {
 	for i := start; i < len(m.spaceNames) && len(spaces) < rows; i++ {
 		suffix := ""
 		if i < len(m.spaceCounts) {
-			suffix = " (" + strconv.Itoa(m.spaceCounts[i]) + ")"
+			if i < len(m.spaceRows) && m.spaceRows[i].problem < 0 {
+				suffix = " (" + strconv.Itoa(m.spaceCounts[i]) + ")"
+			}
 		}
 		prefix := "  "
 		if i == m.spaceCursor {
 			prefix = "> "
 		}
-		name := wideTrim(m.spaceNames[i], left-4-lipgloss.Width(prefix)-lipgloss.Width(suffix))
+		name := m.spaceNames[i]
+		if i < len(m.spaceRows) && m.spaceRows[i].problem >= 0 {
+			name = "! " + name
+		}
+		name = wideTrim(name, left-4-lipgloss.Width(prefix)-lipgloss.Width(suffix))
 		row := prefix + name + suffix
 		if i == m.spaceCursor {
 			row = m.styles.selected.Render(row)
@@ -115,6 +121,9 @@ func (m Model) wideView() string {
 		spaces = append(spaces, row)
 	}
 	names := m.names
+	if m.selectedProblem() != nil {
+		names = nil
+	}
 	items := make([]string, 0, rows)
 	selected := min(m.cursor, max(0, len(names)-1))
 	if m.screen == spacesList {
@@ -156,9 +165,13 @@ func (m Model) wideView() string {
 		}
 		return strings.Join(lines, "\n")
 	}
+	centerTitle := m.spaceTitle()
+	if m.selectedProblem() != nil {
+		centerTitle = ""
+	}
 	panes := lipgloss.JoinHorizontal(lipgloss.Top,
 		m.panel(t.spacesTitle, pad(spaces), left, m.screen == spacesList, true), " ",
-		m.panel(wideTrim(m.spaceTitle(), center-4), pad(items), center, m.screen == vaultList, true), " ",
+		m.panel(wideTrim(centerTitle, center-4), pad(items), center, m.screen == vaultList, true), " ",
 		m.panel(t.itemTitle, pad(detail), right, m.screen == vaultItem, true))
 	hints := t.wideSpacesHint
 	if m.screen == vaultList {

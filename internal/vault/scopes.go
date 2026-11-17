@@ -310,13 +310,14 @@ func NewScope(root, statePath string, id *identity.Identity, name string) (*Vaul
 	if err != nil {
 		return nil, err
 	}
-	if len(problems) != 0 {
-		for _, v := range opened {
-			v.Close()
-		}
-		return nil, &problems[0]
-	}
+	// A scope with a problem does not stop the others from being used, but its
+	// name stays taken while that name can be read.
 	exists := false
+	for _, p := range problems {
+		if p.Name != "" && p.Name == name {
+			exists = true
+		}
+	}
 	for _, v := range opened {
 		n, _ := v.Name()
 		if n == name {
@@ -389,11 +390,13 @@ func RenameScope(root, statePath string, id *identity.Identity, v *Vault, name s
 	if err != nil {
 		return err
 	}
-	if len(problems) != 0 {
-		for _, other := range opened {
-			other.Close()
+	for _, p := range problems {
+		if p.ScopeID != v.ID() && p.Name != "" && p.Name == name {
+			for _, other := range opened {
+				other.Close()
+			}
+			return ErrScopeNameExists
 		}
-		return &problems[0]
 	}
 	defer func() {
 		for _, other := range opened {

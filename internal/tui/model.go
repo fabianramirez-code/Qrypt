@@ -40,6 +40,7 @@ const (
 	spacesAdd
 	spacesRename
 	spacesDelete
+	problemScreen
 	vaultItem
 	vaultAddName
 	vaultAddValue
@@ -138,6 +139,8 @@ type Model struct {
 	backup          string
 	vlt             *vault.Vault
 	scopes          []*vault.Vault
+	problems        []vault.Problem
+	spaceRows       []spaceRow
 	spaceNames      []string
 	spaceCounts     []int
 	scopeID         *identity.Identity
@@ -210,7 +213,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = v.Width, v.Height
-		if m.vlt != nil && isVaultScreen(m.screen) {
+		if m.scopeID != nil && isVaultScreen(m.screen) {
 			m.refreshSpaces()
 			if m.vlt != nil {
 				m.refresh()
@@ -273,7 +276,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input = ""
 			m.message = ""
 			m.openVault(v.id)
-			if m.vlt != nil {
+			if m.scopeID != nil {
 				return m, idleCheck()
 			}
 		case errors.Is(v.err, identity.ErrPassphraseWordCount), errors.Is(v.err, identity.ErrPassphraseUnknownWord), errors.Is(v.err, identity.ErrDecryption):
@@ -305,7 +308,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = 0
 		}
 	case clipboardTickMsg:
-		if m.vlt != nil && m.copyActive && v.token == m.copyToken {
+		if m.scopeID != nil && m.copyActive && v.token == m.copyToken {
 			return m, m.clearCopied()
 		}
 	case logoTickMsg:
@@ -313,7 +316,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logoPhase++
 		return m, logoTick()
 	case idleTickMsg:
-		if m.vlt != nil {
+		if m.scopeID != nil {
 			if !m.now().Before(m.lastKey.Add(idleLifetime)) {
 				cmd := m.closeVault()
 				m.clearSecrets()
@@ -324,18 +327,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		if m.screen == confirmPassphrase || m.screen == confirmRecovery || m.screen == unlock || m.screen == restoreWord {
 			m.message = m.language.text().pasted
+		} else if m.screen == problemScreen && m.selectedProblem() != nil && m.selectedProblem().Kind != vault.ProblemUnreadable {
+			m.message = m.language.text().problemPaste
 		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit || m.screen == spacesAdd || m.screen == spacesRename {
 			m.vaultPaste(v.Content)
 		}
 	case tea.KeyPressMsg:
-		if m.vlt != nil {
+		if m.scopeID != nil {
 			m.lastKey = m.now()
 		}
 		if m.screen == saving || (m.screen == checkingUnlock || m.screen == rebuilding) && !(v.Code == 'c' && v.Mod&tea.ModCtrl != 0) {
 			return m, nil
 		}
 		if v.Code == 'c' && v.Mod&tea.ModCtrl != 0 {
-			opened := m.vlt != nil
+			opened := m.scopeID != nil
 			var clearCmd tea.Cmd
 			if opened {
 				clearCmd = m.closeVault()
@@ -356,6 +361,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if isVaultScreen(m.screen) {
 			if m.wide() {
 				return m.wideKey(v)
+			}
+			if m.screen == problemScreen {
+				return m.problemKey(v)
 			}
 			if isSpaceScreen(m.screen) {
 				return m.spacesKey(v)
@@ -700,6 +708,8 @@ func (m Model) viewContent() string {
 		return m.listView(t)
 	case spacesList, spacesAdd, spacesRename, spacesDelete:
 		return m.spacesView(t)
+	case problemScreen:
+		return m.problemView(t)
 	case vaultItem:
 		return title.Render(t.itemTitle) + "\n" + wrapLine(m.item) + "\n" + m.itemValueView(t) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.itemHint)
 	case vaultAddName:

@@ -10,35 +10,47 @@ import (
 	"github.com/fabianramirez-code/qrypt/internal/vault"
 )
 
+type spaceRow struct {
+	scope   *vault.Vault
+	problem int // -1 for a healthy space
+	name    string
+	count   int
+}
+
 // selectSpace keeps the current opened scope and the selected list row together.
 func (m *Model) selectSpace() {
-	if len(m.scopes) == 0 {
+	if len(m.spaceRows) == 0 {
 		m.vlt = nil
+		m.spaceCursor = 0
 		return
 	}
-	m.spaceCursor = min(max(m.spaceCursor, 0), len(m.scopes)-1)
-	m.vlt = m.scopes[m.spaceCursor]
+	m.spaceCursor = min(max(m.spaceCursor, 0), len(m.spaceRows)-1)
+	m.vlt = m.spaceRows[m.spaceCursor].scope
 }
 
 func (m *Model) sortSpaces(selected *vault.Vault) error {
-	names := make(map[*vault.Vault]string, len(m.scopes))
-	for _, v := range m.scopes {
-		n, err := v.Name()
-		if err != nil {
-			return err
-		}
-		names[v] = n
+	m.refreshSpaces()
+	if m.screen == vaultFailed {
+		return errors.New(m.message)
 	}
-	slices.SortFunc(m.scopes, func(a, b *vault.Vault) int { return strings.Compare(names[a], names[b]) })
-	m.spaceCursor = max(slices.Index(m.scopes, selected), 0)
+	for i, row := range m.spaceRows {
+		if row.scope == selected {
+			m.spaceCursor = i
+			break
+		}
+	}
 	m.selectSpace()
 	return nil
 }
 
-// refreshSpaces verifies every opened scope and caches only public names and counts.
+// refreshSpaces verifies opened scopes and caches only space names and counts.
 func (m *Model) refreshSpaces() {
-	names := make([]string, 0, len(m.scopes))
-	counts := make([]int, 0, len(m.scopes))
+	rows := make([]spaceRow, 0, len(m.scopes)+len(m.problems))
+	selected := m.vlt
+	selectedID := ""
+	if m.spaceCursor < len(m.spaceRows) && m.spaceRows[m.spaceCursor].problem >= 0 {
+		selectedID = m.problems[m.spaceRows[m.spaceCursor].problem].ScopeID
+	}
 	for _, scope := range m.scopes {
 		name, err := scope.Name()
 		if err != nil {
@@ -50,10 +62,22 @@ func (m *Model) refreshSpaces() {
 			m.failVault(err)
 			return
 		}
-		names = append(names, name)
-		counts = append(counts, len(items))
+		rows = append(rows, spaceRow{scope: scope, problem: -1, name: name, count: len(items)})
 	}
-	m.spaceNames, m.spaceCounts = names, counts
+	for i, p := range m.problems {
+		rows = append(rows, spaceRow{problem: i, name: problemName(p, m.language.text())})
+	}
+	slices.SortFunc(rows, func(a, b spaceRow) int { return strings.Compare(a.name, b.name) })
+	m.spaceRows = rows
+	m.spaceNames = make([]string, len(rows))
+	m.spaceCounts = make([]int, len(rows))
+	for i, row := range rows {
+		m.spaceNames[i], m.spaceCounts[i] = row.name, row.count
+		if row.scope != nil && row.scope == selected || row.problem >= 0 && m.problems[row.problem].ScopeID == selectedID {
+			m.spaceCursor = i
+		}
+	}
+	m.selectSpace()
 }
 
 func (m *Model) spaceError(err error) {
@@ -81,14 +105,16 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.spaceCursor = max(m.spaceCursor-1, 0)
 			m.selectSpace()
 		case v.Code == tea.KeyDown:
-			m.spaceCursor = min(m.spaceCursor+1, len(m.scopes)-1)
+			m.spaceCursor = min(m.spaceCursor+1, max(len(m.spaceRows)-1, 0))
 			m.selectSpace()
+		case v.Code == tea.KeyEnter && m.selectedProblem() != nil:
+			m.openProblem()
 		case v.Code == tea.KeyEnter && m.vlt != nil:
 			m.cursor = 0
 			m.message = ""
 			m.screen = vaultList
 			m.refresh()
-		case plainKey(v, 'a'):
+		case plainKey(v, 'a') && m.selectedProblem() == nil:
 			m.input = ""
 			m.message = ""
 			m.screen = spacesAdd
@@ -140,7 +166,9 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.spaceError(err)
 				break
 			}
-			m.scopes = slices.Delete(m.scopes, m.spaceCursor, m.spaceCursor+1)
+			index := slices.Index(m.scopes, deleted)
+			m.scopes = slices.Delete(m.scopes, index, index+1)
+			m.spaceRows = nil
 			m.selectSpace()
 		}
 		m.message = ""
@@ -169,9 +197,9 @@ func (m Model) spacesView(t texts) string {
 		return title.Render(t.spaceDeleteTitle) + "\n" + wrapLine(name) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.deleteHint)
 	}
 	rows := max(m.height-12, 3)
-	first := max(min(m.spaceCursor-rows/2, len(m.scopes)-rows), 0)
+	first := max(min(m.spaceCursor-rows/2, len(m.spaceRows)-rows), 0)
 	var lines []string
-	for i := first; i < min(first+rows, len(m.scopes)); i++ {
+	for i := first; i < min(first+rows, len(m.spaceRows)); i++ {
 		if i >= len(m.spaceNames) || i >= len(m.spaceCounts) {
 			continue
 		}
@@ -179,8 +207,14 @@ func (m Model) spacesView(t texts) string {
 		if i == m.spaceCursor {
 			prefix = "> "
 		}
-		suffix := fmt.Sprintf(" (%d)", m.spaceCounts[i])
+		suffix := ""
+		if m.spaceRows[i].problem < 0 {
+			suffix = fmt.Sprintf(" (%d)", m.spaceCounts[i])
+		}
 		name := []rune(m.spaceNames[i])
+		if m.spaceRows[i].problem >= 0 {
+			name = []rune("! " + m.spaceNames[i])
+		}
 		limit := 58 - len([]rune(prefix)) - len([]rune(suffix))
 		if len(name) > limit {
 			name = append(name[:limit-1:limit-1], '…')

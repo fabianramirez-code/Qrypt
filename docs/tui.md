@@ -131,6 +131,21 @@ The first screen after unlocking lists the spaces by name, each with the number 
 - **Inside a space**, the screens below work as before, on that space only. Esc on its list returns to Spaces instead of locking. The title of the list is the name of the space.
 - **Moving an item between spaces** is not offered yet.
 
+### Problems
+
+A problem in one space does not block healthy spaces. The Spaces list keeps their names and item counts; each affected space is a `!` row followed by its name. When its name cannot be read, the row says `! Space <first 8 characters of id>` or `! Espacio <first 8 characters of id>`. Enter opens the single-panel **Problem** screen; in wide mode Right and Tab do so too. The other panes are empty while a problem row is selected. A, R and D do nothing on that row.
+
+| Kind | What the Problem screen says |
+| ---- | ---------------------------- |
+| Files | Counts of missing, unexpected, changed and undecryptable files (including zero counts). |
+| Signature | The manifest signature is invalid; the file counts are shown. |
+| Fork | Two different states have the same generation; both generation numbers are shown. |
+| Rollback | The current and recorded generations are shown. |
+| Removed | The space was removed outside Qrypt; accepting removes its local record. |
+| Unreadable | The space cannot be opened with this identity. Qrypt leaves it untouched. There is no confirmation field; only Esc returns. |
+
+For every accept-able problem, the screen explains that accepting removes files that cannot be decrypted, signs the surviving state, and cannot restore anything lost. Type `ACCEPT` in English or `ACEPTAR` in Spanish **exactly**, then Enter, to accept. Other input changes nothing and shows the rejection message. Esc returns without changing the vault; pasting into the field is refused. On success Qrypt reopens all spaces, so a repaired row becomes a normal space and a removed row disappears. A failed acceptance shows the system error without silently accepting it. The Problem screen shows no item names or values.
+
 ### Wide mode
 
 At 100 columns by 20 rows or larger, the vault's Spaces, List and Item screens show three bordered panes side by side: spaces and their item counts on the left, the selected space's item names in the center, and the selected item's name and value on the right. At 100 columns the panes are 25, 43 and 30 columns wide, separated by one-column gaps; extra width is distributed at roughly 25/45/30. The pane corresponding to the current screen has the accent border; the others are dim. Tab and Right move focus from Spaces to List to Item; Tab on Item wraps to Spaces without locking. Shift+Tab and Left move back one pane, doing nothing on Spaces; Esc on Spaces still locks. Enter opens a selected space or item and, on Item, shows or hides its value. Tab on Item does not reveal it, and Right on Item does nothing, because Item is the last pane. Up and Down move within the focused pane. A, C, D, E and R retain their actions on the focused pane. Leaving Item clears its decrypted value from memory. Below the wide threshold, Tab still reveals on the Item screen and Enter does not.
@@ -181,6 +196,26 @@ The focused-pane footer hints include the focus keys (Tab/Right forward, Shift+T
 | The clipboard could not be used                  | As the system reports it                                                       | As the system reports it                                                         |
 | Space name already used                          | `A space with that name already exists.`                                       | `Ya existe un espacio con ese nombre.`                                           |
 | Deleting a space that holds items                | `This space is not empty. Delete its items first.`                             | `Este espacio no está vacío. Borra primero sus elementos.`                       |
+| Problem title | `Problem` | `Problema` |
+| Unknown space name | `Space <first 8 characters of id>` | `Espacio <first 8 characters of id>` |
+| Missing files | `Missing files: <n>` | `Archivos faltantes: <n>` |
+| Unexpected files | `Unexpected files: <n>` | `Archivos inesperados: <n>` |
+| Changed files | `Changed files: <n>` | `Archivos cambiados: <n>` |
+| Undecryptable files | `Undecryptable files: <n>` | `Archivos que no se pueden descifrar: <n>` |
+| Invalid manifest signature | `The manifest signature is invalid.` | `La firma del manifiesto no es válida.` |
+| Fork | `Two different states claim the same generation.` | `Dos estados distintos tienen la misma generación.` |
+| Rollback | `This space was rolled back.` | `Este espacio volvió a un estado anterior.` |
+| Current generation | `Current generation: <n>` | `Generación actual: <n>` |
+| Recorded generation | `Recorded generation: <n>` | `Generación registrada: <n>` |
+| Removed space | `This space was removed outside Qrypt.` | `Este espacio se eliminó fuera de Qrypt.` |
+| Removed-space acceptance | `Accepting removes its local record.` | `Aceptar elimina su registro local.` |
+| Unreadable space | `This space cannot be opened with this identity. Qrypt leaves it untouched.` | `Este espacio no se puede abrir con esta identidad. Qrypt lo deja intacto.` |
+| Acceptance consequence | `Accepting removes files that cannot be decrypted, signs the surviving state, and cannot restore anything lost.` | `Aceptar elimina los archivos que no se pueden descifrar, firma el estado restante y no recupera nada de lo perdido.` |
+| Confirmation prompt | `Type ACCEPT to accept:` | `Escribe ACEPTAR para aceptar:` |
+| Wrong confirmation | `Type ACCEPT exactly. Nothing was changed.` | `Escribe ACEPTAR exactamente. No se cambió nada.` |
+| Paste into confirmation | `Pasting is not accepted. Type the confirmation.` | `No se acepta pegar. Escribe la confirmación.` |
+| Problem keys | `Enter: accept  Esc: back` | `Enter: aceptar  Esc: volver` |
+| Unreadable problem keys | `Esc: back` | `Esc: volver` |
 | Anything else                                    | As the system reports it                                                       | As the system reports it                                                         |
 
 ### Identity

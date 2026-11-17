@@ -24,7 +24,7 @@ func stateFile(identityPath string) string { return filepath.Join(filepath.Dir(i
 
 func isVaultScreen(s screen) bool {
 	switch s {
-	case vaultList, vaultItem, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, spacesList, spacesAdd, spacesRename, spacesDelete:
+	case vaultList, vaultItem, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, spacesList, spacesAdd, spacesRename, spacesDelete, problemScreen:
 		return true
 	}
 	return false
@@ -38,10 +38,7 @@ func isSpaceScreen(s screen) bool {
 func (m *Model) openVault(id *identity.Identity) {
 	dir := vaultDir(m.path)
 	scopes, problems, err := vault.OpenScopes(dir, stateFile(m.path), id)
-	if err == nil && len(problems) != 0 {
-		err = &problems[0]
-	}
-	if err == nil && len(scopes) == 0 {
+	if err == nil && len(scopes) == 0 && len(problems) == 0 {
 		var first *vault.Vault
 		first, err = vault.NewScope(dir, stateFile(m.path), id, "Personal")
 		if err == nil {
@@ -56,9 +53,9 @@ func (m *Model) openVault(id *identity.Identity) {
 		return
 	}
 	m.scopes = scopes
+	m.problems = problems
 	m.scopeID = id
 	m.spaceCursor = 0
-	m.selectSpace()
 	m.status = 0
 	m.cursor = 0
 	m.screen = spacesList
@@ -84,6 +81,8 @@ func (m *Model) closeVault() tea.Cmd {
 		scope.Close()
 	}
 	m.scopes = nil
+	m.problems = nil
+	m.spaceRows = nil
 	m.spaceNames = nil
 	m.spaceCounts = nil
 	m.vlt = nil

@@ -127,3 +127,42 @@ func TestRemoveScopeLeavesNoRecord(t *testing.T) {
 	}
 	scopes[0].Close()
 }
+
+// A scope with a problem must not stop new scopes from being created or
+// renamed, and its readable name stays taken.
+func TestScopesCanBeAddedAndRenamedBesideAProblem(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "vault")
+	state := filepath.Join(filepath.Dir(root), "state")
+	id := newIdentity(t, 1)
+	broken, err := vault.NewScope(root, state, id, "Work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := broken.Put("a", []byte("1")); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "scopes", broken.ID())
+	broken.Close()
+	if err := os.Remove(filepath.Join(dir, "manifest")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vault.NewScope(root, state, id, "Work"); !errors.Is(err, vault.ErrScopeNameExists) {
+		t.Fatalf("NewScope with the name of a problem scope = %v", err)
+	}
+	fresh, err := vault.NewScope(root, state, id, "Personal")
+	if err != nil {
+		t.Fatalf("NewScope beside a problem = %v", err)
+	}
+	defer fresh.Close()
+	if err := vault.RenameScope(root, state, id, fresh, "Work"); !errors.Is(err, vault.ErrScopeNameExists) {
+		t.Fatalf("RenameScope to the name of a problem scope = %v", err)
+	}
+	if err := vault.RenameScope(root, state, id, fresh, "Home"); err != nil {
+		t.Fatalf("RenameScope beside a problem = %v", err)
+	}
+	scopes, problems, err := vault.OpenScopes(root, state, id)
+	if err != nil || len(scopes) != 1 || len(problems) != 1 {
+		t.Fatalf("OpenScopes = %v, %+v, %v", scopes, problems, err)
+	}
+	scopes[0].Close()
+}
