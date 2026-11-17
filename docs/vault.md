@@ -131,6 +131,7 @@ They learn nothing about names or values without the scope key, which needs the 
 
 - **Tampering and rollback are not detected yet.** Anyone able to write to the vault can delete a file or put back an older copy of one. A person who can write can also build a scope file wrapped to their own key. The AEAD stops them from changing what a file says, not from replacing the whole vault. Detecting this needs the signed member list and chained log of the [threat model](threat-model.md#3-tampering-with-the-vault-repository), which are not part of version 1.
 - **Listing opens every name.** To list secrets or check that a name is free, Qrypt reads every file in the scope and decrypts the 256-byte name segments, not the values. The [threat model](threat-model.md#1-infected-device) already accepts that an infected device can read what the program holds in memory.
+- **One damaged file stops listing.** If a name segment fails to decrypt, Qrypt reports the error instead of skipping the file, so damage is never hidden. Showing other secrets still needs the listing, so a damaged file has to be repaired or removed by hand in version 1.
 - **One writer at a time.** Two programs adding the same name at the same moment can both succeed. Version 1 does not lock the vault.
 - **Secrets in memory:** see the limit described in the [threat model](threat-model.md#1-infected-device).
 
