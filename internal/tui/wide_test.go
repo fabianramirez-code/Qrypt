@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -344,9 +346,10 @@ func TestWideHeaderFooterPreviewAndForms(t *testing.T) {
 	for _, state := range []screen{spacesAdd, spacesRename, spacesDelete, vaultAddName, vaultAddValue, vaultEdit, vaultDelete} {
 		x := send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 		x.screen = state
-		if strings.Contains(framed(x), "Work (1)") {
-			t.Fatalf("form %d used panes", state)
+		if !strings.Contains(framed(x), "Work (1)") || !strings.Contains(framed(x), x.language.text().spacesTitle) {
+			t.Fatalf("modal %d lacks panes", state)
 		}
+		wideFit(t, x, 120, 30)
 	}
 	seed := make([]byte, identity.SeedSize)
 	id, err := identity.FromSeed(seed)
@@ -389,6 +392,232 @@ func TestWideAllThemesLanguagesAndLongValue(t *testing.T) {
 	m = enter(t, m)
 	if !strings.Contains(framed(m), "The value is too long to") || !strings.Contains(framed(m), "show here.") || strings.Contains(framed(m), "xxxx") {
 		t.Fatalf("long value leaked or missing warning: %s", framed(m))
+	}
+}
+
+func TestWideModalAddCompositionAndNarrow(t *testing.T) {
+	m := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = enter(t, m)
+	before := strings.Split(framed(m), "\n")
+	m = key(t, m, 'a')
+	if m.screen != vaultAddName {
+		t.Fatal("add not opened")
+	}
+	view := framed(m)
+	for _, title := range []string{english.spacesTitle, "Personal", english.itemTitle, english.addTitle} {
+		if !strings.Contains(view, title) {
+			t.Fatalf("missing %q from modal and panes", title)
+		}
+	}
+	wideFit(t, m, 120, 30)
+	rows := strings.Split(view, "\n")
+	start, end := -1, -1
+	for i, row := range rows {
+		if strings.Contains(row, "╭"+strings.Repeat("─", 62)+"╮") {
+			start = i
+		}
+		if start >= 0 && strings.Contains(row, "╰"+strings.Repeat("─", 62)+"╯") {
+			end = i
+			break
+		}
+	}
+	if start < 0 || end <= start || start <= 2 || end >= len(rows)-2 {
+		t.Fatalf("modal borders not within panes: %d..%d", start, end)
+	}
+	if x := strings.Index(rows[start], "╭"+strings.Repeat("─", 62)+"╮"); x < 0 || lipgloss.Width(rows[start][:x]) != 28 || lipgloss.Width(rows[end][:strings.Index(rows[end], "╰")]) != 28 {
+		t.Fatalf("modal borders not centered within window: %q / %q", rows[start], rows[end])
+	}
+	for i := range before {
+		if (i < start || i > end) && i < len(before)-2 {
+			if rows[i] != before[i] {
+				t.Fatalf("background row %d changed: %q / %q", i, rows[i], before[i])
+			}
+		}
+	}
+	m = typeText(t, m, "new-entry")
+	if !strings.Contains(framed(m), "new-entry") {
+		t.Fatal("name not in modal")
+	}
+	m = enter(t, m)
+	m = typeText(t, m, "fresh-value")
+	if strings.Contains(framed(m), "fresh-value") {
+		t.Fatal("value exposed")
+	}
+	m = key(t, m, tea.KeyTab)
+	if !strings.Contains(framed(m), "fresh-value") {
+		t.Fatal("Tab failed to reveal field")
+	}
+	m = enter(t, m)
+	if m.screen != vaultList || !strings.Contains(framed(m), "new-entry") || strings.Contains(framed(m), "fresh-value") {
+		t.Fatal("save did not return to panes safely")
+	}
+	m = key(t, m, 'a')
+	m = key(t, m, tea.KeyEsc)
+	if m.screen != vaultList || strings.Contains(framed(m), english.addTitle) {
+		t.Fatal("Esc did not close modal")
+	}
+	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 24}, {Width: 60, Height: 20}} {
+		x := send(t, m, size)
+		x = key(t, x, 'a')
+		if strings.Contains(framed(x), english.spacesTitle) || strings.Contains(framed(x), english.itemTitle) {
+			t.Fatalf("narrow modal got panes at %dx%d", size.Width, size.Height)
+		}
+	}
+}
+
+func TestWideModalScreensThemesAndSecurity(t *testing.T) {
+	for _, lang := range []Language{English, Spanish} {
+		for _, theme := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+			m := wideFixture(t, lang)
+			m.themeName = theme
+			m.refreshStyles()
+			for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 20}, {Width: 120, Height: 30}} {
+				m = send(t, m, size)
+				for _, state := range []screen{spacesAdd, spacesRename, spacesDelete, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, mirrorScreen, mirrorEdit, mirrorStop} {
+					x := m
+					x.screen = state
+					wideFit(t, x, size.Width, size.Height)
+					if !strings.Contains(framed(x), lang.text().spacesTitle) || !strings.Contains(framed(x), lang.text().itemTitle) {
+						t.Fatalf("%s %d %dx%d did not overlay panes", theme, state, size.Width, size.Height)
+					}
+					if strings.Contains(framed(x), "private-token") {
+						t.Fatal("background exposed value")
+					}
+					if theme == "carbon" && !strings.Contains(x.View().Content, "48;2;") {
+						t.Fatal("modal surface not painted")
+					}
+				}
+			}
+		}
+	}
+	m := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = enter(t, enter(t, m))
+	m = enter(t, m)
+	m = key(t, m, 'e')
+	if strings.Contains(m.View().Content, "private-token") || !strings.Contains(framed(m), "************") {
+		t.Fatal("edit leaked previously revealed value")
+	}
+	m = typeText(t, m, "private-token")
+	if strings.Contains(framed(m), "private-token") {
+		t.Fatal("edit field not masked")
+	}
+	m = key(t, m, tea.KeyTab)
+	if !strings.Contains(framed(m), "private-token") {
+		t.Fatal("edit Tab did not reveal field")
+	}
+	m = key(t, m, tea.KeyEsc)
+	if strings.Contains(framed(m), "private-token") || !strings.Contains(framed(m), "************") {
+		t.Fatal("edit Esc did not restore mask")
+	}
+}
+
+func TestWideModalFaintFooterPreviewAndFocus(t *testing.T) {
+	m := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = enter(t, m)
+	m = key(t, m, 'a')
+	m.message = "an error"
+	m.preview = true
+	content := m.View().Content
+	if !strings.Contains(framed(m), "an error") || !strings.Contains(framed(m), english.previewBanner) || strings.Contains(framed(m), english.wideListHint) {
+		t.Fatal("modal footer or preview wrong")
+	}
+	if !regexp.MustCompile(`(?s)\x1b\[[0-9;]*2m[^\n]*Personal`).MatchString(content) {
+		t.Fatal("background is not faint")
+	}
+	if regexp.MustCompile(`\x1b\[[0-9;]*2m[^\n]*Add item`).MatchString(content) {
+		t.Fatal("modal title is faint")
+	}
+	for _, tc := range []struct{ state, focus screen }{
+		{vaultAddName, vaultList}, {vaultAddValue, vaultList}, {vaultDelete, vaultList},
+		{vaultEdit, vaultItem}, {spacesAdd, spacesList}, {spacesRename, spacesList},
+		{spacesDelete, spacesList}, {mirrorScreen, spacesList}, {mirrorEdit, spacesList}, {mirrorStop, spacesList},
+	} {
+		x := m
+		x.screen = tc.state
+		if x.modalPane() != tc.focus {
+			t.Fatalf("screen %d focused wrong pane", tc.state)
+		}
+	}
+}
+
+func TestWideModalSpaceAndMirrorActions(t *testing.T) {
+	m := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = key(t, m, 'a')
+	if m.screen != spacesAdd || !strings.Contains(framed(m), english.spaceAddTitle) {
+		t.Fatal("space add modal missing")
+	}
+	m = typeText(t, m, "New Space")
+	m = enter(t, m)
+	if m.screen != spacesList || !strings.Contains(framed(m), "New Space (0)") {
+		t.Fatal("space add not reflected in panes")
+	}
+	m = key(t, m, 'r')
+	m = typeText(t, m, "Renamed")
+	m = enter(t, m)
+	if m.screen != spacesList || !strings.Contains(framed(m), "Renamed (0)") {
+		t.Fatal("space rename not reflected in panes")
+	}
+	m = key(t, m, 'd')
+	m = key(t, m, 'n')
+	if !strings.Contains(framed(m), "Renamed (0)") {
+		t.Fatal("space deletion cancel changed list")
+	}
+	m = key(t, m, 'd')
+	m = key(t, m, 'y')
+	if strings.Contains(framed(m), "Renamed (0)") {
+		t.Fatal("space deletion not reflected")
+	}
+	m.settingsPath = filepath.Join(t.TempDir(), "settings")
+	m = key(t, m, 'm')
+	if m.screen != mirrorScreen || !strings.Contains(framed(m), english.mirrorTitle) {
+		t.Fatal("mirror main modal missing")
+	}
+	m = key(t, m, 'e')
+	if m.screen != mirrorEdit {
+		t.Fatal("mirror folder modal missing")
+	}
+	folder := filepath.Join(t.TempDir(), "mirror")
+	m = typeText(t, m, folder)
+	m = enter(t, m)
+	if m.screen != mirrorScreen || m.settings.Mirror != folder || !strings.Contains(framed(m), filepath.Base(folder)) {
+		t.Fatal("mirror folder not saved or not shown")
+	}
+	m = key(t, m, 'x')
+	if m.screen != mirrorStop || !strings.Contains(framed(m), english.mirrorStopPrompt) {
+		t.Fatal("mirror stop modal missing")
+	}
+	m = key(t, m, 'n')
+	if m.settings.Mirror != folder || m.screen != mirrorScreen {
+		t.Fatal("mirror stop cancel changed setting")
+	}
+	m = key(t, m, 'x')
+	m = key(t, m, 'y')
+	if m.settings.Mirror != "" || m.screen != mirrorScreen {
+		t.Fatal("mirror stop did not clear setting")
+	}
+	m = key(t, m, tea.KeyEsc)
+	if m.screen != spacesList || !strings.Contains(framed(m), english.spacesTitle) {
+		t.Fatal("mirror Esc did not return to panes")
+	}
+}
+
+func TestWideModalRealProblemFallback(t *testing.T) {
+	m, _, _ := problemFixture(t, English, false, func(t *testing.T, dir string) {
+		if err := os.WriteFile(filepath.Join(dir, "secrets", "0123456789abcdef0123456789abcdef.qrs"), []byte("broken"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	})
+	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = key(t, m, tea.KeyDown)
+	m = enter(t, m)
+	if m.screen != problemScreen || !strings.Contains(framed(m), english.problemTitle) || !strings.Contains(framed(m), english.spacesTitle) {
+		t.Fatal("real problem not over panes")
+	}
+	wideFit(t, m, 120, 30)
+	m = send(t, m, tea.WindowSizeMsg{Width: 100, Height: 20})
+	wideFit(t, m, 100, 20)
+	if !strings.Contains(framed(m), english.problemPrompt) || !strings.Contains(framed(m), english.problemHint) {
+		t.Fatal("problem fallback lost content")
 	}
 }
 

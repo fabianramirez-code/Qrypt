@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// wide applies only to the three vault navigation screens. Forms retain their panel.
+// wide applies only to the three vault navigation screens; modals use their own renderer.
 func (m Model) wide() bool {
 	return m.width >= 100 && m.height >= 20 && (m.screen == spacesList || m.screen == vaultList || m.screen == vaultItem)
 }
@@ -75,7 +75,68 @@ func wideTrim(s string, width int) string {
 	return b.String() + "…"
 }
 
-func (m Model) wideView() string {
+// modalPane is the navigation screen whose selection remains behind a modal.
+func (m Model) modalPane() screen {
+	switch m.screen {
+	case vaultAddName, vaultAddValue, vaultDelete:
+		return vaultList
+	case vaultEdit:
+		return vaultItem
+	default:
+		return spacesList
+	}
+}
+
+func (m Model) isWideModal() bool {
+	if m.width < 100 || m.height < 20 {
+		return false
+	}
+	switch m.screen {
+	case vaultAddName, vaultAddValue, vaultEdit, vaultDelete,
+		spacesAdd, spacesRename, spacesDelete, problemScreen,
+		mirrorScreen, mirrorEdit, mirrorStop:
+		return true
+	}
+	return false
+}
+
+// wideModal composes the existing screen's content over masked, faint panes.
+// A too-tall panel returns false so View can use the unchanged single-panel flow.
+func (m Model) wideModal() (string, bool) {
+	content := m.viewContent()
+	parts := strings.SplitN(content, "\n", 2)
+	if len(parts) < 2 {
+		return "", false
+	}
+	body := parts[1] // Including the screen's existing key hints inside the modal.
+	panel := m.panel(stripANSI(parts[0]), body, m.panelWidth(), true, true)
+	base := m
+	base.screen = m.modalPane()
+	base.visible = false // Never draw a revealed detail value behind any modal.
+	background := base.wideView(true)
+	paneTop := 2
+	if m.height >= 30 {
+		paneTop = 7
+	}
+	paneBottom := m.height - 2
+	if m.preview {
+		paneBottom--
+	}
+	h := lipgloss.Height(panel)
+	if h > paneBottom-paneTop || lipgloss.Width(panel) > m.width {
+		return "", false
+	}
+	x := (m.width - lipgloss.Width(panel)) / 2
+	y := paneTop + (paneBottom-paneTop-h)/2
+	canvas := lipgloss.NewCanvas(m.width, m.height)
+	canvas.Compose(lipgloss.NewCompositor(
+		lipgloss.NewLayer(background).X(0).Y(0).Z(0),
+		lipgloss.NewLayer(panel).X(x).Y(y).Z(1),
+	))
+	return canvas.Render(), true
+}
+
+func (m Model) wideView(modal bool) string {
 	t := m.language.text()
 	extra := m.width - 100
 	left := 25 + extra*25/100
@@ -173,6 +234,9 @@ func (m Model) wideView() string {
 		m.panel(t.spacesTitle, pad(spaces), left, m.screen == spacesList, true), " ",
 		m.panel(wideTrim(centerTitle, center-4), pad(items), center, m.screen == vaultList, true), " ",
 		m.panel(t.itemTitle, pad(detail), right, m.screen == vaultItem, true))
+	if modal {
+		panes = lipgloss.NewStyle().Faint(true).Render(panes)
+	}
 	hints := t.wideSpacesHint
 	if m.screen == vaultList {
 		hints = t.wideListHint
@@ -180,10 +244,13 @@ func (m Model) wideView() string {
 	if m.screen == vaultItem {
 		hints = t.wideItemHint
 	}
+	if modal {
+		hints = ""
+	}
 	hints = strings.ReplaceAll(hints, "\n", "  ")
 	hints = wideTrim(hints, m.width)
 	status := m.message
-	if status == "" {
+	if status == "" && !modal {
 		status = t.wideCount(len(names))
 	}
 	style := m.styles.hint
