@@ -114,13 +114,13 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var err error
 		if m.screen == spacesAdd {
 			var newScope *vault.Vault
-			newScope, err = vault.NewScope(vaultDir(m.path), m.scopeID, m.input)
+			newScope, err = vault.NewScope(vaultDir(m.path), stateFile(m.path), m.scopeID, m.input)
 			if err == nil {
 				m.scopes = append(m.scopes, newScope)
 				err = m.sortSpaces(newScope)
 			}
 		} else {
-			err = vault.RenameScope(vaultDir(m.path), m.scopeID, m.vlt, m.input)
+			err = vault.RenameScope(vaultDir(m.path), stateFile(m.path), m.scopeID, m.vlt, m.input)
 			if err == nil {
 				err = m.sortSpaces(m.vlt)
 			}

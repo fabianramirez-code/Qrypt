@@ -1,0 +1,309 @@
+package vault
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/fabianramirez-code/qrypt/internal/identity"
+)
+
+type recordEntry struct {
+	generation uint64
+	hash       [32]byte
+}
+
+// readRecord rejects malformed or unreadable state instead of treating it as a new device.
+func readRecord(path string) (map[string]recordEntry, error) {
+	entries := make(map[string]recordEntry)
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return entries, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		return nil, fmt.Errorf("invalid vault record")
+	}
+	previous := ""
+	for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
+		if line == "" {
+			if len(data) == 0 {
+				break
+			}
+			return nil, fmt.Errorf("invalid vault record")
+		}
+		fields := strings.Split(line, " ")
+		if len(fields) != 3 || !validScopeID(fields[0]) || fields[0] <= previous || len(fields[2]) != 64 || strings.ToLower(fields[2]) != fields[2] {
+			return nil, fmt.Errorf("invalid vault record")
+		}
+		n, e := strconv.ParseUint(fields[1], 10, 64)
+		if e != nil || n == 0 || strconv.FormatUint(n, 10) != fields[1] {
+			return nil, fmt.Errorf("invalid vault record")
+		}
+		h, e := hex.DecodeString(fields[2])
+		if e != nil {
+			return nil, fmt.Errorf("invalid vault record")
+		}
+		var hash [32]byte
+		copy(hash[:], h)
+		entries[fields[0]] = recordEntry{n, hash}
+		previous = fields[0]
+	}
+	return entries, nil
+}
+func writeRecord(path string, entries map[string]recordEntry) error {
+	keys := make([]string, 0, len(entries))
+	for k := range entries {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		entry := entries[k]
+		fmt.Fprintf(&b, "%s %d %x\n", k, entry.generation, entry.hash)
+	}
+	return writeReplacing(path, []byte(b.String()))
+}
+func recordVault(v *Vault) error {
+	entries, err := readRecord(v.statePath)
+	if err != nil {
+		return err
+	}
+	entries[v.ID()] = recordEntry{v.Generation(), v.ManifestHash()}
+	return writeRecord(v.statePath, entries)
+}
+
+// diskUndecryptable counts files that accepting would remove, including damaged value segments.
+func diskUndecryptable(v *Vault) (int, error) {
+	count := 0
+	if _, err := v.nameUnchecked(); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			count++
+		}
+	}
+	files, err := os.ReadDir(filepath.Join(v.dir, secretDir))
+	if errors.Is(err, os.ErrNotExist) {
+		return count, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	for _, f := range files {
+		fid, ok := parseFileName(f.Name())
+		if !ok || f.IsDir() {
+			continue
+		}
+		blob, e := os.ReadFile(filepath.Join(v.dir, secretDir, f.Name()))
+		if e != nil {
+			return 0, e
+		}
+		if _, e = v.decodeName(fid, blob); e != nil {
+			count++
+			continue
+		}
+		value, e := v.decodeValue(fid, blob)
+		clear(value) // Only whether it decrypts matters here.
+		if e != nil {
+			count++
+		}
+	}
+	return count, nil
+}
+func scopeProblem(v *Vault, kind ProblemKind, recorded uint64) (Problem, error) {
+	p := *v.problem(kind)
+	p.Recorded = recorded
+	if _, err := os.Stat(filepath.Join(v.dir, scopeNameFile)); errors.Is(err, os.ErrNotExist) {
+		p.Name = ""
+	} else if err != nil {
+		return p, err
+	}
+	n, e := diskUndecryptable(v)
+	if e != nil {
+		return p, e
+	}
+	p.Undecryptable = n
+	return p, nil
+}
+
+// inspectScope verifies the scope before comparing the signed state with the local record.
+func inspectScope(dir, scopeID string, id *identity.Identity, rec recordEntry, hasRecord bool) (*Vault, *Problem, error) {
+	manifestPath := filepath.Join(dir, "manifest")
+	_, statErr := os.Stat(manifestPath)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return nil, nil, statErr
+	}
+	// A recorded manifest must not be silently recreated by Open.
+	if hasRecord && errors.Is(statErr, os.ErrNotExist) {
+		v, err := openScope(dir, id, false)
+		if err != nil {
+			return nil, nil, err
+		}
+		defer v.Close()
+		p, e := scopeProblem(v, ProblemSignature, rec.generation)
+		return nil, &p, e
+	}
+	v, err := Open(dir, id)
+	if err != nil {
+		var problem *Problem
+		if !errors.As(err, &problem) {
+			return nil, nil, err
+		}
+		v, e := openScope(dir, id, false)
+		if e != nil {
+			return nil, nil, e
+		}
+		defer v.Close()
+		p, e := scopeProblem(v, problem.Kind, rec.generation)
+		if e != nil {
+			return nil, nil, e
+		}
+		p.Generation = problem.Generation
+		p.Missing = problem.Missing
+		p.Unexpected = problem.Unexpected
+		p.Changed = problem.Changed
+		// A valid manifest may have been read before a files mismatch.
+		return nil, &p, nil
+	}
+	if v.ID() != scopeID {
+		v.Close()
+		return nil, nil, ErrInvalidFormat
+	}
+	if hasRecord {
+		kind := ProblemKind("")
+		switch {
+		case v.Generation() < rec.generation:
+			kind = ProblemRollback
+		case v.Generation() == rec.generation && v.ManifestHash() != rec.hash:
+			kind = ProblemFork
+		}
+		if kind != "" {
+			p, e := scopeProblem(v, kind, rec.generation)
+			v.Close()
+			return nil, &p, e
+		}
+	}
+	if _, e := v.nameUnchecked(); e != nil {
+		p, x := scopeProblem(v, ProblemFiles, rec.generation)
+		v.Close()
+		if x != nil {
+			return nil, nil, x
+		}
+		return nil, &p, nil
+	}
+	return v, nil, nil
+}
+
+// Accept keeps only decryptable files and signs a fresh current manifest.
+func Accept(root, statePath string, id *identity.Identity, scopeID string) error {
+	if !validScopeID(scopeID) {
+		return ErrInvalidFormat
+	}
+	entries, err := readRecord(statePath)
+	if err != nil {
+		return err
+	}
+	rec, has := entries[scopeID]
+	dir := filepath.Join(root, "scopes", scopeID)
+	if _, err = os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+		if has {
+			delete(entries, scopeID)
+			return writeRecord(statePath, entries)
+		}
+		return os.ErrNotExist
+	}
+	if err != nil {
+		return err
+	}
+	v, problem, err := inspectScope(dir, scopeID, id, rec, has)
+	if unreadableScope(err) {
+		return ErrScopeUnreadable
+	}
+	if err != nil {
+		return err
+	}
+	if v != nil {
+		v.Close()
+		return nil
+	}
+	if problem == nil {
+		return nil
+	}
+	v, err = openScope(dir, id, false)
+	if err != nil {
+		return err
+	}
+	defer v.Close()
+	if v.ID() != scopeID {
+		return ErrInvalidFormat
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "manifest"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	old, verifyErr := VerifyManifest(id, raw)
+	generation := rec.generation
+	if verifyErr == nil && old.ScopeID == scopeID && old.Generation > generation {
+		generation = old.Generation
+	}
+	if generation == ^uint64(0) {
+		return fmt.Errorf("manifest generation overflow")
+	}
+	m := Manifest{ScopeID: scopeID, Generation: generation + 1, Files: make(map[string][32]byte)}
+	namePath := filepath.Join(dir, scopeNameFile)
+	if name, e := os.ReadFile(namePath); e == nil {
+		if _, e = v.nameUnchecked(); e == nil {
+			m.NameHash = sha256.Sum256(name)
+		} else if e = os.Remove(namePath); e != nil {
+			return e
+		}
+	} else if !errors.Is(e, os.ErrNotExist) {
+		return e
+	}
+	files, e := os.ReadDir(filepath.Join(dir, secretDir))
+	if e != nil && !errors.Is(e, os.ErrNotExist) {
+		return e
+	}
+	for _, f := range files {
+		fid, ok := parseFileName(f.Name())
+		if !ok || f.IsDir() {
+			continue
+		}
+		path := filepath.Join(dir, secretDir, f.Name())
+		data, e := os.ReadFile(path)
+		if e != nil {
+			return e
+		}
+		_, ne := v.decodeName(fid, data)
+		value, ve := v.decodeValue(fid, data)
+		clear(value) // Only whether it decrypts matters here.
+		if ne != nil || ve != nil {
+			if e = os.Remove(path); e != nil {
+				return e
+			}
+			continue
+		}
+		m.Files[hex.EncodeToString(fid)] = sha256.Sum256(data)
+	}
+	signed, err := v.signManifest(m)
+	if err != nil {
+		return err
+	}
+	if err = writeReplacing(filepath.Join(dir, "manifest.next"), signed); err != nil {
+		return err
+	}
+	if err = os.Rename(filepath.Join(dir, "manifest.next"), filepath.Join(dir, "manifest")); err != nil {
+		return err
+	}
+	m.Hash = sha256.Sum256(signed)
+	v.manifest = m
+	v.statePath = statePath
+	return recordVault(v)
+}

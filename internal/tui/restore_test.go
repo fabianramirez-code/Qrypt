@@ -114,10 +114,11 @@ func entries(t *testing.T, path string, want int) {
 		t.Fatal(err)
 	}
 	for _, e := range list {
-		if e.Name() == "vault" {
+		if e.Name() == "vault" || e.Name() == "state" {
 			want++
 		}
 	}
+
 	if len(list) != want {
 		t.Fatalf("entries %d, want %d", len(list), want)
 	}

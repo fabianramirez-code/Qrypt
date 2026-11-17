@@ -30,7 +30,13 @@ const (
 	ProblemFork      ProblemKind = "fork"
 	ProblemRollback  ProblemKind = "rollback"
 	ProblemRemoved   ProblemKind = "removed"
+	// ProblemUnreadable means the scope file is damaged or belongs to another
+	// identity. Its key cannot be recovered, so the scope cannot be accepted.
+	ProblemUnreadable ProblemKind = "unreadable"
 )
+
+// ErrScopeUnreadable means a scope cannot be opened with this identity and was left untouched.
+var ErrScopeUnreadable = errors.New("scope cannot be opened with this identity")
 
 type Problem struct {
 	ScopeID                                     string
@@ -161,6 +167,9 @@ func (v *Vault) change(m Manifest, action func() error) error {
 	}
 	m.Hash = sha256.Sum256(data)
 	v.manifest = m
+	if v.statePath != "" {
+		return recordVault(v)
+	}
 	return nil
 }
 

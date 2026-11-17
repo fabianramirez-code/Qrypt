@@ -20,7 +20,7 @@ import (
 
 func scopeAt(t *testing.T, root string, id *identity.Identity, name string) *vault.Vault {
 	t.Helper()
-	v, err := vault.NewScope(root, id, name)
+	v, err := vault.NewScope(root, filepath.Join(filepath.Dir(root), "state"), id, name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestScopeNameValidationAndBinding(t *testing.T) {
 func TestScopeManagement(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "vault")
 	id := newIdentity(t, 1)
-	if list, e := vault.OpenScopes(root, id); e != nil || len(list) != 0 {
+	if list, problems, e := vault.OpenScopes(root, filepath.Join(filepath.Dir(root), "state"), id); e != nil || len(problems) != 0 || len(list) != 0 {
 		t.Fatalf("missing: %v %v", list, e)
 	}
 	work := scopeAt(t, root, id, "Work")
@@ -152,18 +152,18 @@ func TestScopeManagement(t *testing.T) {
 		}
 	}
 	before := snapshot(t, root)
-	if _, e := vault.NewScope(root, id, "Work"); !errors.Is(e, vault.ErrScopeNameExists) {
+	if _, e := vault.NewScope(root, filepath.Join(filepath.Dir(root), "state"), id, "Work"); !errors.Is(e, vault.ErrScopeNameExists) {
 		t.Fatalf("duplicate: %v", e)
 	}
 	personal := scopeAt(t, root, id, "Personal")
 	beforeRename := snapshot(t, root)
-	if e := vault.RenameScope(root, id, work, "Personal"); !errors.Is(e, vault.ErrScopeNameExists) {
+	if e := vault.RenameScope(root, filepath.Join(filepath.Dir(root), "state"), id, work, "Personal"); !errors.Is(e, vault.ErrScopeNameExists) {
 		t.Fatalf("rename duplicate: %v", e)
 	}
 	if !reflect.DeepEqual(beforeRename, snapshot(t, root)) {
 		t.Fatal("duplicate rename changed files")
 	}
-	if e := vault.RenameScope(root, id, work, "Work"); e != nil {
+	if e := vault.RenameScope(root, filepath.Join(filepath.Dir(root), "state"), id, work, "Work"); e != nil {
 		t.Fatal(e)
 	}
 	if e := work.Put("item", []byte("private")); e != nil {
@@ -186,7 +186,10 @@ func TestScopeManagement(t *testing.T) {
 	if e := os.Remove(filepath.Join(root, "scopes", personal.ID(), "secrets", filepath.Base(foreign))); e != nil {
 		t.Fatal(e)
 	}
-	names, e := vault.OpenScopes(root, id)
+	names, problems, e := vault.OpenScopes(root, filepath.Join(filepath.Dir(root), "state"), id)
+	if len(problems) != 0 {
+		t.Fatalf("unexpected problems: %+v", problems)
+	}
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -232,15 +235,33 @@ func TestOpenScopesRejectsDamagedOrForeign(t *testing.T) {
 	if e := os.WriteFile(path, broken, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if list, e := vault.OpenScopes(root, id); list != nil || !errors.Is(e, vault.ErrIntegrity) {
-		t.Fatalf("damaged: %v %v", list, e)
+	if list, problems, e := vault.OpenScopes(root, filepath.Join(filepath.Dir(root), "state"), id); e != nil || len(list) != 1 || len(problems) != 1 || problems[0].Kind != vault.ProblemFiles {
+		t.Fatalf("damaged: %v %+v %v", list, problems, e)
+	} else {
+		for _, v := range list {
+			v.Close()
+		}
 	}
 	if e := os.WriteFile(path, original, 0600); e != nil {
 		t.Fatal(e)
 	}
 	other := newIdentity(t, 2)
-	if list, e := vault.OpenScopes(root, other); list != nil || !errors.Is(e, vault.ErrDecryption) {
-		t.Fatalf("other identity: %v %v", list, e)
+	// Scopes of another identity are reported one by one and left untouched; none is opened.
+	before := snapshot(t, root)
+	list, problems, e := vault.OpenScopes(root, filepath.Join(t.TempDir(), "other-state"), other)
+	if e != nil || len(list) != 0 || len(problems) != 2 {
+		t.Fatalf("other identity: %v %v %v", list, problems, e)
+	}
+	for _, p := range problems {
+		if p.Kind != vault.ProblemUnreadable {
+			t.Fatalf("other identity: kind %q", p.Kind)
+		}
+		if e := vault.Accept(root, filepath.Join(t.TempDir(), "other-state"), other, p.ScopeID); !errors.Is(e, vault.ErrScopeUnreadable) {
+			t.Fatalf("Accept of an unreadable scope = %v", e)
+		}
+	}
+	if !sameSnapshot(before, snapshot(t, root)) {
+		t.Fatal("an unreadable scope was changed")
 	}
 	if e := os.Mkdir(filepath.Join(root, "scopes", "damaged"), 0700); e != nil {
 		t.Fatal(e)
@@ -249,8 +270,8 @@ func TestOpenScopesRejectsDamagedOrForeign(t *testing.T) {
 	if e := os.WriteFile(filepath.Join(root, "scopes", ".DS_Store"), []byte("x"), 0600); e != nil {
 		t.Fatal(e)
 	}
-	list, e := vault.OpenScopes(root, id)
-	if e != nil || len(list) != 2 {
+	list, problems, e = vault.OpenScopes(root, filepath.Join(filepath.Dir(root), "state"), id)
+	if e != nil || len(problems) != 0 || len(list) != 2 {
 		t.Fatalf("foreign entries: %v %v", list, e)
 	}
 	for _, v := range list {
@@ -282,7 +303,10 @@ func TestEarlierLayoutMoveAndRecovery(t *testing.T) {
 					t.Fatal(e)
 				}
 			}
-			opened, e := vault.OpenScopes(root, id)
+			opened, problems, e := vault.OpenScopes(root, filepath.Join(filepath.Dir(root), "state"), id)
+			if len(problems) != 0 {
+				t.Fatalf("migration problems: %+v", problems)
+			}
 			if e != nil {
 				t.Fatal(e)
 			}

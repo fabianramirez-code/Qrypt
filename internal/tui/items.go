@@ -20,6 +20,7 @@ const maxShownRunes = 300
 func vaultDir(identityPath string) string {
 	return filepath.Join(filepath.Dir(identityPath), "vault")
 }
+func stateFile(identityPath string) string { return filepath.Join(filepath.Dir(identityPath), "state") }
 
 func isVaultScreen(s screen) bool {
 	switch s {
@@ -36,15 +37,21 @@ func isSpaceScreen(s screen) bool {
 // openVault opens every scope, or first creates Personal next to the identity file.
 func (m *Model) openVault(id *identity.Identity) {
 	dir := vaultDir(m.path)
-	scopes, err := vault.OpenScopes(dir, id)
+	scopes, problems, err := vault.OpenScopes(dir, stateFile(m.path), id)
+	if err == nil && len(problems) != 0 {
+		err = &problems[0]
+	}
 	if err == nil && len(scopes) == 0 {
 		var first *vault.Vault
-		first, err = vault.NewScope(dir, id, "Personal")
+		first, err = vault.NewScope(dir, stateFile(m.path), id, "Personal")
 		if err == nil {
 			scopes = append(scopes, first)
 		}
 	}
 	if err != nil {
+		for _, scope := range scopes {
+			scope.Close()
+		}
 		m.failVault(err)
 		return
 	}

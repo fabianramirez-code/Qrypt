@@ -59,8 +59,8 @@ func TestRemoveScopeKeepsSecretsAndOtherScopes(t *testing.T) {
 	if err := vault.RemoveScope(gone); err != nil {
 		t.Fatal(err)
 	}
-	list, err := vault.OpenScopes(root, id)
-	if err != nil || len(list) != 1 {
+	list, problems, err := vault.OpenScopes(root, filepath.Join(filepath.Dir(root), "state"), id)
+	if err != nil || len(problems) != 0 || len(list) != 1 {
 		t.Fatalf("OpenScopes after a removal = %v, %v", list, err)
 	}
 	defer list[0].Close()
@@ -76,11 +76,11 @@ func TestEmptyEarlierSecretsDirectoryIsNotAnError(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "secrets"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	list, err := vault.OpenScopes(root, id)
-	if err != nil || len(list) != 0 {
+	list, problems, err := vault.OpenScopes(root, filepath.Join(filepath.Dir(root), "state"), id)
+	if err != nil || len(problems) != 0 || len(list) != 0 {
 		t.Fatalf("OpenScopes = %v, %v", list, err)
 	}
-	v, err := vault.NewScope(root, id, "Personal")
+	v, err := vault.NewScope(root, filepath.Join(filepath.Dir(root), "state"), id, "Personal")
 	if err != nil {
 		t.Fatalf("NewScope = %v", err)
 	}
@@ -99,7 +99,7 @@ func TestOrphanEarlierSecretsAreKeptAndReported(t *testing.T) {
 	if err := os.WriteFile(orphan, []byte("unreadable"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := vault.OpenScopes(root, id); !errors.Is(err, vault.ErrInvalidFormat) {
+	if _, _, err := vault.OpenScopes(root, filepath.Join(filepath.Dir(root), "state"), id); !errors.Is(err, vault.ErrInvalidFormat) {
 		t.Fatalf("OpenScopes = %v", err)
 	}
 	if data, err := os.ReadFile(orphan); err != nil || string(data) != "unreadable" {

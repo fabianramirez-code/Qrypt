@@ -214,6 +214,8 @@ Damage happens without an attack: a disk error, an interrupted synchronization t
 
 Accepting never brings a file back. Whatever was lost stays lost.
 
+**A scope that cannot be opened at all** is the exception. If its scope file is damaged, or was written for another identity, its key cannot be obtained and nothing in it can be read or signed. Qrypt reports it, leaves every file untouched, and does not offer to accept it: the files may be valid for another identity.
+
 ## 7. What the files reveal
 
 An attacker who copies the vault learns:

@@ -123,6 +123,7 @@ type Vault struct {
 	edPublic     []byte
 	mlPublic     []byte
 	manifest     Manifest
+	statePath    string
 }
 
 func derive(scopeKey []byte, label string) []byte {
@@ -201,6 +202,10 @@ func Create(dir string, id *identity.Identity) (*Vault, error) {
 
 // Open reads the scope file in dir and unwraps the scope key with the identity.
 func Open(dir string, id *identity.Identity) (*Vault, error) {
+	return openScope(dir, id, true)
+}
+
+func openScope(dir string, id *identity.Identity, verify bool) (*Vault, error) {
 	file, err := readLimited(filepath.Join(dir, scopeName), scopeFileSize)
 	if err != nil {
 		return nil, err
@@ -225,9 +230,11 @@ func Open(dir string, id *identity.Identity) (*Vault, error) {
 	}
 	defer clear(scopeKey)
 	v := newVault(dir, scopeID, scopeKey, id)
-	if err := v.openManifest(); err != nil {
-		v.Close()
-		return nil, err
+	if verify {
+		if err := v.openManifest(); err != nil {
+			v.Close()
+			return nil, err
+		}
 	}
 	return v, nil
 }

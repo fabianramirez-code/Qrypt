@@ -35,7 +35,7 @@ func (m *Model) startPreview() {
 			return
 		}
 	}
-	work, err := vault.NewScope(vaultDir(m.path), id, "Work")
+	work, err := vault.NewScope(vaultDir(m.path), stateFile(m.path), id, "Work")
 	if err != nil {
 		m.failVault(err)
 		return

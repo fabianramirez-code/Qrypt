@@ -222,66 +222,99 @@ func validScopeID(s string) bool {
 }
 
 // OpenScopes opens all scopes, completing any earlier-layout migration first.
-func OpenScopes(root string, id *identity.Identity) ([]*Vault, error) {
-	if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
-		return []*Vault{}, nil
-	} else if err != nil {
-		return nil, err
+func OpenScopes(root, statePath string, id *identity.Identity) ([]*Vault, []Problem, error) {
+	records, err := readRecord(statePath)
+	if err != nil {
+		return nil, nil, err
 	}
-	if err := moveEarlierLayout(root, id); err != nil {
-		return nil, err
+	if _, err = os.Stat(root); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, err
+	}
+	if err == nil {
+		if err = moveEarlierLayout(root, id); err != nil {
+			return nil, nil, err
+		}
 	}
 	dirs, err := os.ReadDir(filepath.Join(root, "scopes"))
-	if errors.Is(err, os.ErrNotExist) {
-		return []*Vault{}, nil
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, err
 	}
-	if err != nil {
-		return nil, err
-	}
-	result := make([]*Vault, 0, len(dirs))
-	fail := func(err error) ([]*Vault, error) {
+	result := []*Vault{}
+	problems := []Problem{}
+	seen := map[string]bool{}
+	updated := false
+	fail := func(e error) ([]*Vault, []Problem, error) {
 		for _, v := range result {
 			v.Close()
 		}
-		return nil, err
+		return nil, nil, e
 	}
 	for _, d := range dirs {
-		// Anything that is not a scope directory is ignored: a scope being created or
-		// removed (".scope-" prefix), or a file the system added, such as .DS_Store.
 		if !d.IsDir() || !validScopeID(d.Name()) {
 			continue
 		}
-		v, err := Open(filepath.Join(root, "scopes", d.Name()), id)
-		if err != nil {
-			return fail(err)
+		scopeID := d.Name()
+		seen[scopeID] = true
+		rec, has := records[scopeID]
+		v, p, e := inspectScope(filepath.Join(root, "scopes", scopeID), scopeID, id, rec, has)
+		if unreadableScope(e) {
+			// One scope that cannot be opened must not take the others with it.
+			problems = append(problems, Problem{ScopeID: scopeID, Kind: ProblemUnreadable, Recorded: rec.generation})
+			continue
 		}
-		if v.ID() != d.Name() {
-			v.Close()
-			return fail(ErrInvalidFormat)
+		if e != nil {
+			return fail(e)
 		}
-		if _, err := v.Name(); err != nil {
-			v.Close()
-			return fail(err)
+		if p != nil {
+			problems = append(problems, *p)
+			continue
 		}
+		v.statePath = statePath
 		result = append(result, v)
+		if !has || v.Generation() > rec.generation {
+			records[scopeID] = recordEntry{v.Generation(), v.ManifestHash()}
+			updated = true
+		}
+	}
+	for scopeID, rec := range records {
+		if !seen[scopeID] {
+			problems = append(problems, Problem{ScopeID: scopeID, Kind: ProblemRemoved, Recorded: rec.generation})
+		}
+	}
+	if updated {
+		if err = writeRecord(statePath, records); err != nil {
+			return fail(err)
+		}
 	}
 	names := make(map[*Vault]string, len(result))
 	for _, v := range result {
-		n, _ := v.Name()
-		names[v] = n
+		names[v], _ = v.Name()
 	}
 	sort.Slice(result, func(i, j int) bool { return names[result[i]] < names[result[j]] })
-	return result, nil
+	sort.Slice(problems, func(i, j int) bool { return problems[i].ScopeID < problems[j].ScopeID })
+	return result, problems, nil
+}
+
+// unreadableScope reports whether a scope failed to open because of its own scope file.
+func unreadableScope(err error) bool {
+	return errors.Is(err, ErrDecryption) || errors.Is(err, ErrInvalidFormat) ||
+		errors.Is(err, ErrUnsupportedVersion) || errors.Is(err, os.ErrNotExist)
 }
 
 // NewScope creates a named scope, refusing an existing name.
-func NewScope(root string, id *identity.Identity, name string) (*Vault, error) {
+func NewScope(root, statePath string, id *identity.Identity, name string) (*Vault, error) {
 	if err := validateName(name); err != nil {
 		return nil, err
 	}
-	opened, err := OpenScopes(root, id)
+	opened, problems, err := OpenScopes(root, statePath, id)
 	if err != nil {
 		return nil, err
+	}
+	if len(problems) != 0 {
+		for _, v := range opened {
+			v.Close()
+		}
+		return nil, &problems[0]
 	}
 	exists := false
 	for _, v := range opened {
@@ -332,11 +365,16 @@ func NewScope(root string, id *identity.Identity, name string) (*Vault, error) {
 	}
 	created = true
 	v.dir = dest
+	v.statePath = statePath
+	if err = recordVault(v); err != nil {
+		v.Close()
+		return nil, err
+	}
 	return v, nil
 }
 
 // RenameScope changes a scope's name if no other scope has it.
-func RenameScope(root string, id *identity.Identity, v *Vault, name string) error {
+func RenameScope(root, statePath string, id *identity.Identity, v *Vault, name string) error {
 	if err := validateName(name); err != nil {
 		return err
 	}
@@ -347,9 +385,15 @@ func RenameScope(root string, id *identity.Identity, v *Vault, name string) erro
 	if current == name {
 		return nil
 	}
-	opened, err := OpenScopes(root, id)
+	opened, problems, err := OpenScopes(root, statePath, id)
 	if err != nil {
 		return err
+	}
+	if len(problems) != 0 {
+		for _, other := range opened {
+			other.Close()
+		}
+		return &problems[0]
 	}
 	defer func() {
 		for _, other := range opened {
@@ -395,5 +439,16 @@ func RemoveScope(v *Vault) error {
 		return err
 	}
 	v.Close()
-	return os.RemoveAll(removed)
+	if err := os.RemoveAll(removed); err != nil {
+		return err
+	}
+	if v.statePath != "" {
+		entries, err := readRecord(v.statePath)
+		if err != nil {
+			return err
+		}
+		delete(entries, v.ID())
+		return writeRecord(v.statePath, entries)
+	}
+	return nil
 }

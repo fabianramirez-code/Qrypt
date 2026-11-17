@@ -43,7 +43,7 @@ func unlockFixture(t *testing.T, language Language) (Model, string, string, []by
 			expected = 0
 		}
 		for _, e := range entries {
-			if e.Name() == "vault" {
+			if e.Name() == "vault" || e.Name() == "state" {
 				expected++
 			}
 		}
