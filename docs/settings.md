@@ -11,8 +11,9 @@ How Qrypt remembers the interface language and theme, and how a user edits color
 | Language | `en` or `es`                                                        |
 | Theme    | `green`, `violet`, `mono`, `contrast`, `auto`, `carbon`, or `custom` |
 | Colors   | For `custom` only: the hex value of each color role                 |
+| `mirror` | Optional folder path as typed on the Mirror screen                  |
 
-The file never holds a secret, a name, a value, a path to the vault, or anything about the identity. It is plain text, so the user can read it and Qrypt can show exactly what it saves.
+The file never holds a secret, a name, a value, a path to the working vault, or anything about the identity. The optional `mirror=<path>` line does reveal where the copy is. It is plain text, so the user can read it and Qrypt can show exactly what it saves.
 
 ## Storage
 
@@ -26,7 +27,7 @@ The file never holds a secret, a name, a value, a path to the vault, or anything
 - **Whole or not at all:** a temporary file in the same directory, synced, then renamed over the old one.
 - **Owner only:** directory `0700`, file `0600`.
 - **Never fatal.** A missing, unreadable, too large (over 4 KiB) or invalid file is ignored: Qrypt starts with the defaults (system language, theme `green`) and shows a one-line notice on the first screen. It never overwrites a file it could not read until the user changes a setting.
-- **Format:** one `key=value` per line, UTF-8, for example `language=es`, `theme=custom`, `color.accent=#22d3ee`. Unknown keys are ignored. Invalid values make that one line be ignored.
+- **Format:** one `key=value` per line, UTF-8, for example `language=es`, `theme=custom`, `color.accent=#22d3ee`. Unknown keys are ignored. Invalid values make that one line be ignored. An absent or empty `mirror` means no mirror; stopping mirroring removes the line without deleting the folder.
 
 ## Themes
 

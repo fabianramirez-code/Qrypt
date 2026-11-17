@@ -76,6 +76,9 @@ func (m Model) problemKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.selectSpace()
+	if m.screen == spacesList {
+		m.mirrorUpdate()
+	}
 	return m, nil
 }
 

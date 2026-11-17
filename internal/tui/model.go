@@ -14,6 +14,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/fabianramirez-code/qrypt/internal/clipboard"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
+	"github.com/fabianramirez-code/qrypt/internal/mirror"
 	"github.com/fabianramirez-code/qrypt/internal/settings"
 	"github.com/fabianramirez-code/qrypt/internal/tui/theme"
 	"github.com/fabianramirez-code/qrypt/internal/vault"
@@ -41,6 +42,9 @@ const (
 	spacesRename
 	spacesDelete
 	problemScreen
+	mirrorScreen
+	mirrorEdit
+	mirrorStop
 	vaultItem
 	vaultAddName
 	vaultAddValue
@@ -106,6 +110,9 @@ type Model struct {
 	settingsPath    string
 	settings        settings.Settings
 	settingsError   bool
+	mirrorStorage   func(string) mirror.Storage
+	mirrorResult    string
+	mirrorWarning   bool
 	darkBackground  bool
 	themeName       string
 	styles          styles
@@ -329,7 +336,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = m.language.text().pasted
 		} else if m.screen == problemScreen && m.selectedProblem() != nil && m.selectedProblem().Kind != vault.ProblemUnreadable {
 			m.message = m.language.text().problemPaste
-		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit || m.screen == spacesAdd || m.screen == spacesRename {
+		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit || m.screen == spacesAdd || m.screen == spacesRename || m.screen == mirrorEdit {
 			m.vaultPaste(v.Content)
 		}
 	case tea.KeyPressMsg:
@@ -364,6 +371,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.screen == problemScreen {
 				return m.problemKey(v)
+			}
+			if m.screen == mirrorScreen || m.screen == mirrorEdit || m.screen == mirrorStop {
+				return m.mirrorKey(v)
 			}
 			if isSpaceScreen(m.screen) {
 				return m.spacesKey(v)
@@ -664,7 +674,7 @@ func (m Model) View() tea.View {
 	if m.width >= 60 && m.height >= 20 {
 		if m.message != "" && m.screen != languageScreen {
 			messageStyle := m.styles.error
-			if m.message == m.language.text().copied {
+			if m.message == m.language.text().copied || m.mirrorWarning && m.message == m.mirrorResult {
 				messageStyle = m.styles.warning
 			}
 			content = strings.Replace(content, wrapLine(m.message), messageStyle.Render(wrapLine(m.message)), 1)
@@ -710,6 +720,8 @@ func (m Model) viewContent() string {
 		return m.spacesView(t)
 	case problemScreen:
 		return m.problemView(t)
+	case mirrorScreen, mirrorEdit, mirrorStop:
+		return m.mirrorView(t)
 	case vaultItem:
 		return title.Render(t.itemTitle) + "\n" + wrapLine(m.item) + "\n" + m.itemValueView(t) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.itemHint)
 	case vaultAddName:

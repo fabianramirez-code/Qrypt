@@ -18,6 +18,7 @@ const maxSize = 4 * 1024
 type Settings struct {
 	Language string
 	Theme    string
+	Mirror   string
 	Colors   map[string]string
 }
 
@@ -90,6 +91,11 @@ func Load(path string) (Settings, error) {
 		case key == "theme" && validTheme(value):
 			s.Theme = value
 			valid = true
+		case key == "mirror":
+			if value != "" && !strings.ContainsAny(value, "\r\x00") {
+				s.Mirror = value
+			}
+			valid = true
 		case strings.HasPrefix(key, "color.") && validRole(strings.TrimPrefix(key, "color.")) && validHex(value):
 			if s.Colors == nil {
 				s.Colors = make(map[string]string)
@@ -112,6 +118,9 @@ func Save(path string, s Settings) error {
 	if s.Theme != "" && !validTheme(s.Theme) {
 		return fmt.Errorf("invalid theme")
 	}
+	if strings.ContainsAny(s.Mirror, "\r\n\x00") {
+		return fmt.Errorf("invalid mirror path")
+	}
 	keys := make([]string, 0, len(s.Colors))
 	for role, hex := range s.Colors {
 		if !validRole(role) || !validHex(hex) {
@@ -126,6 +135,9 @@ func Save(path string, s Settings) error {
 	}
 	if s.Theme != "" {
 		fmt.Fprintf(&b, "theme=%s\n", s.Theme)
+	}
+	if s.Mirror != "" {
+		fmt.Fprintf(&b, "mirror=%s\n", s.Mirror)
 	}
 	for _, role := range keys {
 		fmt.Fprintf(&b, "color.%s=%s\n", role, s.Colors[role])

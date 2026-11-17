@@ -412,8 +412,10 @@ func (v *Vault) scan() ([]entry, error) {
 	if err := v.checkDisk(); err != nil {
 		return nil, err
 	}
+	// A scope with no secret may have no directory for them, as one copied
+	// from a mirror has: the manifest check above already vouches for it.
 	files, err := os.ReadDir(filepath.Join(v.dir, secretDir))
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
 	var entries []entry

@@ -2,7 +2,7 @@
 
 How Qrypt keeps a second copy of the vault, and how anyone can add a place to keep it.
 
-> **Status:** design. Not implemented yet. Not audited.
+> **Status:** implemented. Not audited. Choose and manage the folder on the [Mirror screen](tui.md#mirror).
 
 ## Why
 
@@ -50,6 +50,7 @@ For each scope, Qrypt first reads the manifest the mirror holds:
 
 On a device with an empty vault, Qrypt can bring the vault back from a mirror.
 
+- **A new device does not write first.** When the device holds no secret and the mirror holds scopes the device does not have, Qrypt writes nothing to the mirror and offers to restore. Copying the device's own empty scope would mix it with the vault the mirror holds.
 - **Checked before anything is written.** Every scope must have a manifest signed by the identity, and files that match it exactly. If one scope fails, nothing is restored and Qrypt reports which.
 - **Only into an empty vault.** Qrypt restores when the device has no secret. It never merges into, or replaces, a vault that holds something. The empty scopes of the device, such as the `Personal` scope created on first use, are replaced by the scopes of the mirror.
 - **Whole or not at all.** The scopes are first written apart and verified there. Only then do they take their place in the vault.

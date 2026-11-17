@@ -3,45 +3,53 @@ package tui
 import "fmt"
 
 type texts struct {
-	problemTitle, unknownSpace, problemSignature, problemFork, problemRollback, problemRemoved, problemRemoveRecord, problemUnreadable string
-	problemAccept, problemPrompt, problemWrong, problemPaste, problemHint, problemBack, problemWord                                    string
-	problemMissing, problemUnexpected, problemChanged, problemUndecryptable, problemGeneration, problemRecorded                        func(uint64) string
-	spacesTitle, spacesHint, spaceAddTitle, spaceRenameTitle, spaceDeleteTitle, spaceNameHint, spaceExists, spaceNotEmpty              string
-	previewBanner                                                                                                                      string
-	wideCount                                                                                                                          func(int) string
-	wideSpacesHint, wideListHint, wideItemHint                                                                                         string
-	welcomeTitle, welcomeBody, welcomeHint                                                                                             string
-	generating, passTitle, passIntro, passOutro, secretHint                                                                            string
-	confirmPassTitle, confirmPassPrompt, checkHint, checking                                                                           string
-	recoveryTitle, recoveryIntro, recoveryOutro                                                                                        string
-	confirmRecoveryTitle, savingTitle, savingBody                                                                                      string
-	doneTitle, doneBody, fileLabel, doneOutro, exitHint                                                                                string
-	failedTitle, failedBody, failedOutro, discard                                                                                      string
-	enlarge, unlockTitle, unlockPrompt, unlockHint                                                                                     string
-	cannotOpenTitle                                                                                                                    string
-	listTitle, noItems, listHint, listEmptyHint, itemTitle, itemHint, tooLong                                                          string
-	addTitle, namePrompt, addNameHint, valuePrompt, valueHint, editTitle                                                               string
-	deleteTitle, deleteQuestion, deleteHint, vaultFailedTitle, vaultLabel                                                              string
-	invalidName, nameExists, valueTooLarge, lineBreak, vaultDamaged, copied                                                            string
-	unlockWrongPass, invalidIdentity, newerIdentity                                                                                    string
-	wordCount, unknownWord, wrongPass, pasted, alreadyExists                                                                           string
-	wordProgress, wordPrompt, wrongWord                                                                                                func(int) string
-	typedWords                                                                                                                         func(int) string
-	welcomeRestore, unlockRestoreHint, restoreTitle, restoreIntro, restoreBackup, restoreIntroHint                                     string
-	restoreWordTitle, restoreWordHint, rebuilding, newPassTitle                                                                        string
-	restoredTitle, restoredBody, backupLabel, previousPass, keepNewPass                                                                string
-	notRestoredTitle, notRestoredBody, notRestoredOutro, discardNew, phraseStillValid                                                  string
-	invalidWord, invalidPhrase, backupExists                                                                                           string
-	restoreProgress, restorePrompt                                                                                                     func(int) string
+	mirrorTitle, mirrorNoFolder, mirrorPathPrompt, mirrorHint, mirrorPathHint, mirrorStopPrompt, mirrorStopHint                               string
+	mirrorFailed, mirrorPreviewRefused, mirrorNotEmpty, mirrorIncomplete, mirrorRestoreForeign, mirrorEmpty, mirrorRestored, mirrorHoldsVault string
+	mirrorUpdated                                                                                                                             func(int, int) string
+	mirrorAhead, mirrorForeign, mirrorUnknown, mirrorProblems                                                                                 func(int) string
+	problemTitle, unknownSpace, problemSignature, problemFork, problemRollback, problemRemoved, problemRemoveRecord, problemUnreadable        string
+	problemAccept, problemPrompt, problemWrong, problemPaste, problemHint, problemBack, problemWord                                           string
+	problemMissing, problemUnexpected, problemChanged, problemUndecryptable, problemGeneration, problemRecorded                               func(uint64) string
+	spacesTitle, spacesHint, spaceAddTitle, spaceRenameTitle, spaceDeleteTitle, spaceNameHint, spaceExists, spaceNotEmpty                     string
+	previewBanner                                                                                                                             string
+	wideCount                                                                                                                                 func(int) string
+	wideSpacesHint, wideListHint, wideItemHint                                                                                                string
+	welcomeTitle, welcomeBody, welcomeHint                                                                                                    string
+	generating, passTitle, passIntro, passOutro, secretHint                                                                                   string
+	confirmPassTitle, confirmPassPrompt, checkHint, checking                                                                                  string
+	recoveryTitle, recoveryIntro, recoveryOutro                                                                                               string
+	confirmRecoveryTitle, savingTitle, savingBody                                                                                             string
+	doneTitle, doneBody, fileLabel, doneOutro, exitHint                                                                                       string
+	failedTitle, failedBody, failedOutro, discard                                                                                             string
+	enlarge, unlockTitle, unlockPrompt, unlockHint                                                                                            string
+	cannotOpenTitle                                                                                                                           string
+	listTitle, noItems, listHint, listEmptyHint, itemTitle, itemHint, tooLong                                                                 string
+	addTitle, namePrompt, addNameHint, valuePrompt, valueHint, editTitle                                                                      string
+	deleteTitle, deleteQuestion, deleteHint, vaultFailedTitle, vaultLabel                                                                     string
+	invalidName, nameExists, valueTooLarge, lineBreak, vaultDamaged, copied                                                                   string
+	unlockWrongPass, invalidIdentity, newerIdentity                                                                                           string
+	wordCount, unknownWord, wrongPass, pasted, alreadyExists                                                                                  string
+	wordProgress, wordPrompt, wrongWord                                                                                                       func(int) string
+	typedWords                                                                                                                                func(int) string
+	welcomeRestore, unlockRestoreHint, restoreTitle, restoreIntro, restoreBackup, restoreIntroHint                                            string
+	restoreWordTitle, restoreWordHint, rebuilding, newPassTitle                                                                               string
+	restoredTitle, restoredBody, backupLabel, previousPass, keepNewPass                                                                       string
+	notRestoredTitle, notRestoredBody, notRestoredOutro, discardNew, phraseStillValid                                                         string
+	invalidWord, invalidPhrase, backupExists                                                                                                  string
+	restoreProgress, restorePrompt                                                                                                            func(int) string
 }
 
 var english = texts{
+	mirrorTitle: "Mirror", mirrorNoFolder: "No mirror", mirrorPathPrompt: "Folder path:", mirrorHint: "E: folder  X: stop  R: restore  Esc: back", mirrorPathHint: "Enter: save  Esc: back", mirrorStopPrompt: "Stop mirroring? The folder will be left untouched.", mirrorStopHint: "Y: stop  Any other key: cancel",
+	mirrorHoldsVault: "This folder already holds a vault. Press R to restore it.",
+	mirrorFailed:     "Mirror not updated: ", mirrorPreviewRefused: "Preview mirror must stay in the temporary directory.", mirrorNotEmpty: "Cannot restore: the vault holds a secret.", mirrorIncomplete: "Cannot restore: the mirror is incomplete.", mirrorRestoreForeign: "Cannot restore: the mirror belongs to another identity.", mirrorEmpty: "Cannot restore: the mirror is empty.", mirrorRestored: "Mirror restored.",
+	mirrorUpdated: func(a, b int) string { return fmt.Sprintf("Updated: %d  Unchanged: %d", a, b) }, mirrorAhead: func(n int) string { return fmt.Sprintf("Mirror ahead: %d space(s). Nothing overwritten.", n) }, mirrorForeign: func(n int) string { return fmt.Sprintf("Folder of another vault: %d space(s). Nothing written.", n) }, mirrorUnknown: func(n int) string { return fmt.Sprintf("Mirror holds %d space(s) absent from this device.", n) }, mirrorProblems: func(n int) string { return fmt.Sprintf("Not copied: %d space(s) with a problem.", n) },
 	problemTitle: "Problem", unknownSpace: "Space", problemSignature: "The manifest signature is invalid.", problemFork: "Two different states claim the same generation.", problemRollback: "This space was rolled back.", problemRemoved: "This space was removed outside Qrypt.", problemRemoveRecord: "Accepting removes its local record.", problemUnreadable: "This space cannot be opened with this identity. Qrypt leaves it untouched.",
 	problemAccept: "Accepting removes files that cannot be decrypted, signs the surviving state, and cannot restore anything lost.", problemPrompt: "Type ACCEPT to accept:", problemWrong: "Type ACCEPT exactly. Nothing was changed.", problemPaste: "Pasting is not accepted. Type the confirmation.", problemHint: "Enter: accept  Esc: back", problemBack: "Esc: back", problemWord: "ACCEPT",
 	problemMissing: func(n uint64) string { return fmt.Sprintf("Missing files: %d", n) }, problemUnexpected: func(n uint64) string { return fmt.Sprintf("Unexpected files: %d", n) }, problemChanged: func(n uint64) string { return fmt.Sprintf("Changed files: %d", n) }, problemUndecryptable: func(n uint64) string { return fmt.Sprintf("Undecryptable files: %d", n) }, problemGeneration: func(n uint64) string { return fmt.Sprintf("Current generation: %d", n) }, problemRecorded: func(n uint64) string { return fmt.Sprintf("Recorded generation: %d", n) },
-	spacesTitle: "Spaces", spacesHint: "Up/Down: move  Enter: open  A: add  R: rename\nD: delete  Esc: lock", spaceAddTitle: "Add a space", spaceRenameTitle: "Rename space", spaceDeleteTitle: "Delete this space?", spaceNameHint: "Enter: save  Esc: back", spaceExists: "A space with that name already exists.", spaceNotEmpty: "This space is not empty. Delete its items first.",
+	spacesTitle: "Spaces", spacesHint: "Up/Down: move  Enter: open  A: add  R: rename\nD: delete  M: mirror  Esc: lock", spaceAddTitle: "Add a space", spaceRenameTitle: "Rename space", spaceDeleteTitle: "Delete this space?", spaceNameHint: "Enter: save  Esc: back", spaceExists: "A space with that name already exists.", spaceNotEmpty: "This space is not empty. Delete its items first.",
 	previewBanner: "PREVIEW: temporary data, nothing is saved", wideCount: func(n int) string { return fmt.Sprintf("%d items", n) },
-	wideSpacesHint: "↑↓ move  Tab/→ open  A add  R rename  D delete  Esc lock",
+	wideSpacesHint: "↑↓ move  Tab/→ open  A add  R rename  D delete  M mirror  Esc lock",
 	wideListHint:   "↑↓ move  Tab/→ open  ⇧Tab/← back  A add  D delete  C copy",
 	wideItemHint:   "Enter show/hide  Tab/→ spaces  ⇧Tab/← back  E edit  C copy",
 	welcomeTitle:   "Creating an identity", welcomeBody: "Qrypt will give you two secrets.\n\nPassphrase (7 words)\n  You type it every time you open Qrypt on this device.\n\nRecovery phrase (24 words)\n  It rebuilds your identity if you lose this device\n  or forget the passphrase.\n\nWrite both on paper. They are shown only now,\nand nobody can reset them.", welcomeHint: "Enter: create   R: restore   Esc: quit", welcomeRestore: "Have a recovery phrase already? Press R to restore.",
@@ -70,12 +78,20 @@ var english = texts{
 }
 
 var spanish = texts{
+	mirrorTitle: "Espejo", mirrorNoFolder: "Sin espejo", mirrorPathPrompt: "Ruta de la carpeta:", mirrorHint: "E: carpeta  X: detener  R: restaurar  Esc: volver", mirrorPathHint: "Enter: guardar  Esc: volver", mirrorStopPrompt: "¿Detener el espejo? La carpeta no se modificará.", mirrorStopHint: "Y: detener  Cualquier otra tecla: cancelar",
+	mirrorHoldsVault: "Esta carpeta ya contiene una bóveda. Pulsa R para restaurarla.",
+	mirrorFailed:     "Espejo sin actualizar: ", mirrorPreviewRefused: "El espejo de prueba debe estar en el directorio temporal.", mirrorNotEmpty: "No se puede restaurar: la bóveda contiene un secreto.", mirrorIncomplete: "No se puede restaurar: el espejo está incompleto.", mirrorRestoreForeign: "No se puede restaurar: el espejo pertenece a otra identidad.", mirrorEmpty: "No se puede restaurar: el espejo está vacío.", mirrorRestored: "Espejo restaurado.",
+	mirrorUpdated: func(a, b int) string { return fmt.Sprintf("Actualizados: %d  Sin cambios: %d", a, b) }, mirrorAhead: func(n int) string {
+		return fmt.Sprintf("Espejo adelantado: %d espacio(s). No se sobrescribió nada.", n)
+	}, mirrorForeign: func(n int) string {
+		return fmt.Sprintf("Carpeta de otra bóveda: %d espacio(s). No se escribió nada.", n)
+	}, mirrorUnknown: func(n int) string { return fmt.Sprintf("El espejo tiene %d espacio(s) ausentes en este equipo.", n) }, mirrorProblems: func(n int) string { return fmt.Sprintf("Sin copiar: %d espacio(s) con problemas.", n) },
 	problemTitle: "Problema", unknownSpace: "Espacio", problemSignature: "La firma del manifiesto no es válida.", problemFork: "Dos estados distintos tienen la misma generación.", problemRollback: "Este espacio volvió a un estado anterior.", problemRemoved: "Este espacio se eliminó fuera de Qrypt.", problemRemoveRecord: "Aceptar elimina su registro local.", problemUnreadable: "Este espacio no se puede abrir con esta identidad. Qrypt lo deja intacto.",
 	problemAccept: "Aceptar elimina los archivos que no se pueden descifrar, firma el estado restante y no recupera nada de lo perdido.", problemPrompt: "Escribe ACEPTAR para aceptar:", problemWrong: "Escribe ACEPTAR exactamente. No se cambió nada.", problemPaste: "No se acepta pegar. Escribe la confirmación.", problemHint: "Enter: aceptar  Esc: volver", problemBack: "Esc: volver", problemWord: "ACEPTAR",
 	problemMissing: func(n uint64) string { return fmt.Sprintf("Archivos faltantes: %d", n) }, problemUnexpected: func(n uint64) string { return fmt.Sprintf("Archivos inesperados: %d", n) }, problemChanged: func(n uint64) string { return fmt.Sprintf("Archivos cambiados: %d", n) }, problemUndecryptable: func(n uint64) string { return fmt.Sprintf("Archivos que no se pueden descifrar: %d", n) }, problemGeneration: func(n uint64) string { return fmt.Sprintf("Generación actual: %d", n) }, problemRecorded: func(n uint64) string { return fmt.Sprintf("Generación registrada: %d", n) },
-	spacesTitle: "Espacios", spacesHint: "↑/↓ mover  Enter abrir  A añadir  R renombrar\nD borrar  Esc bloquear", spaceAddTitle: "Añadir un espacio", spaceRenameTitle: "Renombrar espacio", spaceDeleteTitle: "¿Borrar este espacio?", spaceNameHint: "Enter: guardar  Esc: volver", spaceExists: "Ya existe un espacio con ese nombre.", spaceNotEmpty: "Este espacio no está vacío. Borra primero sus elementos.",
+	spacesTitle: "Espacios", spacesHint: "↑/↓ mover  Enter abrir  A añadir  R renombrar\nD borrar  M espejo  Esc bloquear", spaceAddTitle: "Añadir un espacio", spaceRenameTitle: "Renombrar espacio", spaceDeleteTitle: "¿Borrar este espacio?", spaceNameHint: "Enter: guardar  Esc: volver", spaceExists: "Ya existe un espacio con ese nombre.", spaceNotEmpty: "Este espacio no está vacío. Borra primero sus elementos.",
 	previewBanner: "VISTA PREVIA: datos temporales, no se guarda nada", wideCount: func(n int) string { return fmt.Sprintf("%d elementos", n) },
-	wideSpacesHint: "↑↓ mover  Tab/→ abrir  A añadir  R renombrar  D borrar  Esc bloquear",
+	wideSpacesHint: "↑↓ mover  Tab/→ abrir  A añadir  R renombrar  D borrar  M espejo  Esc bloquear",
 	wideListHint:   "↑↓ mover  Tab/→ abrir  ⇧Tab/← volver  A añadir  D borrar  C copiar",
 	wideItemHint:   "Enter mostrar/ocultar  Tab/→ espacios  ⇧Tab/← volver  E editar  C copiar",
 	welcomeTitle:   "Crear una identidad", welcomeBody: "Qrypt te dará dos secretos.\n\nFrase de contraseña (7 palabras)\n  La escribes cada vez que abres Qrypt en este equipo.\n\nFrase de recuperación (24 palabras)\n  Reconstruye tu identidad si pierdes este equipo\n  u olvidas la frase de contraseña.\n\nAnota las dos en papel. Solo se muestran ahora,\ny nadie puede restablecerlas.\n\nLas palabras están en inglés. Cópialas tal cual.", welcomeHint: "Enter: crear   R: restaurar   Esc: salir", welcomeRestore: "¿Ya tienes frase de recuperación? Pulsa R para restaurar.",

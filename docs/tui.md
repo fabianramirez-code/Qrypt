@@ -42,7 +42,7 @@ Both flows offer a way into "Restoring an identity".
 
 ## Preview mode
 
-Run `qrypt --preview` to choose a language and explore a vault with two spaces, `Personal` and `Work`, holding fake sample items, without entering a passphrase. Every vault screen marks the session as temporary. The identity and vault live only in a throwaway directory, removed when Qrypt exits; changes are not kept. This does not unlock your real identity or vault. The normal `qrypt` command still requires your passphrase. Both commands require an interactive terminal.
+Run `qrypt --preview` to choose a language and explore a vault with two spaces, `Personal` and `Work`, holding fake sample items, without entering a passphrase. Every vault screen marks the session as temporary. The identity and vault live only in a throwaway directory, removed when Qrypt exits; changes are not kept. The Mirror screen is available there too, but accepts only folders inside that temporary directory; a path outside it is refused without reading or writing it. This does not unlock your real identity or vault. The normal `qrypt` command still requires your passphrase. Both commands require an interactive terminal.
 
 ## Creating an identity
 
@@ -121,7 +121,7 @@ The first screen after unlocking lists the spaces by name, each with the number 
 
 | Screen           | Shows                                                   | Keys                                                                                                  |
 | ---------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Spaces**       | The names of the spaces in byte order, one selected.    | Up and Down move, Enter opens the selected space, A adds, R renames, D deletes, Esc locks and exits.  |
+| **Spaces**       | The names of the spaces in byte order, one selected.    | Up and Down move, Enter opens the selected space, A adds, R renames, D deletes, M opens Mirror, Esc locks and exits. |
 | **Add a space**  | A text field for the name.                              | Enter creates the space and returns to the list with it selected. Esc returns without creating it.    |
 | **Rename**       | The current name and a field for the new one.           | Enter renames. Esc returns without changing it.                                                       |
 | **Delete space** | The name, and a question to confirm.                    | Y deletes. Any other key cancels.                                                                     |
@@ -145,6 +145,14 @@ A problem in one space does not block healthy spaces. The Spaces list keeps thei
 | Unreadable | The space cannot be opened with this identity. Qrypt leaves it untouched. There is no confirmation field; only Esc returns. |
 
 For every accept-able problem, the screen explains that accepting removes files that cannot be decrypted, signs the surviving state, and cannot restore anything lost. Type `ACCEPT` in English or `ACEPTAR` in Spanish **exactly**, then Enter, to accept. Other input changes nothing and shows the rejection message. Esc returns without changing the vault; pasting into the field is refused. On success Qrypt reopens all spaces, so a repaired row becomes a normal space and a removed row disappears. A failed acceptance shows the system error without silently accepting it. The Problem screen shows no item names or values.
+
+### Mirror
+
+M on Spaces opens the single-panel **Mirror** screen, showing the chosen folder (or `No mirror` / `Sin espejo`) and the result of the last update. E opens a field to type or paste a folder path; Enter creates the folder if necessary, saves the path as typed in settings, and runs the first update. A file instead of a folder or a folder that cannot be created shows the system error and saves nothing. Esc returns to Spaces. In preview, only a folder within the temporary directory can be chosen; paths outside it are refused without access.
+
+Qrypt synchronously updates the mirror after each successful item or space change, after accepting a problem, and after unlocking. The vault change always succeeds independently: an update failure leaves the device's change intact and shows a warning-colored `Mirror not updated: <reason>` / `Espejo sin actualizar: <motivo>` line. The next change retries. A mirror ahead is not overwritten; a folder belonging to another identity receives nothing. A space with a problem is not copied; a scope held only by the mirror is left there and reported. Deleting a space removes its files from the mirror at deletion time, if available.
+
+X asks for Y to stop mirroring; any other key cancels. Confirming removes the mirror setting, never the folder or its contents. R restores from the selected folder only if the device holds no item; on success Spaces refreshes with the restored names and counts. If it holds an item, the restore is refused without changing anything. An empty, incomplete, or foreign mirror is refused with its own message; other failures show the system error. Restoring never copies the identity file. Ctrl+C and the five-minute idle lock exit normally on this screen.
 
 ### Wide mode
 
@@ -216,6 +224,26 @@ The focused-pane footer hints include the focus keys (Tab/Right forward, Shift+T
 | Paste into confirmation | `Pasting is not accepted. Type the confirmation.` | `No se acepta pegar. Escribe la confirmación.` |
 | Problem keys | `Enter: accept  Esc: back` | `Enter: aceptar  Esc: volver` |
 | Unreadable problem keys | `Esc: back` | `Esc: volver` |
+| Mirror title | `Mirror` | `Espejo` |
+| No selected mirror | `No mirror` | `Sin espejo` |
+| Mirror edit prompt | `Folder path:` | `Ruta de la carpeta:` |
+| Mirror keys | `E: folder  X: stop  R: restore  Esc: back` | `E: carpeta  X: detener  R: restaurar  Esc: volver` |
+| Mirror path keys | `Enter: save  Esc: back` | `Enter: guardar  Esc: volver` |
+| Mirror stop question | `Stop mirroring? The folder will be left untouched.` | `¿Detener el espejo? La carpeta no se modificará.` |
+| Mirror stop keys | `Y: stop  Any other key: cancel` | `Y: detener  Cualquier otra tecla: cancelar` |
+| Update result | `Updated: <n>  Unchanged: <n>` | `Actualizados: <n>  Sin cambios: <n>` |
+| Mirror ahead | `Mirror ahead: <n> space(s). Nothing overwritten.` | `Espejo adelantado: <n> espacio(s). No se sobrescribió nada.` |
+| Foreign mirror | `Folder of another vault: <n> space(s). Nothing written.` | `Carpeta de otra bóveda: <n> espacio(s). No se escribió nada.` |
+| Unknown space | `Mirror holds <n> space(s) absent from this device.` | `El espejo tiene <n> espacio(s) ausentes en este equipo.` |
+| Problem space | `Not copied: <n> space(s) with a problem.` | `Sin copiar: <n> espacio(s) con problemas.` |
+| Failed mirror update | `Mirror not updated: <reason>` | `Espejo sin actualizar: <motivo>` |
+| Preview path outside temporary directory | `Preview mirror must stay in the temporary directory.` | `El espejo de prueba debe estar en el directorio temporal.` |
+| Restore with an item on device | `Cannot restore: the vault holds a secret.` | `No se puede restaurar: la bóveda contiene un secreto.` |
+| Incomplete mirror | `Cannot restore: the mirror is incomplete.` | `No se puede restaurar: el espejo está incompleto.` |
+| Foreign mirror | `Cannot restore: the mirror belongs to another identity.` | `No se puede restaurar: el espejo pertenece a otra identidad.` |
+| Empty mirror | `Cannot restore: the mirror is empty.` | `No se puede restaurar: el espejo está vacío.` |
+| Restored mirror | `Mirror restored.` | `Espejo restaurado.` |
+| The folder holds a vault and this device holds no item | `This folder already holds a vault. Press R to restore it.` | `Esta carpeta ya contiene una bóveda. Pulsa R para restaurarla.` |
 | Anything else                                    | As the system reports it                                                       | As the system reports it                                                         |
 
 ### Identity

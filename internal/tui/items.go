@@ -24,7 +24,7 @@ func stateFile(identityPath string) string { return filepath.Join(filepath.Dir(i
 
 func isVaultScreen(s screen) bool {
 	switch s {
-	case vaultList, vaultItem, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, spacesList, spacesAdd, spacesRename, spacesDelete, problemScreen:
+	case vaultList, vaultItem, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, spacesList, spacesAdd, spacesRename, spacesDelete, problemScreen, mirrorScreen, mirrorEdit, mirrorStop:
 		return true
 	}
 	return false
@@ -61,6 +61,9 @@ func (m *Model) openVault(id *identity.Identity) {
 	m.screen = spacesList
 	m.lastKey = m.now()
 	m.refreshSpaces()
+	if m.screen == spacesList {
+		m.mirrorUpdate()
+	}
 }
 
 func (m *Model) failVault(err error) {
@@ -259,6 +262,7 @@ func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.refresh()
 			if m.vlt != nil {
 				m.cursor = max(slices.Index(m.names, name), 0)
+				m.mirrorUpdate()
 			}
 		default:
 			m.editInput(v)
@@ -279,6 +283,7 @@ func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.itemValue = []byte(m.input)
 			m.input, m.message, m.visible = "", "", false
 			m.screen = vaultItem
+			m.mirrorUpdate()
 		default:
 			m.editInput(v)
 		}
@@ -289,6 +294,9 @@ func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.refresh()
+			if m.vlt != nil {
+				m.mirrorUpdate()
+			}
 		}
 		if m.vlt != nil {
 			m.screen = vaultList

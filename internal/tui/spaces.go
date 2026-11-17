@@ -114,6 +114,10 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.message = ""
 			m.screen = vaultList
 			m.refresh()
+		case plainKey(v, 'm'):
+			m.input = ""
+			m.message = ""
+			m.screen = mirrorScreen
 		case plainKey(v, 'a') && m.selectedProblem() == nil:
 			m.input = ""
 			m.message = ""
@@ -159,6 +163,9 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.message = ""
 		m.screen = spacesList
 		m.refreshSpaces()
+		if m.screen == spacesList {
+			m.mirrorUpdate()
+		}
 	case spacesDelete:
 		if plainKey(v, 'y') {
 			deleted := m.vlt
@@ -168,10 +175,13 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			index := slices.Index(m.scopes, deleted)
 			m.scopes = slices.Delete(m.scopes, index, index+1)
+			m.mirrorRemoved(deleted.ID())
 			m.spaceRows = nil
 			m.selectSpace()
 		}
-		m.message = ""
+		if !m.mirrorWarning {
+			m.message = ""
+		}
 		m.screen = spacesList
 		m.refreshSpaces()
 	}

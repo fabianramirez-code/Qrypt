@@ -189,7 +189,7 @@ func (m Model) wideView() string {
 	style := m.styles.hint
 	if m.message != "" {
 		style = m.styles.error
-		if m.message == t.copied {
+		if m.message == t.copied || m.mirrorWarning && m.message == m.mirrorResult {
 			style = m.styles.warning
 		}
 	}

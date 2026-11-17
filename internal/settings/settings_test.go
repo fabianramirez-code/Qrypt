@@ -8,6 +8,42 @@ import (
 	"testing"
 )
 
+func TestMirrorSetting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings")
+	got, err := Load(path)
+	if err != nil || got.Mirror != "" {
+		t.Fatalf("absent: %+v %v", got, err)
+	}
+	s := Settings{Language: "es", Theme: "green", Mirror: filepath.Join(t.TempDir(), "cópia con espacios")}
+	if err := Save(path, s); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	want := "language=es\ntheme=green\nmirror=" + s.Mirror + "\n"
+	if err != nil || string(data) != want {
+		t.Fatalf("saved %q: %v", data, err)
+	}
+	got, err = Load(path)
+	if err != nil || got.Mirror != s.Mirror {
+		t.Fatalf("round trip: %+v %v", got, err)
+	}
+	if err := os.WriteFile(path, []byte("theme=green\nmirror=\nunknown=ignored\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err = Load(path)
+	if err != nil || got.Mirror != "" || got.Theme != "green" {
+		t.Fatalf("empty: %+v %v", got, err)
+	}
+	s.Mirror = ""
+	if err := Save(path, s); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(path)
+	if err != nil || string(data) != "language=es\ntheme=green\n" {
+		t.Fatalf("removed: %q %v", data, err)
+	}
+}
+
 func TestCarbonRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings")
 	if !validTheme("carbon") {
