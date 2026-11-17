@@ -50,7 +50,8 @@ func (m Model) panel(title, body string, width int, focused, rule bool) string {
 }
 
 func (m Model) logoView() string {
-	rows := strings.Split(strings.TrimSuffix(logo, "\n"), "\n")
+	// A checkout may convert the embedded file to CRLF line endings.
+	rows := strings.Split(strings.TrimRight(strings.ReplaceAll(logo, "\r", ""), "\n"), "\n")
 	var result []string
 	accent := m.styles.palette.Accent
 	for _, row := range rows {
