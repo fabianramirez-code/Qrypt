@@ -7,6 +7,9 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/fabianramirez-code/qrypt/internal/clipboard"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -61,6 +64,23 @@ type rebuiltMsg struct {
 	pass   string
 	err    error
 }
+type clipboardTickMsg struct{ token uint64 }
+type idleTickMsg struct{}
+
+const clipboardLifetime = 30 * time.Second
+const idleLifetime = 5 * time.Minute
+
+func idleCheck() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return idleTickMsg{} })
+}
+
+func quitAfter(cmd tea.Cmd) tea.Cmd {
+	if cmd != nil {
+		return tea.Sequence(cmd, tea.Quit)
+	}
+	return tea.Quit
+}
+
 type unlockedMsg struct {
 	id  *identity.Identity
 	err error
@@ -95,11 +115,19 @@ type Model struct {
 	newName       string
 	generate      func() (*identity.Identity, error)
 	pick          func() [3]int
+	copyFn        func(string) error
+	clearFn       func(string) error
+	now           func() time.Time
+	lastKey       time.Time
+	copyValue     string
+	copyActive    bool
+	copyToken     uint64
+	copyFallback  bool
 }
 
 // New constructs a session for the explicit identity path without writing to disk.
 func New(path string, preferred Language) Model {
-	m := Model{path: path, language: preferred, status: 1, generate: identity.Generate, pick: randomPositions}
+	m := Model{path: path, language: preferred, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
 	if _, err := os.Stat(path); err == nil {
 		m.start = unlock
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -181,6 +209,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input = ""
 			m.message = ""
 			m.openVault(v.id)
+			if m.vlt != nil {
+				return m, idleCheck()
+			}
 		case errors.Is(v.err, identity.ErrPassphraseWordCount), errors.Is(v.err, identity.ErrPassphraseUnknownWord), errors.Is(v.err, identity.ErrDecryption):
 			m.screen = unlock
 			m.message = unlockError(v.err, m.language.text())
@@ -209,6 +240,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = done
 			m.status = 0
 		}
+	case clipboardTickMsg:
+		if m.vlt != nil && m.copyActive && v.token == m.copyToken {
+			return m, m.clearCopied()
+		}
+	case idleTickMsg:
+		if m.vlt != nil {
+			if !m.now().Before(m.lastKey.Add(idleLifetime)) {
+				cmd := m.closeVault()
+				m.clearSecrets()
+				return m, quitAfter(cmd)
+			}
+			return m, idleCheck()
+		}
 	case tea.PasteMsg:
 		if m.screen == confirmPassphrase || m.screen == confirmRecovery || m.screen == unlock || m.screen == restoreWord {
 			m.message = m.language.text().pasted
@@ -216,11 +260,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.vaultPaste(v.Content)
 		}
 	case tea.KeyPressMsg:
+		if m.vlt != nil {
+			m.lastKey = m.now()
+		}
 		if m.screen == saving || (m.screen == checkingUnlock || m.screen == rebuilding) && !(v.Code == 'c' && v.Mod&tea.ModCtrl != 0) {
 			return m, nil
 		}
 		if v.Code == 'c' && v.Mod&tea.ModCtrl != 0 {
 			opened := m.vlt != nil
+			var clearCmd tea.Cmd
+			if opened {
+				clearCmd = m.closeVault()
+			}
 			if m.restoring && m.screen != restored && m.screen != notRestored {
 				m.resetRestore()
 			} else {
@@ -229,7 +280,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !opened && m.screen != done && m.screen != restored {
 				m.status = 1
 			}
-			return m, tea.Quit
+			return m, quitAfter(clearCmd)
 		}
 		if m.screen == done || m.screen == notSaved || m.screen == vaultFailed || m.screen == cannotOpen || m.screen == restored || m.screen == notRestored {
 			return m, tea.Quit

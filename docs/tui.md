@@ -8,7 +8,7 @@ What the `qrypt` program shows and how it behaves. It has four flows: creating a
 
 - **Alternate screen only.** Qrypt draws on the terminal's alternate screen, which disappears when the program exits. A passphrase or a recovery phrase never stays in the terminal's scrollback.
 - **Interactive terminal required.** If standard input or standard output is not a terminal, Qrypt prints one line to standard error, exits with status 1, and does nothing else. Secrets can never be piped into a file or into another program.
-- **Nothing else receives secrets.** No logs, no clipboard, and nothing on standard output or standard error after the program exits. Copying a value to the clipboard is not offered yet.
+- **Nothing else receives secrets.** No logs, no clipboard, and nothing on standard output or standard error after the program exits. The only exception is copying a value to the clipboard on the user's request: see [Copying and locking](#copying-and-locking).
 - **Ctrl+C quits** at once, on every screen except while the identity file is being written (the Saving step of creating and of restoring). That write takes an instant and is never interrupted, so the exit status always matches what is on disk.
 - **Small windows.** If the window is smaller than 60 columns by 20 rows, or its size is not known yet, Qrypt shows only a request to enlarge it. Secrets are never shown cut off.
 - **Two languages.** The interface is in English or in Spanish. See [Language](#language).
@@ -21,7 +21,7 @@ Qrypt asks for the language every time it starts. It is the first screen.
 
 - **The screen shows both languages at once.** Up and Down move, Enter selects, and Esc quits with status 1.
 - **The system language is selected in advance:** Spanish if the system language is Spanish, English otherwise. On Windows Qrypt reads the user's preferred display language. On other systems it reads `LC_ALL`, `LC_MESSAGES` and `LANG`, in that order.
-- **The choice is not remembered.** Remembering it needs a settings file, and Qrypt writes nothing to disk before an identity is saved.
+- **The choice is remembered** in a [settings file](settings.md), written only when the user changes it. The saved language is selected in advance. A settings file that cannot be read is ignored. The same screen also chooses the theme; see [Settings and themes](settings.md). Starting and quitting without a change writes nothing, so quitting before an identity is saved still leaves no identity file and no vault.
 - **Only the interface is translated.** The passphrase and the recovery phrase are always English words, in both languages. An identity therefore has one format, and its words can be typed on any keyboard. The Spanish Welcome screen says that the words are in English.
 - **Before the choice, both languages.** The language screen, the request to enlarge the window while no language is chosen, and the lines printed when Qrypt cannot start are in English and in Spanish.
 
@@ -125,6 +125,15 @@ After unlocking, Qrypt opens the [vault](vault.md#4-storage) next to the identit
 - **A damaged vault file** makes the list fail, as [documented](vault.md#6-limits). The screen says so and Qrypt exits with status 1.
 - **Messages never repeat a value.**
 
+## Copying and locking
+
+- **Copy.** C copies the value of the open item, or of the selected item on the list, without showing it. The screen says that the clipboard will be cleared in 30 seconds.
+- **Cleared on time.** Qrypt clears the clipboard 30 seconds after the last copy, when the vault locks, and when the program quits. Where the system lets Qrypt read the clipboard, it clears it only if it still holds the copied value, so something the user copied afterwards is never erased. A newer copy restarts the 30 seconds, and an older timer never clears a newer copy.
+- **Excluded from history.** On Windows, Qrypt marks the copy so that Windows clipboard history and cloud clipboard sync skip it. Elsewhere no such marking exists in Qrypt yet.
+- **Terminals without a native clipboard.** On systems where Qrypt has no native clipboard code, it asks the terminal to set the clipboard (OSC 52). Terminals that do not support it ignore the request, and Qrypt cannot tell. It cannot read the clipboard either, so at expiry it clears the clipboard without checking what it holds.
+- **Limit.** Clearing does not reach copies kept by clipboard managers or other programs, as the [threat model](threat-model.md) says.
+- **Automatic lock.** After 5 minutes without a key press while the vault is open, Qrypt locks: it erases the keys, clears the clipboard, and exits with status 0. The alternate screen disappears with it, so no name or value stays visible.
+
 ## Messages
 
 ### Vault
@@ -136,6 +145,8 @@ After unlocking, Qrypt opens the [vault](vault.md#4-storage) next to the identit
 | Value too large                                  | `That value is too large. The limit is 64 KiB.`                                | `Ese valor es demasiado grande. El límite es 64 KiB.`                            |
 | Pasted value with a line break                   | `Values are one line. Remove the line break.`                                  | `Los valores son de una línea. Quita el salto de línea.`                         |
 | Vault file damaged, or another identity's vault  | `A vault file is damaged, or the vault belongs to another identity.`           | `Un archivo de la bóveda está dañado, o la bóveda es de otra identidad.`         |
+| Value copied                                     | `Copied. The clipboard is cleared in 30 seconds.`                              | `Copiado. El portapapeles se borra en 30 segundos.`                              |
+| The clipboard could not be used                  | As the system reports it                                                       | As the system reports it                                                         |
 | Anything else                                    | As the system reports it                                                       | As the system reports it                                                         |
 
 ### Identity

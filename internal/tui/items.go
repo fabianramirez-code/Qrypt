@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/fabianramirez-code/qrypt/internal/clipboard"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
@@ -42,6 +45,7 @@ func (m *Model) openVault(id *identity.Identity) {
 	m.status = 0
 	m.cursor = 0
 	m.screen = vaultList
+	m.lastKey = m.now()
 	m.refresh()
 }
 
@@ -57,7 +61,8 @@ func (m *Model) failVault(err error) {
 	}
 }
 
-func (m *Model) closeVault() {
+func (m *Model) closeVault() tea.Cmd {
+	cmd := m.clearCopied()
 	if m.vlt != nil {
 		m.vlt.Close()
 		m.vlt = nil
@@ -65,6 +70,52 @@ func (m *Model) closeVault() {
 	clear(m.itemValue)
 	m.itemValue = nil
 	m.names = nil
+	return cmd
+}
+
+func (m *Model) clearCopied() tea.Cmd {
+	if !m.copyActive {
+		return nil
+	}
+	value, fallback := m.copyValue, m.copyFallback
+	m.copyValue = ""
+	m.copyActive = false
+	m.copyFallback = false
+	m.copyToken++
+	if fallback {
+		return tea.SetClipboard("")
+	}
+	_ = m.clearFn(value)
+	return nil
+}
+
+func (m *Model) copyItem(name string) tea.Cmd {
+	value := m.itemValue
+	if m.screen == vaultList {
+		var err error
+		value, err = m.vlt.Get(name)
+		if err != nil {
+			m.failVault(err)
+			return nil
+		}
+		defer clear(value)
+	}
+	text := string(value)
+	err := m.copyFn(text)
+	fallback := errors.Is(err, clipboard.ErrUnavailable)
+	if err != nil && !fallback {
+		m.message = err.Error()
+		return nil
+	}
+	m.copyValue, m.copyFallback, m.copyActive = text, fallback, true
+	m.copyToken++
+	token := m.copyToken
+	m.message = m.language.text().copied
+	tick := tea.Tick(clipboardLifetime, func(time.Time) tea.Msg { return clipboardTickMsg{token: token} })
+	if fallback {
+		return tea.Batch(tea.SetClipboard(text), tick)
+	}
+	return tick
 }
 
 // refresh reloads the names, keeping the cursor inside the list.
@@ -123,8 +174,9 @@ func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case vaultList:
 		switch {
 		case v.Code == tea.KeyEsc:
-			m.closeVault()
-			return m, tea.Quit
+			cmd := m.closeVault()
+			m.clearSecrets()
+			return m, quitAfter(cmd)
 		case v.Code == tea.KeyUp:
 			m.cursor = max(m.cursor-1, 0)
 		case v.Code == tea.KeyDown:
@@ -134,6 +186,8 @@ func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case plainKey(v, 'a'):
 			m.input, m.message, m.visible = "", "", false
 			m.screen = vaultAddName
+		case plainKey(v, 'c') && len(m.names) > 0:
+			return m, m.copyItem(m.selectedName())
 		case plainKey(v, 'd') && len(m.names) > 0:
 			m.screen = vaultDelete
 		}
@@ -143,6 +197,8 @@ func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.leaveItem()
 		case v.Code == tea.KeyTab:
 			m.visible = !m.visible
+		case plainKey(v, 'c'):
+			return m, m.copyItem(m.item)
 		case plainKey(v, 'e'):
 			m.input, m.message, m.visible = "", "", false
 			m.screen = vaultEdit
@@ -248,7 +304,7 @@ func (m Model) itemValueView(t texts) string {
 
 func (m Model) listView(t texts) string {
 	if len(m.names) == 0 {
-		return title.Render(t.listTitle) + "\n" + wrapLine(t.noItems) + "\n" + hint.Render(t.listEmptyHint)
+		return title.Render(t.listTitle) + "\n" + wrapLine(t.noItems) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listEmptyHint)
 	}
 	rows := max(m.height-8, 3)
 	first := max(min(m.cursor-rows/2, len(m.names)-rows), 0)
@@ -260,7 +316,7 @@ func (m Model) listView(t texts) string {
 		}
 		lines = append(lines, firstLine(prefix+m.names[i]))
 	}
-	return title.Render(t.listTitle) + "\n" + strings.Join(lines, "\n") + "\n" + hint.Render(t.listHint)
+	return title.Render(t.listTitle) + "\n" + strings.Join(lines, "\n") + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listHint)
 }
 
 // firstLine fits a name on one row by cutting it, since the full name is shown on the Item screen.
