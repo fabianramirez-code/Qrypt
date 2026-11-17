@@ -3,6 +3,7 @@ package tui
 import "fmt"
 
 type texts struct {
+	previewBanner                                                                                  string
 	welcomeTitle, welcomeBody, welcomeHint                                                         string
 	generating, passTitle, passIntro, passOutro, secretHint                                        string
 	confirmPassTitle, confirmPassPrompt, checkHint, checking                                       string
@@ -29,7 +30,8 @@ type texts struct {
 }
 
 var english = texts{
-	welcomeTitle: "Creating an identity", welcomeBody: "Qrypt will give you two secrets.\n\nPassphrase (7 words)\n  You type it every time you open Qrypt on this device.\n\nRecovery phrase (24 words)\n  It rebuilds your identity if you lose this device\n  or forget the passphrase.\n\nWrite both on paper. They are shown only now,\nand nobody can reset them.", welcomeHint: "Enter: create   R: restore   Esc: quit", welcomeRestore: "Have a recovery phrase already? Press R to restore.",
+	previewBanner: "PREVIEW: temporary data, nothing is saved",
+	welcomeTitle:  "Creating an identity", welcomeBody: "Qrypt will give you two secrets.\n\nPassphrase (7 words)\n  You type it every time you open Qrypt on this device.\n\nRecovery phrase (24 words)\n  It rebuilds your identity if you lose this device\n  or forget the passphrase.\n\nWrite both on paper. They are shown only now,\nand nobody can reset them.", welcomeHint: "Enter: create   R: restore   Esc: quit", welcomeRestore: "Have a recovery phrase already? Press R to restore.",
 	generating: "Generating and sealing your identity. Please wait.", passTitle: "Passphrase", passIntro: "Write these 7 words on paper, in order.", passOutro: "You will type them on the next screen.", secretHint: "Enter: continue  Ctrl+C: quit",
 	confirmPassTitle: "Confirm passphrase", confirmPassPrompt: "Type the 7 words in order (visible):", checkHint: "Enter: check  Esc: back", checking: "Checking your passphrase. Please wait.",
 	recoveryTitle: "Recovery phrase", recoveryIntro: "Write these 24 words on paper, in order.", recoveryOutro: "Keep the paper somewhere safe, away from this device.\nDo not store it in a photo, a note or a file.",
@@ -55,7 +57,8 @@ var english = texts{
 }
 
 var spanish = texts{
-	welcomeTitle: "Crear una identidad", welcomeBody: "Qrypt te dará dos secretos.\n\nFrase de contraseña (7 palabras)\n  La escribes cada vez que abres Qrypt en este equipo.\n\nFrase de recuperación (24 palabras)\n  Reconstruye tu identidad si pierdes este equipo\n  u olvidas la frase de contraseña.\n\nAnota las dos en papel. Solo se muestran ahora,\ny nadie puede restablecerlas.\n\nLas palabras están en inglés. Cópialas tal cual.", welcomeHint: "Enter: crear   R: restaurar   Esc: salir", welcomeRestore: "¿Ya tienes frase de recuperación? Pulsa R para restaurar.",
+	previewBanner: "VISTA PREVIA: datos temporales, no se guarda nada",
+	welcomeTitle:  "Crear una identidad", welcomeBody: "Qrypt te dará dos secretos.\n\nFrase de contraseña (7 palabras)\n  La escribes cada vez que abres Qrypt en este equipo.\n\nFrase de recuperación (24 palabras)\n  Reconstruye tu identidad si pierdes este equipo\n  u olvidas la frase de contraseña.\n\nAnota las dos en papel. Solo se muestran ahora,\ny nadie puede restablecerlas.\n\nLas palabras están en inglés. Cópialas tal cual.", welcomeHint: "Enter: crear   R: restaurar   Esc: salir", welcomeRestore: "¿Ya tienes frase de recuperación? Pulsa R para restaurar.",
 	generating: "Preparando tu identidad. Espera un momento.", passTitle: "Frase de contraseña", passIntro: "Anota estas 7 palabras en papel, en orden.", passOutro: "Las escribirás en la siguiente pantalla.", secretHint: "Enter: continuar  Ctrl+C: salir",
 	confirmPassTitle: "Confirmar frase de contraseña", confirmPassPrompt: "Escribe las 7 palabras en orden (visibles):", checkHint: "Enter: comprobar  Esc: volver", checking: "Comprobando tu frase de contraseña. Espera un momento.",
 	recoveryTitle: "Frase de recuperación", recoveryIntro: "Anota estas 24 palabras en papel, en orden.", recoveryOutro: "Guarda el papel en un lugar seguro, lejos de este equipo.\nNo la guardes en una foto, una nota ni un archivo.",

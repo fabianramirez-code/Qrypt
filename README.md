@@ -64,13 +64,15 @@ To run Qrypt from source, use an interactive terminal. On Windows, use Windows T
 
 ```
 go run ./cmd/qrypt
+# Explore with temporary sample data, without a passphrase:
+go run ./cmd/qrypt --preview
 ```
 
 Qrypt first asks for the language of the interface: English or Spanish.
 
 The first run creates your identity. It shows your passphrase and your recovery phrase so you can write them on paper, and it saves nothing until you have confirmed both. The words of both phrases are always in English. See [Terminal interface](docs/tui.md).
 
-On later runs Qrypt asks for your passphrase to unlock the identity.
+On later runs Qrypt asks for your passphrase to unlock the identity. `--preview` instead opens a temporary sample vault after language selection; it never accesses your real identity or vault, and removes the sample data on exit. See [Preview mode](docs/tui.md#preview-mode).
 
 At this stage you can delete the identity file to start over. Its location is shown at the end.
 

@@ -36,6 +36,10 @@ Qrypt first asks for the [language](#language). Then:
 
 Both flows offer a way into "Restoring an identity".
 
+## Preview mode
+
+Run `qrypt --preview` to choose a language and explore a vault containing four fake sample items without entering a passphrase. Every vault screen marks the session as temporary. The identity and vault live only in a throwaway directory, removed when Qrypt exits; changes are not kept. This does not unlock your real identity or vault. The normal `qrypt` command still requires your passphrase. Both commands require an interactive terminal.
+
 ## Creating an identity
 
 Nothing is written to disk until step 6. Quitting before that leaves no file and no directory.

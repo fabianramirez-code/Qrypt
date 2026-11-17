@@ -89,6 +89,8 @@ type unlockedMsg struct {
 // Model holds the state of a single identity creation, unlock, or restore session.
 type Model struct {
 	path          string
+	preview       bool
+	previewID     *identity.Identity
 	language      Language
 	start         screen
 	screen        screen
@@ -298,7 +300,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyDown:
 				m.language = Spanish
 			case tea.KeyEnter:
-				m.screen = m.start
+				if m.preview {
+					m.startPreview()
+					if m.vlt != nil {
+						return m, idleCheck()
+					}
+				} else {
+					m.screen = m.start
+				}
 			}
 		case unlock:
 			if v.Code == 'r' && v.Mod&tea.ModCtrl != 0 {
@@ -465,6 +474,7 @@ func openFailure(err error, text texts) string {
 }
 func (m *Model) clearSecrets() {
 	m.id = nil
+	m.previewID = nil
 	clear(m.sealed)
 	m.sealed = nil
 	m.pass = ""
@@ -494,7 +504,11 @@ var secret = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
 
 // View renders every state on the alternate screen, including small and waiting screens.
 func (m Model) View() tea.View {
-	view := tea.NewView(m.viewContent())
+	content := m.viewContent()
+	if m.preview && (isVaultScreen(m.screen) || m.screen == vaultFailed) {
+		content += "\n" + m.language.text().previewBanner
+	}
+	view := tea.NewView(content)
 	view.AltScreen = true
 	return view
 }
