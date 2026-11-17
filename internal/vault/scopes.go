@@ -134,7 +134,15 @@ func moveEarlierLayout(root string, id *identity.Identity) error {
 	} else if err != nil {
 		return err
 	}
+	// An empty directory is what a vault whose creation failed leaves behind: it
+	// holds nothing to move. Remove succeeds only on an empty directory.
+	if os.Remove(oldSecrets) == nil {
+		return nil
+	}
 	dirs, err := os.ReadDir(filepath.Join(root, "scopes"))
+	if errors.Is(err, os.ErrNotExist) {
+		return ErrInvalidFormat
+	}
 	if err != nil {
 		return err
 	}
@@ -326,11 +334,19 @@ func RemoveScope(v *Vault) error {
 	if v.scopeNameKey == nil {
 		return ErrClosed
 	}
+	// Only secret files count: a leftover temporary file is not a secret, and a
+	// scope whose directory of secrets is missing holds none.
 	entries, err := os.ReadDir(filepath.Join(v.dir, secretDir))
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if len(entries) != 0 {
+	secrets := 0
+	for _, entry := range entries {
+		if _, ok := parseFileName(entry.Name()); ok {
+			secrets++
+		}
+	}
+	if secrets != 0 {
 		return ErrScopeNotEmpty
 	}
 	// One rename takes the scope out of the vault; a crash while its files are
