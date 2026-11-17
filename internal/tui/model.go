@@ -36,6 +36,10 @@ const (
 	unlock
 	checkingUnlock
 	vaultList
+	spacesList
+	spacesAdd
+	spacesRename
+	spacesDelete
 	vaultItem
 	vaultAddName
 	vaultAddValue
@@ -133,6 +137,11 @@ type Model struct {
 	restoreWords    []string
 	backup          string
 	vlt             *vault.Vault
+	scopes          []*vault.Vault
+	spaceNames      []string
+	spaceCounts     []int
+	scopeID         *identity.Identity
+	spaceCursor     int
 	names           []string
 	cursor          int
 	item            string
@@ -307,7 +316,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		if m.screen == confirmPassphrase || m.screen == confirmRecovery || m.screen == unlock || m.screen == restoreWord {
 			m.message = m.language.text().pasted
-		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit {
+		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit || m.screen == spacesAdd || m.screen == spacesRename {
 			m.vaultPaste(v.Content)
 		}
 	case tea.KeyPressMsg:
@@ -337,6 +346,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		if isVaultScreen(m.screen) {
+			if isSpaceScreen(m.screen) {
+				return m.spacesKey(v)
+			}
 			return m.vaultKey(v)
 		}
 		switch m.screen {
@@ -656,6 +668,8 @@ func (m Model) viewContent() string {
 		return title.Render(t.unlockTitle) + "\n" + t.checking
 	case vaultList:
 		return m.listView(t)
+	case spacesList, spacesAdd, spacesRename, spacesDelete:
+		return m.spacesView(t)
 	case vaultItem:
 		return title.Render(t.itemTitle) + "\n" + wrapLine(m.item) + "\n" + m.itemValueView(t) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.itemHint)
 	case vaultAddName:

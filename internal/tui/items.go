@@ -2,7 +2,6 @@ package tui
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -24,29 +23,40 @@ func vaultDir(identityPath string) string {
 
 func isVaultScreen(s screen) bool {
 	switch s {
-	case vaultList, vaultItem, vaultAddName, vaultAddValue, vaultEdit, vaultDelete:
+	case vaultList, vaultItem, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, spacesList, spacesAdd, spacesRename, spacesDelete:
 		return true
 	}
 	return false
 }
 
-// openVault opens, or first creates, the vault next to the identity file.
+func isSpaceScreen(s screen) bool {
+	return s == spacesList || s == spacesAdd || s == spacesRename || s == spacesDelete
+}
+
+// openVault opens every scope, or first creates Personal next to the identity file.
 func (m *Model) openVault(id *identity.Identity) {
 	dir := vaultDir(m.path)
-	v, err := vault.Open(dir, id)
-	if errors.Is(err, os.ErrNotExist) {
-		v, err = vault.Create(dir, id)
+	scopes, err := vault.OpenScopes(dir, id)
+	if err == nil && len(scopes) == 0 {
+		var first *vault.Vault
+		first, err = vault.NewScope(dir, id, "Personal")
+		if err == nil {
+			scopes = append(scopes, first)
+		}
 	}
 	if err != nil {
 		m.failVault(err)
 		return
 	}
-	m.vlt = v
+	m.scopes = scopes
+	m.scopeID = id
+	m.spaceCursor = 0
+	m.selectSpace()
 	m.status = 0
 	m.cursor = 0
-	m.screen = vaultList
+	m.screen = spacesList
 	m.lastKey = m.now()
-	m.refresh()
+	m.refreshSpaces()
 }
 
 func (m *Model) failVault(err error) {
@@ -63,10 +73,14 @@ func (m *Model) failVault(err error) {
 
 func (m *Model) closeVault() tea.Cmd {
 	cmd := m.clearCopied()
-	if m.vlt != nil {
-		m.vlt.Close()
-		m.vlt = nil
+	for _, scope := range m.scopes {
+		scope.Close()
 	}
+	m.scopes = nil
+	m.spaceNames = nil
+	m.spaceCounts = nil
+	m.vlt = nil
+	m.scopeID = nil
 	clear(m.itemValue)
 	m.itemValue = nil
 	m.names = nil
@@ -174,9 +188,9 @@ func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case vaultList:
 		switch {
 		case v.Code == tea.KeyEsc:
-			cmd := m.closeVault()
-			m.clearSecrets()
-			return m, quitAfter(cmd)
+			m.screen = spacesList
+			m.message = ""
+			m.refreshSpaces()
 		case v.Code == tea.KeyUp:
 			m.cursor = max(m.cursor-1, 0)
 		case v.Code == tea.KeyDown:
@@ -310,7 +324,7 @@ func (m Model) itemValueView(t texts) string {
 func (m Model) listView(t texts) string {
 	title, hint := m.styles.title, m.styles.hint
 	if len(m.names) == 0 {
-		return title.Render(t.listTitle) + "\n" + wrapLine(t.noItems) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listEmptyHint)
+		return title.Render(m.spaceTitle()) + "\n" + wrapLine(t.noItems) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listEmptyHint)
 	}
 	rows := max(m.height-12, 3)
 	first := max(min(m.cursor-rows/2, len(m.names)-rows), 0)
@@ -326,7 +340,7 @@ func (m Model) listView(t texts) string {
 		}
 		lines = append(lines, row)
 	}
-	return title.Render(t.listTitle) + "\n" + strings.Join(lines, "\n") + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listHint)
+	return title.Render(m.spaceTitle()) + "\n" + strings.Join(lines, "\n") + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listHint)
 }
 
 // firstLine fits a name on one row by cutting it, since the full name is shown on the Item screen.
@@ -336,6 +350,13 @@ func firstLine(text string) string {
 		return string(runes[:57]) + "…"
 	}
 	return text
+}
+
+func (m Model) spaceTitle() string {
+	if m.spaceCursor >= 0 && m.spaceCursor < len(m.spaceNames) {
+		return m.spaceNames[m.spaceCursor]
+	}
+	return m.language.text().listTitle
 }
 
 func (m Model) selectedName() string {

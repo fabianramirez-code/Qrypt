@@ -124,7 +124,7 @@ func TestUnlockSuccessAndExit(t *testing.T) {
 		t.Fatal("waiting accepted key")
 	}
 	m = finishCheck(t, m, cmd)
-	requireUnlock(t, m, "Bóveda de Qrypt", "Aún no hay nada guardado.", "Esc: bloquear")
+	requireUnlock(t, m, "Espacios", "Personal (0)", "Esc bloquear")
 	if strings.Contains(plain(m), "*") || strings.Contains(plain(m), pass) || m.input != "" || m.id != nil {
 		t.Fatal("secret retained")
 	}
@@ -175,7 +175,7 @@ func TestUnlockRejectionsAndPaste(t *testing.T) {
 	m = key(t, m, tea.KeyBackspace)
 	m, cmd := beginCheck(t, m, pass)
 	m = finishCheck(t, m, cmd)
-	requireUnlock(t, m, "Qrypt vault")
+	requireUnlock(t, m, "Spaces", "Personal (0)")
 }
 
 func TestUnlockCannotOpen(t *testing.T) {

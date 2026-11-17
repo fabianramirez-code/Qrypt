@@ -42,7 +42,7 @@ Both flows offer a way into "Restoring an identity".
 
 ## Preview mode
 
-Run `qrypt --preview` to choose a language and explore a vault containing four fake sample items without entering a passphrase. Every vault screen marks the session as temporary. The identity and vault live only in a throwaway directory, removed when Qrypt exits; changes are not kept. This does not unlock your real identity or vault. The normal `qrypt` command still requires your passphrase. Both commands require an interactive terminal.
+Run `qrypt --preview` to choose a language and explore a vault with two spaces, `Personal` and `Work`, holding fake sample items, without entering a passphrase. Every vault screen marks the session as temporary. The identity and vault live only in a throwaway directory, removed when Qrypt exits; changes are not kept. This does not unlock your real identity or vault. The normal `qrypt` command still requires your passphrase. Both commands require an interactive terminal.
 
 ## Creating an identity
 
@@ -113,7 +113,25 @@ Quitting before step 6 exits with status 1.
 
 ## Managing the vault
 
-After unlocking, Qrypt opens the [vault](vault.md#4-storage) next to the identity file, and creates it if it does not exist. The first time, this writes the vault's scope file; nothing else is written until the user adds an item. If the vault cannot be opened, the screen says why and Qrypt exits with status 1.
+After unlocking, Qrypt opens the [vault](vault.md#5-storage) next to the identity file, and creates it if it does not exist. The vault is divided into **spaces** (the [scopes](vault.md#scope-of-version-1) of the vault format), such as `Personal` and `Work`. Each space has its own key. The first time, Qrypt creates one space named `Personal`; nothing else is written until the user adds an item or a space. If the vault cannot be opened, the screen says why and Qrypt exits with status 1.
+
+### Spaces
+
+The first screen after unlocking lists the spaces by name, each with the number of items it holds.
+
+| Screen           | Shows                                                   | Keys                                                                                                  |
+| ---------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Spaces**       | The names of the spaces in byte order, one selected.    | Up and Down move, Enter opens the selected space, A adds, R renames, D deletes, Esc locks and exits.  |
+| **Add a space**  | A text field for the name.                              | Enter creates the space and returns to the list with it selected. Esc returns without creating it.    |
+| **Rename**       | The current name and a field for the new one.           | Enter renames. Esc returns without changing it.                                                       |
+| **Delete space** | The name, and a question to confirm.                    | Y deletes. Any other key cancels.                                                                     |
+
+- **A space is deleted only when it is empty.** If it holds items, the screen says so and deletes nothing. The user deletes or moves nothing by accident.
+- **Names follow the item name rules** and are unique among spaces. They are stored encrypted.
+- **Inside a space**, the screens below work as before, on that space only. Esc on its list returns to Spaces instead of locking. The title of the list is the name of the space.
+- **Moving an item between spaces** is not offered yet.
+
+### Items
 
 | Screen     | Shows                                                                                      | Keys                                                                                        |
 | ---------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
@@ -123,14 +141,14 @@ After unlocking, Qrypt opens the [vault](vault.md#4-storage) next to the identit
 | **Edit**   | The name and a field for the new value.                                                    | Enter saves, Esc returns to the item without changing it.                                   |
 | **Delete** | The name, and a question to confirm.                                                       | Y deletes. Any other key cancels.                                                           |
 
-- **Locking.** Esc on the list, and Ctrl+C anywhere, erase the keys from memory and exit with status 0 once the vault was opened. Writes to the vault finish before the next key is read, and each file is written whole or not at all, so quitting never leaves a half-written file.
+- **Locking.** Esc on the Spaces screen, and Ctrl+C anywhere, erase the keys from memory and exit with status 0 once the vault was opened. Writes to the vault finish before the next key is read, and each file is written whole or not at all, so quitting never leaves a half-written file.
 - **Values are hidden by default** and shown only with Tab on the Item screen. Leaving the screen hides them again. The value field of Add and Edit is hidden as it is typed, and Tab shows or hides it.
 - **Names are visible** in the list and in the name field. A name too long for one row is cut with `…` in the list; the Item screen shows it whole.
 - **A long value is not cut off.** If a value has more than 300 characters, the Item screen says that it is too long to show instead of showing part of it.
 - **Pasting is accepted** in the name and value fields. A pasted value with a line break is rejected, because values typed here are one line. Values of several lines need a later import feature.
 - **Limits are checked when the user presses Enter.** A name must follow the [vault rules](vault.md#name) and a value may be at most 64 KiB. Rejected input leaves the vault unchanged and keeps what was typed.
 - **Deleting needs a Y.** Deleting is permanent: the file is removed and Qrypt keeps no copy.
-- **A damaged vault file** makes the list fail, as [documented](vault.md#6-limits). The screen says so and Qrypt exits with status 1.
+- **A damaged vault file** makes the list fail, as [documented](vault.md#7-limits). The screen says so and Qrypt exits with status 1.
 - **Messages never repeat a value.**
 
 ## Copying and locking
@@ -155,6 +173,8 @@ After unlocking, Qrypt opens the [vault](vault.md#4-storage) next to the identit
 | Vault file damaged, or another identity's vault  | `A vault file is damaged, or the vault belongs to another identity.`           | `Un archivo de la bóveda está dañado, o la bóveda es de otra identidad.`         |
 | Value copied                                     | `Copied. The clipboard is cleared in 30 seconds.`                              | `Copiado. El portapapeles se borra en 30 segundos.`                              |
 | The clipboard could not be used                  | As the system reports it                                                       | As the system reports it                                                         |
+| Space name already used                          | `A space with that name already exists.`                                       | `Ya existe un espacio con ese nombre.`                                           |
+| Deleting a space that holds items                | `This space is not empty. Delete its items first.`                             | `Este espacio no está vacío. Borra primero sus elementos.`                       |
 | Anything else                                    | As the system reports it                                                       | As the system reports it                                                         |
 
 ### Identity

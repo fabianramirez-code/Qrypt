@@ -138,6 +138,7 @@ func TestVaultLockIdleAndActivity(t *testing.T) {
 		m = copyKey(m)
 		var keyMsg tea.KeyPressMsg
 		if exit == tea.KeyEsc {
+			m = key(t, m, tea.KeyEsc) // Item list returns to Spaces before locking.
 			keyMsg = tea.KeyPressMsg{Code: exit}
 		} else {
 			keyMsg = tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}

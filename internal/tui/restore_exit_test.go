@@ -60,7 +60,7 @@ func TestRestoreEscThenUnlock(t *testing.T) {
 	}
 	m = typeText(t, m, pass)
 	m = enter(t, m)
-	if m.screen != vaultList || m.ExitStatus() != 0 {
+	if m.screen != spacesList || m.ExitStatus() != 0 {
 		t.Fatalf("unlock failed: %q", plain(m))
 	}
 	data, err := os.ReadFile(path)

@@ -23,10 +23,11 @@ func vaultSession(t *testing.T, language Language) (Model, string, string) {
 	}
 	m, cmd := beginCheck(t, m, pass)
 	m = finishCheck(t, m, cmd)
+	m = enter(t, m) // Unlock now lands on Spaces; open Personal for item tests.
 	if m.ExitStatus() != 0 || !strings.Contains(plain(m), map[Language]string{English: "Nothing stored yet", Spanish: "Aún no hay nada guardado"}[language]) {
 		t.Fatalf("not empty vault list: %q", plain(m))
 	}
-	if _, err := os.Stat(filepath.Join(dir, "scope")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "scopes", m.vlt.ID(), "scope")); err != nil {
 		t.Fatalf("vault not created: %v", err)
 	}
 	return m, path, pass
@@ -52,6 +53,11 @@ func addVaultItem(t *testing.T, m Model, name, value string) Model {
 // relying on opaque secret-file names or any vault implementation detail.
 func vaultFiles(t *testing.T, dir string) map[string][]byte {
 	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(dir, "scopes"))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("expected one scope: %v %v", entries, err)
+	}
+	dir = filepath.Join(dir, "scopes", entries[0].Name())
 	files := make(map[string][]byte)
 	for _, subdir := range []string{"", "secrets"} {
 		entries, err := os.ReadDir(filepath.Join(dir, subdir))
@@ -132,7 +138,7 @@ func TestVaultAddShowEditAndDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened, err := vault.Open(dir, id)
+	opened, err := vault.Open(filepath.Join(dir, "scopes", m.vlt.ID()), id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +161,7 @@ func TestVaultAddShowEditAndDelete(t *testing.T) {
 		t.Fatalf("delete did not return empty list: %q", plain(m))
 	}
 	after := vaultFiles(t, dir)
-	if len(after) != 1 || len(before) != 2 {
+	if len(after) != 2 || len(before) != 3 { // Scope and encrypted name files remain.
 		t.Fatalf("deleted item file remains: %d -> %d files", len(before), len(after))
 	}
 }
@@ -251,6 +257,7 @@ func TestVaultExitAndMinimumWidth(t *testing.T) {
 					fresh = enter(t, fresh)
 					fresh, cmd := beginCheck(t, fresh, pass)
 					fresh = finishCheck(t, fresh, cmd)
+					fresh = enter(t, fresh) // Open Personal from Spaces.
 					switch label {
 					case "add name", "add value":
 						fresh = key(t, fresh, 'a')
@@ -276,6 +283,7 @@ func TestVaultExitAndMinimumWidth(t *testing.T) {
 					}
 				})
 			}
+			m = key(t, m, tea.KeyEsc) // Item list returns to Spaces.
 			next, quit := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 			if quit == nil || next.(Model).ExitStatus() != 0 || next.(Model).vlt != nil {
 				t.Fatal("Esc did not lock and quit successfully")

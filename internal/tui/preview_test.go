@@ -31,10 +31,10 @@ func TestPreviewScreensAndExit(t *testing.T) {
 				t.Fatal("not language first", plain(m))
 			}
 			m = enter(t, m)
-			if m.ExitStatus() != 0 || !strings.Contains(plain(m), "Qrypt") && !strings.Contains(plain(m), "Bóveda") {
+			if m.ExitStatus() != 0 || !strings.Contains(plain(m), "Spaces") && !strings.Contains(plain(m), "Espacios") {
 				t.Fatal("not vault", plain(m))
 			}
-			if strings.Contains(plain(m), "passphrase") || len(m.names) != 4 {
+			if strings.Contains(plain(m), "passphrase") || !strings.Contains(plain(m), "Personal (4)") || !strings.Contains(plain(m), "Work (2)") {
 				t.Fatal("not sample vault", plain(m))
 			}
 			check := func() {
@@ -47,6 +47,11 @@ func TestPreviewScreensAndExit(t *testing.T) {
 						t.Fatalf("too wide: %q", line)
 					}
 				}
+			}
+			check()
+			m = enter(t, m) // Open Personal from Spaces.
+			if len(m.names) != 4 {
+				t.Fatal("Personal samples missing", plain(m))
 			}
 			check()
 			m = enter(t, m)
@@ -67,6 +72,7 @@ func TestPreviewScreensAndExit(t *testing.T) {
 			check()
 			m = key(t, m, 'n')
 			check()
+			m = key(t, m, tea.KeyEsc) // Leave Personal for Spaces.
 			m = key(t, m, tea.KeyEsc)
 			if m.ExitStatus() != 0 || m.vlt != nil {
 				t.Fatal("lock failed")
