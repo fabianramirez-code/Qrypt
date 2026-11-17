@@ -8,10 +8,10 @@ import (
 	"math"
 )
 
-// Theme contains seven foreground roles and a background for contrast checks.
+// Theme contains seven foreground roles, a background, and an optional painted panel surface.
 type Theme struct {
 	Accent, Text, Dim, Success, Error, Warning, Border color.RGBA
-	Background                                         color.RGBA
+	Background, Surface                                color.RGBA
 }
 
 // Lookup returns a named role's color.
@@ -36,7 +36,7 @@ func (t Theme) Lookup(role string) (color.RGBA, bool) {
 }
 
 // Names lists the built-in themes in display order.
-func Names() []string { return []string{"green", "violet", "mono", "contrast", "auto"} }
+func Names() []string { return []string{"green", "violet", "mono", "contrast", "auto", "carbon"} }
 
 // ParseHex parses an opaque #rrggbb color.
 func ParseHex(s string) (color.RGBA, error) {
@@ -54,6 +54,14 @@ func mustHex(s string) color.RGBA { c, _ := ParseHex(s); return c }
 
 // ByName returns a built-in palette. Auto follows the supplied dark background hint.
 func ByName(name string, dark bool) (Theme, bool) {
+	if name == "carbon" {
+		return Theme{
+			Background: mustHex("#1E1F22"), Surface: mustHex("#26282D"),
+			Accent: mustHex("#50FA7B"), Success: mustHex("#50FA7B"),
+			Warning: mustHex("#FFB86C"), Text: mustHex("#F8F8F2"),
+			Dim: mustHex("#a3a3a3"), Border: mustHex("#a3a3a3"), Error: mustHex("#FF5555"),
+		}, true
+	}
 	if name == "auto" {
 		name = "green"
 	}

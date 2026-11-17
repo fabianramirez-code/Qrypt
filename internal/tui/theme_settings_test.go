@@ -85,7 +85,7 @@ func editor(t *testing.T) (Model, string) {
 	path := filepath.Join(t.TempDir(), "identity")
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
 	m = key(t, m, tea.KeyTab)
-	for i := 0; i < 6; i++ {
+	for i := 0; i < len(theme.Names())+1; i++ {
 		m = key(t, m, tea.KeyDown)
 	}
 	m = enter(t, m)

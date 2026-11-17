@@ -65,7 +65,7 @@ func TestValidateRole(t *testing.T) {
 }
 
 func TestBuiltins(t *testing.T) {
-	if !reflect.DeepEqual(Names(), []string{"green", "violet", "mono", "contrast", "auto"}) {
+	if !reflect.DeepEqual(Names(), []string{"green", "violet", "mono", "contrast", "auto", "carbon"}) {
 		t.Fatalf("names: %v", Names())
 	}
 	for _, name := range Names() {
@@ -84,6 +84,40 @@ func TestBuiltins(t *testing.T) {
 	}
 	if _, ok := ByName("invalid", true); ok {
 		t.Error("unknown theme accepted")
+	}
+}
+
+func TestCarbonPaletteAndSurface(t *testing.T) {
+	want := Theme{
+		Background: mustHex("#1E1F22"), Surface: mustHex("#26282D"),
+		Accent: mustHex("#50FA7B"), Success: mustHex("#50FA7B"),
+		Warning: mustHex("#FFB86C"), Text: mustHex("#F8F8F2"),
+		Dim: mustHex("#a3a3a3"), Border: mustHex("#a3a3a3"), Error: mustHex("#FF5555"),
+	}
+	for _, dark := range []bool{false, true} {
+		got, ok := ByName("carbon", dark)
+		if !ok || got != want {
+			t.Errorf("dark=%v: %+v, %v", dark, got, ok)
+		}
+		for _, role := range []string{"text", "dim", "accent", "success", "error", "warning"} {
+			c, _ := got.Lookup(role)
+			for _, bg := range []color.RGBA{got.Background, got.Surface} {
+				if ratio := Contrast(c, bg); ratio < 4.5 {
+					t.Errorf("%s dark=%v on %v: contrast %v", role, dark, bg, ratio)
+				}
+			}
+		}
+	}
+	for _, name := range []string{"green", "violet", "mono", "contrast", "auto"} {
+		for _, dark := range []bool{false, true} {
+			got, _ := ByName(name, dark)
+			if got.Surface != (color.RGBA{}) {
+				t.Errorf("%s dark=%v paints surface", name, dark)
+			}
+		}
+	}
+	if _, ok := want.Lookup("surface"); ok {
+		t.Error("surface became an editable role")
 	}
 }
 

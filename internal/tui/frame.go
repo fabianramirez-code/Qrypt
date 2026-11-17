@@ -47,7 +47,11 @@ func (m Model) panel(title, body string, width int, focused, rule bool) string {
 		}
 	}
 	lines = append(lines, border.Render(edges.BottomLeft+strings.Repeat(edges.Bottom, width-2)+edges.BottomRight))
-	return strings.Join(lines, "\n")
+	panel := strings.Join(lines, "\n")
+	if m.styles.palette.Surface.A != 0 {
+		return lipgloss.NewStyle().Background(lipgloss.Color(hexColor(m.styles.palette.Surface))).Render(panel)
+	}
+	return panel
 }
 
 // logoPeriod is long enough for the band to leave the logo before it re-enters.

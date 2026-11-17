@@ -158,6 +158,8 @@ type Model struct {
 	copyActive      bool
 	copyToken       uint64
 	copyFallback    bool
+
+	themeBeforeCustom string
 }
 
 // New constructs a session for the explicit identity path without writing to disk.
@@ -175,7 +177,7 @@ func New(path string, preferred Language) Model {
 		m.themeName = m.settings.Theme
 	}
 	m.initialLanguage = m.language
-	for i := 0; i < 6; i++ {
+	for i := 0; i < len(theme.Names())+1; i++ {
 		if themeChoice(i) == m.themeName {
 			m.themeIndex = i
 		}
@@ -368,8 +370,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if v.Code == tea.KeyUp {
 						step = -1
 					}
-					m.themeIndex = max(0, min(6, m.themeIndex+step))
-					if m.themeIndex < 6 {
+					m.themeIndex = max(0, min(len(theme.Names())+1, m.themeIndex+step))
+					if m.themeIndex < len(theme.Names())+1 {
+						if m.themeIndex == len(theme.Names()) && m.themeName != "custom" {
+							m.themeBeforeCustom = m.themeName
+						}
 						m.themeName = themeChoice(m.themeIndex)
 						m.refreshStyles()
 					}
@@ -379,7 +384,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.language = Spanish
 				}
 			case tea.KeyEnter:
-				if m.themeList && m.themeIndex == 6 {
+				if m.themeList && m.themeIndex == len(theme.Names())+1 {
 					m.openColorEditor()
 					break
 				}
@@ -640,6 +645,9 @@ func (m Model) View() tea.View {
 		content = m.frame(content)
 	}
 	view := tea.NewView(content)
+	if m.styles.palette.Surface.A != 0 {
+		view.BackgroundColor = m.styles.palette.Background
+	}
 	view.AltScreen = true
 	return view
 }

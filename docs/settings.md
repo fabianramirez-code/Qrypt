@@ -9,7 +9,7 @@ How Qrypt remembers the interface language and theme, and how a user edits color
 | Setting  | Values                                                              |
 | -------- | ------------------------------------------------------------------- |
 | Language | `en` or `es`                                                        |
-| Theme    | `green`, `violet`, `mono`, `contrast`, `auto`, or `custom`           |
+| Theme    | `green`, `violet`, `mono`, `contrast`, `auto`, `carbon`, or `custom` |
 | Colors   | For `custom` only: the hex value of each color role                 |
 
 The file never holds a secret, a name, a value, a path to the vault, or anything about the identity. It is plain text, so the user can read it and Qrypt can show exactly what it saves.
@@ -49,14 +49,16 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 | `mono`     | No hue: bold, dim and reverse video only. Sober, and the safest on odd terminals.     |
 | `contrast` | White on black with saturated colors, and thick borders. Meets WCAG AAA for text.     |
 | `auto`     | Uses the light `green` palette on a light terminal background and the dark palette otherwise. Without a response it defaults to dark. |
+| `carbon`   | Dark only: base background `#1E1F22`, panel surface `#26282D`, green `#50FA7B` and amber `#FFB86C`. It paints its own background; a terminal that ignores the background instruction shows its own background. |
 
-- Every built-in theme keeps text at a contrast ratio of at least 4.5:1 against its background, and a test checks it.
+- Every built-in theme keeps text at a contrast ratio of at least 4.5:1 against its background, and a test checks it. `carbon` also meets this ratio against its panel surface.
+- `surface` is a theme property for painting panels, not an editable color role. The other themes do not paint a surface or set the terminal background.
 - Meaning never depends on color alone: errors and successes also carry words, and the selected row also carries the `>` marker.
 - When the terminal has no color, Qrypt behaves as `mono`.
 
 ## Custom colors
 
-The user edits a theme from the first screen. Choosing `Edit colors` copies the current theme into `custom` and lists the roles.
+The user edits a theme from the first screen. Choosing `Edit colors` copies the current theme into `custom` and lists the seven color roles. A custom theme made from `carbon` keeps only those seven roles: it loses the carbon background and panel surface.
 
 - **Input:** a hex value `#rrggbb`, typed. Qrypt shows a swatch next to it, and the role's sample text in that color.
 - **Checks before accepting:** the value is valid hex, and for `text`, `dim`, `accent`, `success`, `error` and `warning` the contrast against the theme background is at least 3:1. A color that fails is rejected with a message, never silently changed.

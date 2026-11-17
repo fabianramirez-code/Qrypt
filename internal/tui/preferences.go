@@ -44,9 +44,9 @@ func (m Model) languageView() string {
 		selected := (i == 0 && m.language == English) || (i == 1 && m.language == Spanish)
 		languageRows = append(languageRows, m.choiceRow(name, i, selected, !m.themeList))
 	}
-	for i := 0; i < 7; i++ {
+	for i := 0; i < len(theme.Names())+2; i++ {
 		name := "Edit colors / Editar colores"
-		if i < 6 {
+		if i < len(theme.Names())+1 {
 			name = themeChoice(i)
 		}
 		themeRows = append(themeRows, m.choiceRow(name, i, i == m.themeIndex, m.themeList))
@@ -95,7 +95,10 @@ func cloneSettings(s settings.Settings) settings.Settings {
 func (m *Model) openColorEditor() {
 	m.beforeEdit = cloneSettings(m.settings)
 	m.editorOrigin = m.themeName
-	base, ok := theme.ByName(m.themeName, m.darkBackground)
+	if m.themeName == "custom" && m.themeBeforeCustom != "" {
+		m.editorOrigin = m.themeBeforeCustom
+	}
+	base, ok := theme.ByName(m.editorOrigin, m.darkBackground)
 	if !ok {
 		base, _ = theme.ByName("green", m.darkBackground)
 		base = theme.Custom(base, m.settings.Colors)
@@ -109,7 +112,7 @@ func (m *Model) openColorEditor() {
 		m.settings.Colors[role] = hexColor(c)
 	}
 	m.themeName = "custom"
-	m.themeIndex = 5
+	m.themeIndex = len(theme.Names())
 	m.refreshStyles()
 	m.input, m.message, m.colorIndex, m.screen = "", "", 0, colorEditor
 }
@@ -126,7 +129,8 @@ func (m *Model) colorKey(v tea.KeyPressMsg) {
 			m.settings.Theme = "custom"
 			m.saveEditor()
 		}
-		for i := 0; i < 6; i++ {
+		m.themeBeforeCustom = ""
+		for i := 0; i < len(theme.Names())+1; i++ {
 			if themeChoice(i) == m.themeName {
 				m.themeIndex = i
 			}

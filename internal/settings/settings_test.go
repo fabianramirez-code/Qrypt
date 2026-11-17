@@ -8,6 +8,24 @@ import (
 	"testing"
 )
 
+func TestCarbonRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings")
+	if !validTheme("carbon") {
+		t.Error("carbon not accepted")
+	}
+	if err := Save(path, Settings{Theme: "carbon"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "theme=carbon\n" {
+		t.Fatalf("stored %q: %v", data, err)
+	}
+	got, err := Load(path)
+	if err != nil || got.Theme != "carbon" {
+		t.Fatalf("loaded %+v: %v", got, err)
+	}
+}
+
 func TestLoadMissingAndInvalid(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings")
 	if got, err := Load(path); err != nil || got.Language != "" || got.Theme != "" || got.Colors != nil {
