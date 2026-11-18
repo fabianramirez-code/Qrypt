@@ -9,7 +9,8 @@ Technical decisions and the structure of the code. How Qrypt looks and behaves o
 | Package | Purpose | Imports (internal) |
 | --- | --- | --- |
 | `cmd/qrypt` | Entry point: starts the TUI, `--preview` on throwaway data | `identity`, `tui` |
-| `internal/identity` | Seed identity, recovery phrase, sealing and loading, derived keys | none |
+| `internal/identity` | Seed identity, recovery phrase, sealing and loading, derived keys | `secmem` |
+| `internal/secmem` | Page-backed, best-effort locked key buffers | none |
 | `internal/vault` | Encrypted items, scopes (spaces), signed manifest, rollback record | `identity` |
 | `internal/mirror` | Whole-file replica to untrusted storage; `Storage` interface and the folder backend | `identity`, `vault` |
 | `internal/settings` | Non-secret interface settings (language, theme, colors) | none |
@@ -20,7 +21,7 @@ Technical decisions and the structure of the code. How Qrypt looks and behaves o
 Rules:
 
 - Dependencies point inward: `tui` depends on everything, nothing depends on `tui`.
-- `identity`, `settings`, `clipboard` and `theme` import no internal package.
+- `settings`, `clipboard`, `secmem` and `theme` import no internal package; `identity` imports `secmem`.
 - Only `tui` and `cmd/qrypt` talk to the terminal. No other package prints or reads input.
 
 ## 2. Reference documents
@@ -92,27 +93,22 @@ Each decision lists context, decision, alternatives and consequences.
 ### D8. Few dependencies (implemented)
 
 - **Context:** every dependency of a secrets manager is part of what must be trusted.
-- **Decision:** direct dependencies are Bubble Tea, Lip Gloss, `circl`, `x/crypto`, `x/sys` and `x/term`. No CLI framework, no configuration library. A new dependency needs a decision in this file.
+- **Decision:** direct dependencies are Bubble Tea, Lip Gloss, `circl`, `x/crypto`, `x/sys` and `x/term`. No CLI framework, no configuration library. The locked-memory implementation uses the existing `x/sys`; no new dependency was added.
 - **Alternatives:** Cobra and Viper for commands and configuration.
 - **Consequences:** a little more hand-written code; a smaller supply chain.
 
-### D9. Memory protection with memguard (proposed)
+### D9. Best-effort page locking for keys (implemented, phase 1)
 
-- **Context:** the threat model includes swap files, hibernation files and memory dumps. Today keys are `[]byte` cleared with `clear` on lock, but the passphrase, typed input and the value being copied travel through the TUI as Go `string`, which cannot be wiped.
-- **Decision:** add `github.com/awnumar/memguard`.
-  - Private keys and scope keys live in enclaves (encrypted in RAM) and are opened into locked buffers only for one operation.
-  - Decrypted values are opened at the moment of use (reveal, copy, edit) and destroyed right after; lock, auto-hide and quit destroy all of them.
-  - Secrets travel through the model as `[]byte` or enclaves, never as `string`; the TUI renders a masked copy.
-  - `memguard.CatchInterrupt` and `memguard.Purge` run on every exit path.
-  - If the operating system refuses to lock pages (`VirtualLock` on Windows, `mlock` elsewhere), Qrypt keeps working and shows a warning in the status bar.
-- **Alternatives:** keep manual `clear` only (no protection against swap, and strings stay); `x/sys` calls written by hand (re-implements memguard in the trusted base).
-- **Consequences:** one more dependency in a critical path (exception to D8, accepted); text input has to stop using strings for secrets; a string still exists for the instant a value is drawn revealed on screen, which no library can avoid.
+- **Context:** swap, hibernation and dumps can retain keys. Manual `clear` alone cannot prevent paging. TUI input and copied values still use immutable Go strings.
+- **Decision:** use the small `internal/secmem` package with anonymous private `mmap` on Linux/macOS and `VirtualAlloc` on Windows, `mlock`/`VirtualLock`, and Linux `MADV_DONTDUMP`. Page allocations and locks are best effort: a refusal records its first reason, but the buffer stays usable (heap fallback if allocation fails); close wipes and releases it. Long-lived identity seed and scope-derived and signing key bytes use these buffers. TUI strings remain phase 2.
+- **Alternatives:** `memguard` v0.23.0 was rejected because its page-lock failure panics and triggers a purge of all live buffers, and purge itself may panic; that contradicts continued operation on lock refusal. Manual `clear` alone does not prevent paging.
+- **Consequences:** no new dependency. This does **not** provide guard pages, canaries, encryption of keys at rest in RAM, protection of copies made by the Go runtime or cryptographic libraries, or protection for TUI strings until phase 2. A lock refusal is observable through `secmem.Status`; TUI warning text is phase 2.
 
 ## 4. Quality and delivery
 
 | Area | Decision | Status |
 | --- | --- | --- |
-| Tests | `go vet ./...` and `go test ./...`; TUI tests read content through `plain(m)` and the frame through `framed(m)` | implemented |
+| Tests | `go vet ./...` and `go test ./...`; TUI tests read content through `plain(m)` and the frame through `framed(m)`; cross-platform vets cover page locking | implemented |
 | Fuzzing | Native Go fuzz tests kept in the repository for every parser of untrusted bytes: item file, fields, manifest, record, settings | proposed |
 | Lint | `golangci-lint` v2 configuration and Linux CI job (existing findings are scoped out; local check still reports findings) | proposed |
 | Vulnerabilities | `govulncheck` Ubuntu CI job; weekly Dependabot for Go modules and GitHub Actions | implemented |
@@ -124,7 +120,7 @@ Each decision lists context, decision, alternatives and consequences.
 ## 5. Platform support
 
 - **Windows:** primary platform; native clipboard with expiry and history exclusion.
-- **Linux and macOS:** the code builds, but clipboard support and page locking are not verified there. CI on the three systems (section 4) is the first step.
+- **Linux and macOS:** anonymous private pages use `mmap` and `mlock`; Linux additionally excludes them from core dumps with `MADV_DONTDUMP`. Cross-platform vet checks compilation, not whether the host will grant a page lock; clipboard support remains host-dependent.
 
 ## 6. Open decisions and non-goals
 

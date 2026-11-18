@@ -49,6 +49,7 @@ func (m *Model) openVault(id *identity.Identity) {
 			scope.Close()
 		}
 		m.failVault(err)
+		id.Close()
 		return
 	}
 	m.scopes = scopes
@@ -89,6 +90,7 @@ func (m *Model) closeVault() tea.Cmd {
 	m.spaceNames = nil
 	m.spaceCounts = nil
 	m.vlt = nil
+	m.scopeID.Close()
 	m.scopeID = nil
 	clear(m.itemValue)
 	m.itemValue = nil

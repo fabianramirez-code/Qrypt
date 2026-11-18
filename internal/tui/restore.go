@@ -61,6 +61,7 @@ func (m Model) restoreWordKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					return rebuiltMsg{err: err}
 				}
 				sealed, pass, err := id.Seal()
+				id.Close()
 				return rebuiltMsg{sealed: sealed, pass: pass, err: err}
 			}
 		}

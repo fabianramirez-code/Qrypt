@@ -271,11 +271,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshStyles()
 	case sealedMsg:
 		if m.screen != waitingSeal {
+			v.id.Close()
 			return m, nil
 		}
 		if v.err != nil {
+			v.id.Close()
 			m.fail(v.err)
 			return m, nil
+		}
+		if m.id != v.id {
+			m.id.Close()
 		}
 		m.id, m.sealed, m.pass = v.id, v.sealed, v.pass
 		m.words = strings.Fields(v.id.RecoveryPhrase())
@@ -316,6 +321,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input = ""
 	case unlockedMsg:
 		if m.screen != checkingUnlock {
+			v.id.Close()
 			return m, nil
 		}
 		switch {
@@ -333,6 +339,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input = ""
 			m.screen = cannotOpen
 			m.message = openFailure(v.err, m.language.text())
+		}
+		if v.err != nil {
+			v.id.Close()
 		}
 	case savedMsg:
 		if m.screen != saving {
@@ -584,6 +593,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return sealedMsg{err: err}
 					}
 					data, pass, err := id.Seal()
+					if err != nil {
+						id.Close()
+					}
 					return sealedMsg{id: id, sealed: data, pass: pass, err: err}
 				}
 			}
@@ -617,7 +629,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.message = ""
 				m.screen = waitingOpen
 				sealed := m.sealed
-				return m, func() tea.Msg { _, err := identity.Open(sealed, typed); clear(typed); return openedMsg{err: err} }
+				return m, func() tea.Msg {
+					opened, err := identity.Open(sealed, typed)
+					clear(typed)
+					opened.Close()
+					return openedMsg{err: err}
+				}
 			}
 			m.editInput(v)
 		case recovery:
@@ -710,8 +727,17 @@ func openFailure(err error, text texts) string {
 		return err.Error()
 	}
 }
+
+// Close releases keys retained by the model when the program exits.
+func (m *Model) Close() { m.clearSecrets() }
+
 func (m *Model) clearSecrets() {
 	m.helpOpen = false
+	m.closeVault()
+	m.id.Close()
+	if m.previewID != m.id {
+		m.previewID.Close()
+	}
 	m.id = nil
 	m.previewID = nil
 	clear(m.sealed)
@@ -723,7 +749,6 @@ func (m *Model) clearSecrets() {
 	m.restoreWords = nil
 	m.input = ""
 	m.visible = false
-	m.closeVault()
 	m.newName = ""
 	m.clearItem()
 	m.folderPath = nil
