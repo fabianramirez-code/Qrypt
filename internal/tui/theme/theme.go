@@ -71,13 +71,13 @@ func ByName(name string, dark bool) (Theme, bool) {
 	var t Theme
 	if dark {
 		t = Theme{
-			Background: mustHex("#000000"), Text: mustHex("#f5f5f5"), Dim: mustHex("#a3a3a3"),
+			Background: mustHex("#000000"), Surface: mustHex("#101914"), Text: mustHex("#f5f5f5"), Dim: mustHex("#a3a3a3"),
 			Accent: mustHex("#68b78d"), Success: mustHex("#4ade80"), Error: mustHex("#fb7185"),
 			Warning: mustHex("#facc15"), Border: mustHex("#a3a3a3"),
 		}
 	} else {
 		t = Theme{
-			Background: mustHex("#ffffff"), Text: mustHex("#171717"), Dim: mustHex("#525252"),
+			Background: mustHex("#ffffff"), Surface: mustHex("#ffffff"), Text: mustHex("#171717"), Dim: mustHex("#525252"),
 			Accent: mustHex("#1f6b47"), Success: mustHex("#166534"), Error: mustHex("#be123c"),
 			Warning: mustHex("#854d0e"), Border: mustHex("#525252"),
 		}

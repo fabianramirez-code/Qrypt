@@ -45,7 +45,7 @@ func (m Model) panel(title, body string, width int, focused, rule bool) string {
 	}
 	lines = append(lines, border.Render(edges.BottomLeft+strings.Repeat(edges.Bottom, width-2)+edges.BottomRight))
 	panel := strings.Join(lines, "\n")
-	if m.styles.palette.Surface.A != 0 {
+	if m.themeName == "carbon" {
 		return lipgloss.NewStyle().Background(lipgloss.Color(hexColor(m.styles.palette.Surface))).Render(panel)
 	}
 	return panel
@@ -105,6 +105,9 @@ func (m Model) bottomBar() string {
 
 // frame draws the same headed panel and separate key hints on every full-size screen.
 func (m Model) frame(content string) string {
+	if m.screen == languageScreen {
+		return m.preferenceFrame(content)
+	}
 	width := m.panelWidth()
 	var panel, hints string
 	if m.screen == languageScreen {
@@ -159,6 +162,38 @@ func (m Model) frame(content string) string {
 		}
 	}
 	return content
+}
+
+// preferenceFrame keeps all first-screen content in one opaque island; Place
+// pads outside it without a background style so the terminal stays visible.
+func (m Model) preferenceFrame(content string) string {
+	logo := m.logoView()
+	hints := m.bottomBar()
+	if !m.plain {
+		hints = lipgloss.NewStyle().Foreground(lipgloss.Color(hexColor(m.styles.palette.Dim))).Render(stripANSI(hints))
+	}
+	makeBox := func(mark string) string {
+		// Pad the rows to one width first so the mark is centered as a block.
+		mark = lipgloss.JoinVertical(lipgloss.Left, strings.Split(mark, "\n")...)
+		body := lipgloss.PlaceHorizontal(56, lipgloss.Center, mark) + "\n" + content + "\n" + hints
+		bg := m.styles.palette.Surface
+		if bg.A == 0 {
+			bg = m.styles.palette.Background
+		}
+		style := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+		if !m.plain {
+			style = style.BorderForeground(lipgloss.Color(hexColor(m.styles.palette.Accent))).Background(lipgloss.Color(hexColor(bg)))
+		}
+		return style.Render(body)
+	}
+	box := makeBox(logo)
+	if lipgloss.Height(box) > m.height {
+		box = makeBox(m.styles.accent.Render("◆ Qrypt"))
+	}
+	if lipgloss.Height(box) > m.height {
+		box = makeBox("")
+	}
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
 
 // stripANSI removes style sequences without touching the screen's text.

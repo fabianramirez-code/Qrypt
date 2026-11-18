@@ -32,7 +32,7 @@ func (m Model) wideColumn(heading string, lines []string, width, height int, foc
 		result = append(result, " "+line+strings.Repeat(" ", max(0, width-1-lipgloss.Width(line))))
 	}
 	column := strings.Join(result, "\n")
-	if m.styles.palette.Surface.A != 0 {
+	if m.themeName == "carbon" {
 		column = lipgloss.NewStyle().Background(lipgloss.Color(hexColor(m.styles.palette.Surface))).Render(column)
 	}
 	return column

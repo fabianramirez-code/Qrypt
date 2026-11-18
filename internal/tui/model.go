@@ -126,81 +126,81 @@ type Model struct {
 	themeName      string
 	// plain draws without hue (bold, dim and reverse video only) and keeps the
 	// logo static; it is set when NO_COLOR asks for no color.
-	plain           bool
-	icons           string
-	motion          string
-	styles          styles
-	themeList       bool
-	themeIndex      int
-	colorIndex      int
-	beforeEdit      settings.Settings
-	editorColors    map[string]string
-	editorOrigin    string
-	editorPalette   theme.Theme
-	preview         bool
-	previewID       *identity.Identity
-	language        Language
-	initialLanguage Language
-	start           screen
-	screen          screen
-	width, height   int
-	status          int
-	id              *identity.Identity
-	sealed          []byte
-	pass            secretText
-	phrase          secretText
-	input           secretText
-	message         string
-	visible         bool
-	positions       [3]int
-	index           int
-	restoring       bool
-	restoreOrigin   screen
-	restoreWords    [][]byte
-	backup          string
-	vlt             *vault.Vault
-	scopes          []*vault.Vault
-	problems        []vault.Problem
-	spaceRows       []spaceRow
-	spaceNames      []string
-	spaceCounts     []int
-	scopeID         *identity.Identity
-	spaceCursor     int
-	names           []string
-	cursor          int
-	item            string
-	itemValue       []byte
-	newName         string
-	folderPath      []string
-	folderRows      []folderRow
-	treeRows        []treeRow
-	treeCursor      int
-	entries         []vault.Entry
-	itemID          string
-	itemData        vault.Item
-	fieldCursor     int
-	revealed        map[int]bool
-	revealToken     uint64
-	formKind        vault.FieldKind
-	formLabel       string
-	formAction      screen
-	deleteID        string
-	generate        func() (*identity.Identity, error)
-	pick            func() [3]int
-	copyFn          func(string) error
-	clearFn         func(string) error
-	now             func() time.Time
-	lastKey         time.Time
-	logoPhase       int
-	logoToken       uint64
-	helpOpen        bool
-	helpPage        int
-	copyValue       []byte
-	copyActive      bool
-	copyToken       uint64
-	copyUntil       time.Time
-	copyFallback    bool
-	memoryStatus    func() (bool, string)
+	plain             bool
+	icons             string
+	motion            string
+	styles            styles
+	preferenceSection int
+	themeIndex        int
+	colorIndex        int
+	beforeEdit        settings.Settings
+	editorColors      map[string]string
+	editorOrigin      string
+	editorPalette     theme.Theme
+	preview           bool
+	previewID         *identity.Identity
+	language          Language
+	initialLanguage   Language
+	start             screen
+	screen            screen
+	width, height     int
+	status            int
+	id                *identity.Identity
+	sealed            []byte
+	pass              secretText
+	phrase            secretText
+	input             secretText
+	message           string
+	visible           bool
+	positions         [3]int
+	index             int
+	restoring         bool
+	restoreOrigin     screen
+	restoreWords      [][]byte
+	backup            string
+	vlt               *vault.Vault
+	scopes            []*vault.Vault
+	problems          []vault.Problem
+	spaceRows         []spaceRow
+	spaceNames        []string
+	spaceCounts       []int
+	scopeID           *identity.Identity
+	spaceCursor       int
+	names             []string
+	cursor            int
+	item              string
+	itemValue         []byte
+	newName           string
+	folderPath        []string
+	folderRows        []folderRow
+	treeRows          []treeRow
+	treeCursor        int
+	entries           []vault.Entry
+	itemID            string
+	itemData          vault.Item
+	fieldCursor       int
+	revealed          map[int]bool
+	revealToken       uint64
+	formKind          vault.FieldKind
+	formLabel         string
+	formAction        screen
+	deleteID          string
+	generate          func() (*identity.Identity, error)
+	pick              func() [3]int
+	copyFn            func(string) error
+	clearFn           func(string) error
+	now               func() time.Time
+	lastKey           time.Time
+	logoPhase         int
+	logoToken         uint64
+	helpOpen          bool
+	helpPage          int
+	copyValue         []byte
+	copyActive        bool
+	copyToken         uint64
+	copyUntil         time.Time
+	copyFallback      bool
+	memoryStatus      func() (bool, string)
 
 	themeBeforeCustom string
 }
@@ -503,27 +503,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if (v.Code == 'i' || v.Code == 'I') && v.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
-				switch m.icons {
-				case "emoji":
-					m.icons = "nerd"
-				case "nerd":
-					m.icons = "unicode"
-				default:
-					m.icons = "emoji"
-				}
+				m.cycleIcons(1)
 				break
 			}
 			switch v.Code {
 			case tea.KeyEsc:
 				return m, tea.Quit
-			case tea.KeyTab:
-				m.themeList = !m.themeList
+			case tea.KeyTab, tea.KeyRight:
+				m.preferenceSection = (m.preferenceSection + 1) % 4
 			case tea.KeyLeft:
-				m.themeList = false
-			case tea.KeyRight:
-				m.themeList = true
+				m.preferenceSection = (m.preferenceSection + 3) % 4
 			case tea.KeyUp, tea.KeyDown:
-				if m.themeList {
+				if m.preferenceSection == 1 {
 					step := 1
 					if v.Code == tea.KeyUp {
 						step = -1
@@ -536,13 +527,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.themeName = themeChoice(m.themeIndex)
 						m.refreshStyles()
 					}
+				} else if m.preferenceSection == 0 {
+					if v.Code == tea.KeyUp {
+						m.language = English
+					} else {
+						m.language = Spanish
+					}
+				} else if m.preferenceSection == 2 {
+					step := 1
+					if v.Code == tea.KeyUp {
+						step = -1
+					}
+					m.cycleIcons(step)
 				} else if v.Code == tea.KeyUp {
-					m.language = English
-				} else {
-					m.language = Spanish
+					if m.motion == "reduced" {
+						m.motion = ""
+						m.logoToken++
+						if !m.plain {
+							return m, logoTick(m.logoToken)
+						}
+					}
+				} else if m.motion != "reduced" {
+					m.motion = "reduced"
+					m.logoToken++
 				}
 			case tea.KeyEnter:
-				if m.themeList && m.themeIndex == len(theme.Names())+1 {
+				if m.preferenceSection == 1 && m.themeIndex == len(theme.Names())+1 {
 					m.openColorEditor()
 					break
 				}
@@ -815,7 +825,7 @@ func (m *Model) refreshStyles() {
 func (m Model) View() tea.View {
 	if m.helpOpen && m.width >= 60 && m.height >= 20 {
 		view := tea.NewView(m.helpView())
-		if m.styles.palette.Surface.A != 0 {
+		if m.themeName == "carbon" {
 			view.BackgroundColor = m.styles.palette.Background
 		}
 		view.AltScreen = true
@@ -823,7 +833,7 @@ func (m Model) View() tea.View {
 	}
 	if m.wide() {
 		view := tea.NewView(m.wideView(false))
-		if m.styles.palette.Surface.A != 0 {
+		if m.themeName == "carbon" {
 			view.BackgroundColor = m.styles.palette.Background
 		}
 		view.AltScreen = true
@@ -832,7 +842,7 @@ func (m Model) View() tea.View {
 	if m.isWideModal() {
 		if content, ok := m.wideModal(); ok {
 			view := tea.NewView(content)
-			if m.styles.palette.Surface.A != 0 {
+			if m.themeName == "carbon" {
 				view.BackgroundColor = m.styles.palette.Background
 			}
 			view.AltScreen = true
@@ -857,7 +867,7 @@ func (m Model) View() tea.View {
 		content = m.frame(content)
 	}
 	view := tea.NewView(content)
-	if m.styles.palette.Surface.A != 0 {
+	if m.screen != languageScreen && m.themeName == "carbon" {
 		view.BackgroundColor = m.styles.palette.Background
 	}
 	view.AltScreen = true

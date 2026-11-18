@@ -16,7 +16,7 @@ func TestIconSelectionPersistenceAndTyping(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity")
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
 	for i, set := range []string{"emoji", "nerd", "unicode", "emoji"} {
-		if !strings.Contains(framed(m), "Icons / Iconos: "+set) {
+		if !strings.Contains(framed(m), "> "+set) {
 			t.Fatalf("preview %s: %s", set, framed(m))
 		}
 		if i < 3 {
@@ -38,7 +38,7 @@ func TestIconSelectionPersistenceAndTyping(t *testing.T) {
 		t.Fatalf("saved %+v %v", stored, err)
 	}
 	next := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
-	if !strings.Contains(framed(next), "Icons / Iconos: nerd") {
+	if !strings.Contains(framed(next), "> nerd") {
 		t.Fatal("not preselected", framed(next))
 	}
 	next = enter(t, next)
@@ -87,7 +87,7 @@ func TestTabSwitchesListsAndNoChangeWritesNothing(t *testing.T) {
 	if !strings.Contains(framed(m), "> carbon") || !strings.Contains(framed(m), "> Español") {
 		t.Fatal(framed(m))
 	}
-	m = key(t, m, tea.KeyTab)
+	m = key(t, m, tea.KeyLeft)
 	m = key(t, m, tea.KeyUp)
 	if !strings.Contains(framed(m), "> English") || !strings.Contains(framed(m), "> carbon") {
 		t.Fatal(framed(m))

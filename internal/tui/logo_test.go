@@ -24,7 +24,7 @@ func TestReducedMotionToggleAndTickChain(t *testing.T) {
 	path := m.settingsPath
 	before := m.View().Content
 	m = key(t, m, 'a')
-	if !strings.Contains(plain(m), "Animation / Animación: off / detenida") {
+	if !strings.Contains(plain(m), "> off / detenida") {
 		t.Fatal(plain(m))
 	}
 	m.logoPhase = 35
@@ -44,12 +44,12 @@ func TestReducedMotionToggleAndTickChain(t *testing.T) {
 		t.Fatalf("motion not saved: %q %v", stored, err)
 	}
 	m = send(t, New(m.path, English), tea.WindowSizeMsg{Width: 80, Height: 24})
-	if !strings.Contains(plain(m), "Animation / Animación: off / detenida") {
+	if !strings.Contains(plain(m), "> off / detenida") {
 		t.Fatal("setting not loaded")
 	}
 	next, cmd = m.Update(tea.KeyPressMsg{Code: 'A', Mod: tea.ModShift})
 	m = next.(Model)
-	if cmd == nil || !strings.Contains(plain(m), "Animation / Animación: on / activa") {
+	if cmd == nil || !strings.Contains(plain(m), "> on / activa") {
 		t.Fatal("animated toggle did not restart one chain")
 	}
 	tick, ok := cmd().(logoTickMsg)

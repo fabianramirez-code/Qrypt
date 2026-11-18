@@ -114,8 +114,8 @@ func TestCarbonPaletteAndSurface(t *testing.T) {
 	for _, name := range []string{"green"} {
 		for _, dark := range []bool{false, true} {
 			got, _ := ByName(name, dark)
-			if got.Surface != (color.RGBA{}) {
-				t.Errorf("%s dark=%v paints surface", name, dark)
+			if got.Surface.A == 0 {
+				t.Errorf("%s dark=%v lacks first-screen surface", name, dark)
 			}
 		}
 	}
@@ -136,9 +136,7 @@ func TestAdditionalPaletteProperties(t *testing.T) {
 				t.Errorf("%s dark=%v: %+v", name, dark, p)
 			}
 			backgrounds := []color.RGBA{p.Background}
-			if name == "carbon" {
-				backgrounds = append(backgrounds, p.Surface)
-			}
+			backgrounds = append(backgrounds, p.Surface)
 			for _, bg := range backgrounds {
 				for _, c := range []color.RGBA{p.Accent, p.Text, p.Dim, p.Success, p.Error, p.Warning, p.Info, p.Special, p.Muted} {
 					if Contrast(c, bg) < 4.5 {

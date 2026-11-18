@@ -41,43 +41,61 @@ func (m *Model) savePreferences() {
 }
 
 func (m Model) languageView() string {
-	var languageRows, themeRows []string
+	// Terminal faint can reduce contrast below the palette's measured ratio.
+	if !m.plain {
+		m.styles.dim = lipgloss.NewStyle().Foreground(lipgloss.Color(hexColor(m.styles.palette.Dim)))
+	}
+	var languageRows, themeRows, iconRows, motionRows []string
 	for i, name := range []string{"English", "Español"} {
 		selected := (i == 0 && m.language == English) || (i == 1 && m.language == Spanish)
-		languageRows = append(languageRows, m.choiceRow(name, i, selected, !m.themeList))
+		languageRows = append(languageRows, m.choiceRow(name, i, selected, m.preferenceSection == 0))
 	}
 	for i := 0; i < len(theme.Names())+2; i++ {
 		name := "Edit colors / Editar colores"
 		if i < len(theme.Names())+1 {
 			name = themeChoice(i)
 		}
-		themeRows = append(themeRows, m.choiceRow(name, i, i == m.themeIndex, m.themeList))
+		themeRows = append(themeRows, m.choiceRow(name, i, i == m.themeIndex, m.preferenceSection == 1))
 	}
-	// Both panels have the same height so their borders line up.
-	for len(languageRows) < len(themeRows) {
-		languageRows = append(languageRows, "")
+	for i, name := range []string{"emoji", "nerd", "unicode"} {
+		iconRows = append(iconRows, m.choiceRow(name, i, name == m.icons, m.preferenceSection == 2))
+	}
+	for i, name := range []string{"on / activa", "off / detenida"} {
+		motionRows = append(motionRows, m.choiceRow(name, i, (i == 1) == (m.motion == "reduced"), m.preferenceSection == 3))
+	}
+	pair := func(a, b string, aw, bw int) string {
+		left, right := strings.Split(a, "\n"), strings.Split(b, "\n")
+		for len(left) < len(right) {
+			left = append(left, strings.Repeat(" ", aw))
+		}
+		for len(right) < len(left) {
+			right = append(right, strings.Repeat(" ", bw))
+		}
+		rows := make([]string, len(left))
+		for i := range rows {
+			rows[i] = left[i] + " " + right[i]
+		}
+		return strings.Join(rows, "\n")
 	}
 	join := func(rows []string) string { return strings.Join(rows, "\n") }
-	left := strings.Split(m.panel("LANGUAGE / IDIOMA", join(languageRows), 25, !m.themeList, true), "\n")
-	right := strings.Split(m.panel("THEME / TEMA", join(themeRows), 34, m.themeList, true), "\n")
-	var rows []string
-	for i := range left {
-		rows = append(rows, left[i]+" "+right[i])
-	}
+	first := pair(m.panel("LANGUAGE / IDIOMA", join(languageRows), 21, m.preferenceSection == 0, false), m.panel("THEME / TEMA", join(themeRows), 34, m.preferenceSection == 1, false), 21, 34)
+	second := pair(m.panel("ICONS / ICONOS", join(iconRows), 21, m.preferenceSection == 2, false), m.panel("ANIMATION / ANIMACIÓN", join(motionRows), 34, m.preferenceSection == 3, false), 21, 34)
+	body := first + "\n" + second
 	if m.settingsError {
-		rows = append(rows, "Settings could not be read / No se pudieron leer los ajustes.")
+		body += "\n" + m.styles.dim.Render("Settings could not be read / No se pudieron leer los ajustes.")
 	}
-	glyphs := make([]string, 0, 8)
-	for _, name := range []string{"spaceClosed", "spaceOpen", "item", "locked", "reveal", "copy", "problem", "verified"} {
-		glyphs = append(glyphs, IconGlyph(m.icons, name))
+	return body
+}
+
+func (m *Model) cycleIcons(step int) {
+	choices := []string{"emoji", "nerd", "unicode"}
+	for i, name := range choices {
+		if m.icons == name {
+			m.icons = choices[(i+step+len(choices))%len(choices)]
+			return
+		}
 	}
-	rows = append(rows, "Icons / Iconos: "+m.icons+"  "+strings.Join(glyphs, " "))
-	if m.motion == "reduced" {
-		rows = append(rows, "Animation / Animación: off / detenida")
-	} else {
-		rows = append(rows, "Animation / Animación: on / activa")
-	}
-	return strings.Join(rows, "\n")
+	m.icons = choices[0]
 }
 
 func (m Model) choiceRow(name string, index int, selected, focused bool) string {

@@ -72,13 +72,8 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 		if v.BackgroundColor != nil {
 			t.Errorf("%s changed terminal background", name)
 		}
-		// Only the first screen has a new line and hint (with the default emoji icon set); welcome is unchanged.
-		wantFirst := map[string]string{
-			"green": "cbb495389ee6c53b4dfcd2f59ff2f7514d798d5af35b90b5329638242f2b1728",
-			"mono":  "e812257ef0d6b773987251a1c1a15aceaef8c96d12ecd786a9da98963bcd7254",
-		}[name]
-		if got := fmt.Sprintf("%x", sha256.Sum256([]byte(v.Content))); got != wantFirst {
-			t.Errorf("%s first screen changed: %s", name, got)
+		if !strings.Contains(v.Content, "ICONS / ICONOS") || !strings.Contains(v.Content, "ANIMATION / ANIMACIÓN") {
+			t.Errorf("%s first screen missing settings sections", name)
 		}
 		m.screen = welcome
 		wantWelcome := map[string]string{
@@ -95,9 +90,14 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 	m.refreshStyles()
 	v := m.View()
 	bg, _ := theme.ParseHex("#1E1F22")
-	if v.BackgroundColor != bg {
-		t.Errorf("background = %v, want %v", v.BackgroundColor, bg)
+	if v.BackgroundColor != nil {
+		t.Errorf("first-screen exterior painted: %v", v.BackgroundColor)
 	}
+	m.screen = welcome
+	if m.View().BackgroundColor != bg {
+		t.Errorf("welcome background = %v, want %v", m.View().BackgroundColor, bg)
+	}
+	m.screen = languageScreen
 	if !strings.Contains(v.Content, "\x1b[48;2;38;40;45m") {
 		t.Fatal("first-screen panels lack surface")
 	}

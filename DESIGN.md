@@ -23,7 +23,7 @@ Only two themes exist: **green** (default) and **carbon** (implemented). Both ar
 | Role | Use |
 | --- | --- |
 | Background | Window background |
-| Surface | Panels and the tree/inspector panes (carbon only; green draws on the terminal background) |
+| Surface | Solid first-screen box in every theme; carbon also uses it for panels and panes |
 | Raised | Selected row, focused field, modal body (carbon only) |
 | Text | Primary content |
 | Dim | Secondary content, hints, alternate list rows |
@@ -35,7 +35,7 @@ Only two themes exist: **green** (default) and **carbon** (implemented). Both ar
 
 ### 2.2 `green` (default, dark)
 
-Gentle Shell green. Drawn on the terminal's own background; Info, Special and Muted fall back to Accent, Accent and Dim.
+Gentle Shell green. The first screen has a solid dark Surface (`#101914`); its exterior and other green screens retain the terminal's own background. The light variant uses a solid white Surface. Info, Special and Muted fall back to Accent, Accent and Dim.
 
 | Role | Hex | Contrast on `#000000` |
 | --- | --- | --- |
@@ -83,7 +83,7 @@ A terminal program cannot choose the terminal font. Qrypt can only ask for a goo
   - `unicode` (plain symbols, safest).
 - **Nerd Font:** `SymbolsNerdFontMono-Regular.ttf` is bundled in the release zip (pinned SHA-256) with install instructions; it is not embedded in the executable.
 - **Every icon has a text fallback** in the `unicode` set, and no information exists only as an icon.
-- A preview line on the first screen shows the set name and its glyphs so the user can check their font.
+- The first screen offers the icon sets as choices inside its Icons section; I cycles them as a shortcut.
 
 ## 4. Layout
 
@@ -118,7 +118,7 @@ In wide mode the action rows at the end of each list (section 5) are decoration 
 | Component | Rule |
 | --- | --- |
 | Panel | Bordered, bold centered heading, divider. Focused panel uses an Accent border; others use Border. |
-| Selected row | `>` marker plus Raised background (carbon) or bold (green). Only the focused list highlights. |
+| Selected row | `>` marker plus Raised background (carbon) or bold (green). Only the focused list highlights; unfocused text remains legible. |
 | Chip | Short label in Info or Special (carbon) or Accent (green). Text always present. |
 | Tree | Folders at any depth; folder icon, name, `(n)` count; indentation of two columns per level. |
 | Inspector | Field list for the selected item: hidden (masked), visible, note. Reveal is explicit. |
@@ -169,7 +169,7 @@ How secrets are protected in memory (keys, decrypted values, the passphrase) is 
 - Contrast floor of 4.5:1 for text, checked per role (section 2.4).
 - Meaning never depends on color or on an icon alone.
 - Every action is reachable by keyboard; there is no mouse requirement.
-- Focus is always visible: Accent border on the focused panel, `>` on the focused row.
+- Focus is always visible: Accent border on the focused section, `>` on every selected row. The first screen centers its logo, four sections and hints inside one solid Surface box, leaving the exterior unpainted.
 - Two languages (English and Spanish); only the interface is translated, recovery words are always English.
 - `NO_COLOR` and the `reduce motion` setting are respected (implemented; section 6.2).
 - **(implemented)** Help overlay on `?` when no text field is active, or F1 anywhere, listing the current screen's keys in the chosen language.
