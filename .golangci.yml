@@ -1,0 +1,31 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+  exclusions:
+    rules:
+      # Existing cleanup/error-reporting paths; revisit individually before tightening.
+      - { path: '^cmd/qrypt/main\.go$', linters: [errcheck], text: 'fmt\.Fprintln|os\.RemoveAll' }
+      - { path: '^cmd/qrypt/main_test\.go$', linters: [errcheck], text: 'Close' }
+      - { path: '^internal/clipboard/clipboard_windows\.go$', linters: [errcheck], text: 'globalFree\.Call|globalUnlock\.Call|emptyClipboard\.Call' }
+      - { path: '^internal/clipboard/clipboard_windows_test\.go$', linters: [errcheck], text: 'closeClipboard\.Call|globalUnlock\.Call|clipboard\.ClearIfUnchanged' }
+      - { path: '^internal/identity/identity\.go$', linters: [errcheck], text: 'os\.Remove|file\.Close' }
+      - { path: '^internal/mirror/dir\.go$', linters: [errcheck], text: 'f\.Close|os\.Remove' }
+      - { path: '^internal/mirror/mirror\.go$', linters: [errcheck], text: 'os\.Remove|os\.Rename|os\.WriteFile' }
+      - { path: '^internal/settings/settings\.go$', linters: [errcheck], text: 'f\.Close|os\.Remove' }
+      - { path: '^internal/vault/scopes\.go$', linters: [errcheck], text: 'os\.RemoveAll' }
+      - { path: '^internal/vault/manifest\.go$', linters: [errcheck], text: 'os\.Remove' }
+      - { path: '^internal/vault/vault\.go$', linters: [errcheck], text: 'file\.Close|os\.Remove' }
+      # Existing dead assignments and code, kept until a dedicated Go cleanup.
+      - { path: '^internal/tui/language_test\.go$', linters: [ineffassign], text: 'ineffectual assignment to m' }
+      - { path: '^internal/tui/theme_settings_test\.go$', linters: [ineffassign, staticcheck], text: 'ineffectual assignment to m|SA4006' }
+      - { path: '^internal/tui/problems_test\.go$', linters: [staticcheck], text: 'SA4006' }
+      - { path: '^internal/tui/model\.go$', linters: [staticcheck], text: 'QF1001|QF1003' }
+      - { path: '^internal/tui/items\.go$', linters: [unused], text: 'copyItem|enterItem|itemValueView|firstLine|selectedName' }
+      - { path: '^internal/vault/vault\.go$', linters: [unused], text: 'encode|entry|scan|find' }

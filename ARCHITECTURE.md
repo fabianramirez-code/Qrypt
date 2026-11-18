@@ -114,11 +114,11 @@ Each decision lists context, decision, alternatives and consequences.
 | --- | --- | --- |
 | Tests | `go vet ./...` and `go test ./...`; TUI tests read content through `plain(m)` and the frame through `framed(m)` | implemented |
 | Fuzzing | Native Go fuzz tests kept in the repository for every parser of untrusted bytes: item file, fields, manifest, record, settings | proposed |
-| Lint | `golangci-lint` with a committed `.golangci.yml` | proposed |
-| Vulnerabilities | `govulncheck` in CI; Dependabot for Go modules and GitHub Actions | proposed |
-| CI | GitHub Actions: vet, test, lint and `govulncheck` on Windows, Linux and macOS | proposed |
+| Lint | `golangci-lint` v2 configuration and Linux CI job (existing findings are scoped out; local check still reports findings) | proposed |
+| Vulnerabilities | `govulncheck` Ubuntu CI job; weekly Dependabot for Go modules and GitHub Actions | implemented |
+| CI | GitHub Actions: vet and test on Windows, Linux and macOS; lint and `govulncheck` on Ubuntu | implemented |
 | Releases | `build.ps1` builds a trimmed static Windows binary, bundles licenses and the Symbols Nerd Font (pinned SHA-256), and writes checksums | implemented |
-| Releases | GoReleaser for cross-compilation and checksums, artifacts signed with Cosign; Scoop and Homebrew manifests generated from it | proposed |
+| Releases | GoReleaser v2 builds amd64 Windows/Linux/macOS archives and checksums; Cosign signs the checksum file; draft prerelease (Scoop/Homebrew publishing deferred) | implemented |
 | Demos | VHS scripts for README recordings and visual review | proposed |
 
 ## 5. Platform support

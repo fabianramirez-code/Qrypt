@@ -86,6 +86,16 @@ Qrypt requires Go 1.26.7 or later. An older Go installation downloads that versi
 go test ./...
 ```
 
+### Development checks
+
+CI runs `go vet ./...` and `go test ./... -count=1` on Windows, Linux and macOS. On Ubuntu it also runs `golangci-lint` (configured in `.golangci.yml`) and `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`. Run the linter locally with `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run ./...`. Dependabot checks Go modules and GitHub Actions weekly. Existing lint findings are not yet fully cleared; check CI before relying on a release.
+
+### Releases
+
+The tag workflow (`v*`) runs GoReleaser v2 (`go run github.com/goreleaser/goreleaser/v2@latest check` validates its configuration), producing Windows ZIP and Linux/macOS tar.gz archives for amd64, a SHA-256 `checksums.txt`, and a keyless Cosign signature and certificate for that checksum file. Releases stay draft/prerelease and must be reviewed before publication. Scoop and Homebrew manifests require additional repositories or tokens and are deferred.
+
+For now, `build.ps1` remains the way to produce the Windows ZIP with the SHA-256-pinned Symbols Nerd Font; GoReleaser does not bundle the font (or the script's complete dependency licenses).
+
 To build the Windows release zip:
 
 ```
