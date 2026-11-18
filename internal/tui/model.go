@@ -167,6 +167,7 @@ type Model struct {
 	copyValue       string
 	copyActive      bool
 	copyToken       uint64
+	copyUntil       time.Time
 	copyFallback    bool
 
 	themeBeforeCustom string
@@ -367,7 +368,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if isVaultScreen(m.screen) {
 			if m.wide() {
-				return m.wideKey(v)
+				next, cmd := m.wideKey(v)
+				n := next.(Model)
+				if n.copyToken != m.copyToken && n.copyActive {
+					n.copyUntil = n.now().Add(clipboardLifetime)
+				}
+				return n, cmd
 			}
 			if m.screen == problemScreen {
 				return m.problemKey(v)

@@ -43,6 +43,76 @@ func wideFit(t *testing.T, m Model, width, height int) {
 	}
 }
 
+func TestWideInspectorStatusAndClock(t *testing.T) {
+	for _, lang := range []Language{English, Spanish} {
+		m := send(t, wideFixture(t, lang), tea.WindowSizeMsg{Width: 120, Height: 30})
+		now := time.Unix(1000, 0)
+		m.now = func() time.Time { return now }
+		m.lastKey = now
+		view := framed(m)
+		for _, want := range []string{">_ QRYPT // Personal", "● PQC: ML-KEM-768 + X25519", "[2] Personal", "├─", "└─", "5:00"} {
+			if !strings.Contains(view, want) {
+				t.Errorf("missing %q: %s", want, view)
+			}
+		}
+		if strings.Contains(view, "1024") {
+			t.Fatal("wrong algorithm")
+		}
+		if lang == English {
+			for _, want := range []string{"[1] SPACES", "[3] ITEM", "NAME", "No mirror"} {
+				if !strings.Contains(view, want) {
+					t.Errorf("missing %q", want)
+				}
+			}
+		} else {
+			for _, want := range []string{"[1] ESPACIOS", "[3] ELEMENTO", "NOMBRE", "Sin espejo"} {
+				if !strings.Contains(view, want) {
+					t.Errorf("missing %q", want)
+				}
+			}
+		}
+		m = enter(t, enter(t, m))
+		view = framed(m)
+		for _, want := range []string{"XChaCha20-Poly1305", "ML-KEM-768 + X25519", "Ed25519 + ML-DSA-65", "************", "[Enter]", "[C]", "[E]"} {
+			if !strings.Contains(view, want) {
+				t.Errorf("missing inspector %q: %s", want, view)
+			}
+		}
+		if strings.Contains(view, "private-token") {
+			t.Fatal("hidden value leaked")
+		}
+		if !strings.Contains(m.View().Content, "\x1b[") {
+			t.Fatal("missing ANSI styles")
+		}
+		m = enter(t, m)
+		if !strings.Contains(framed(m), "private-token") {
+			t.Fatal("reveal missing")
+		}
+		m = key(t, m, tea.KeyLeft)
+		if strings.Contains(framed(m), "private-token") {
+			t.Fatal("unfocused value leaked")
+		}
+		m = copyKey(m)
+		if !strings.Contains(framed(m), "30s") {
+			t.Fatal("clipboard countdown missing")
+		}
+		start := m.lastKey
+		now = now.Add(10 * time.Second)
+		m = send(t, m, logoTickMsg{})
+		if m.lastKey != start || !strings.Contains(framed(m), "4:50") || !strings.Contains(framed(m), "20s") {
+			t.Fatalf("tick changed idle or countdown: %s", framed(m))
+		}
+		now = now.Add(20 * time.Second)
+		m = send(t, m, clipboardTickMsg{token: m.copyToken})
+		if strings.Contains(framed(m), "20s") || strings.Contains(framed(m), "30s") {
+			t.Fatal("clipboard countdown persisted")
+		}
+		for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 20}, {Width: 120, Height: 30}, {Width: 160, Height: 40}} {
+			wideFit(t, send(t, m, size), size.Width, size.Height)
+		}
+	}
+}
+
 func TestWideThresholdPanesAndFocus(t *testing.T) {
 	m := wideFixture(t, English)
 	for _, size := range []tea.WindowSizeMsg{{Width: 99, Height: 30}, {Width: 100, Height: 19}} {
@@ -346,7 +416,7 @@ func TestWideHeaderFooterPreviewAndForms(t *testing.T) {
 	for _, state := range []screen{spacesAdd, spacesRename, spacesDelete, vaultAddName, vaultAddValue, vaultEdit, vaultDelete} {
 		x := send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 		x.screen = state
-		if !strings.Contains(framed(x), "Work (1)") || !strings.Contains(framed(x), x.language.text().spacesTitle) {
+		if !strings.Contains(framed(x), "Work (1)") || !strings.Contains(framed(x), "[1] "+strings.ToUpper(x.language.text().spacesTitle)) {
 			t.Fatalf("modal %d lacks panes", state)
 		}
 		wideFit(t, x, 120, 30)
@@ -390,7 +460,7 @@ func TestWideAllThemesLanguagesAndLongValue(t *testing.T) {
 	m = addVaultItem(t, m, "long", strings.Repeat("x", 301))
 	m = enter(t, m)
 	m = enter(t, m)
-	if !strings.Contains(framed(m), "The value is too long to") || !strings.Contains(framed(m), "show here.") || strings.Contains(framed(m), "xxxx") {
+	if !strings.Contains(framed(m), "The value is too") || !strings.Contains(framed(m), "show here.") || strings.Contains(framed(m), "xxxx") {
 		t.Fatalf("long value leaked or missing warning: %s", framed(m))
 	}
 }
@@ -404,7 +474,7 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 		t.Fatal("add not opened")
 	}
 	view := framed(m)
-	for _, title := range []string{english.spacesTitle, "Personal", english.itemTitle, english.addTitle} {
+	for _, title := range []string{"[1] SPACES", "Personal", "[3] ITEM", english.addTitle} {
 		if !strings.Contains(view, title) {
 			t.Fatalf("missing %q from modal and panes", title)
 		}
@@ -459,7 +529,7 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 24}, {Width: 60, Height: 20}} {
 		x := send(t, m, size)
 		x = key(t, x, 'a')
-		if strings.Contains(framed(x), english.spacesTitle) || strings.Contains(framed(x), english.itemTitle) {
+		if strings.Contains(framed(x), "[1] SPACES") || strings.Contains(framed(x), "[3] ITEM") {
 			t.Fatalf("narrow modal got panes at %dx%d", size.Width, size.Height)
 		}
 	}
@@ -477,7 +547,7 @@ func TestWideModalScreensThemesAndSecurity(t *testing.T) {
 					x := m
 					x.screen = state
 					wideFit(t, x, size.Width, size.Height)
-					if !strings.Contains(framed(x), lang.text().spacesTitle) || !strings.Contains(framed(x), lang.text().itemTitle) {
+					if !strings.Contains(framed(x), "[1] "+strings.ToUpper(lang.text().spacesTitle)) || !strings.Contains(framed(x), "[3] "+strings.ToUpper(lang.text().itemTitle)) {
 						t.Fatalf("%s %d %dx%d did not overlay panes", theme, state, size.Width, size.Height)
 					}
 					if strings.Contains(framed(x), "private-token") {
@@ -494,8 +564,10 @@ func TestWideModalScreensThemesAndSecurity(t *testing.T) {
 	m = enter(t, enter(t, m))
 	m = enter(t, m)
 	m = key(t, m, 'e')
-	if strings.Contains(m.View().Content, "private-token") || !strings.Contains(framed(m), "************") {
-		t.Fatal("edit leaked previously revealed value")
+	background := m
+	background.screen, background.visible = vaultItem, false
+	if strings.Contains(m.View().Content, "private-token") || !strings.Contains(framed(background), "************") {
+		t.Fatal("edit leaked previously revealed value or background not masked")
 	}
 	m = typeText(t, m, "private-token")
 	if strings.Contains(framed(m), "private-token") {
@@ -596,7 +668,7 @@ func TestWideModalSpaceAndMirrorActions(t *testing.T) {
 		t.Fatal("mirror stop did not clear setting")
 	}
 	m = key(t, m, tea.KeyEsc)
-	if m.screen != spacesList || !strings.Contains(framed(m), english.spacesTitle) {
+	if m.screen != spacesList || !strings.Contains(framed(m), "[1] SPACES") {
 		t.Fatal("mirror Esc did not return to panes")
 	}
 }
@@ -610,7 +682,7 @@ func TestWideModalRealProblemFallback(t *testing.T) {
 	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = key(t, m, tea.KeyDown)
 	m = enter(t, m)
-	if m.screen != problemScreen || !strings.Contains(framed(m), english.problemTitle) || !strings.Contains(framed(m), english.spacesTitle) {
+	if m.screen != problemScreen || !strings.Contains(framed(m), english.problemTitle) || !strings.Contains(framed(m), "[1] SPACES") {
 		t.Fatal("real problem not over panes")
 	}
 	wideFit(t, m, 120, 30)
@@ -645,5 +717,67 @@ func TestWideRightOnDetailPaneNeverReveals(t *testing.T) {
 	m = enter(t, m)
 	if !m.visible || !strings.Contains(framed(m), "DEMO-ACCOUNT-0000") {
 		t.Fatalf("Enter did not reveal the value:\n%s", framed(m))
+	}
+}
+
+// At the smallest wide window the inspector shows every value whole, its value
+// box is closed on both sides, and the generation follows the space's changes.
+func TestWideInspectorFitsItsValuesAtTheThreshold(t *testing.T) {
+	for _, language := range []Language{English, Spanish} {
+		id, err := identity.Generate()
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := NewPreview(filepath.Join(t.TempDir(), "identity"), language, id)
+		m.copyFn = func(string) error { return nil }
+		m.clearFn = func(string) error { return nil }
+		m = send(t, m, tea.WindowSizeMsg{Width: 100, Height: 20})
+		m = enter(t, m) // language screen -> spaces
+		m = enter(t, m) // spaces -> items
+		m = enter(t, m) // items -> detail
+		view := framed(m)
+		for _, want := range []string{"Personal", "XChaCha20-Poly1305", "ML-KEM-768 + X25519", "Ed25519 + ML-DSA-65"} {
+			if !strings.Contains(view, want) {
+				t.Fatalf("%q missing or cut:\n%s", want, view)
+			}
+		}
+		generation := regexp.MustCompile(`(?:generation|generación|gen) (\d+)`)
+		before := generation.FindStringSubmatch(view)
+		if before == nil || strings.Contains(view, "…") {
+			t.Fatalf("generation missing or a value was cut:\n%s", view)
+		}
+		// The value box is closed: its corners and sides line up in the same columns.
+		lines := strings.Split(view, "\n")
+		top, left, right := -1, -1, -1
+		for i, line := range lines {
+			cells := []rune(line)
+			for c := 0; c+1 < len(cells); c++ {
+				if cells[c] == '╭' && cells[c+1] == '─' && c > 60 && strings.ContainsRune(string(cells[c:]), 'V') {
+					top, left = i, c
+				}
+			}
+			if top == i {
+				for c := len(cells) - 1; c > left; c-- {
+					if cells[c] == '╮' {
+						right = c
+						break
+					}
+				}
+			}
+		}
+		if top < 0 || right < 0 || top+2 >= len(lines) {
+			t.Fatalf("value box not found:\n%s", view)
+		}
+		middle, bottom := []rune(lines[top+1]), []rune(lines[top+2])
+		if len(middle) <= right || len(bottom) <= right || middle[left] != '│' || middle[right] != '│' || bottom[left] != '╰' || bottom[right] != '╯' {
+			t.Fatalf("value box is not closed evenly:\n%s", view)
+		}
+		m = key(t, m, 'e')
+		m = typeText(t, m, "new value")
+		m = enter(t, m)
+		after := generation.FindStringSubmatch(framed(m))
+		if after == nil || after[1] == before[1] {
+			t.Fatalf("generation did not change after an edit: %v -> %v\n%s", before, after, framed(m))
+		}
 	}
 }
