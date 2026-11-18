@@ -63,7 +63,7 @@ func TestWideFolderTreeAndFieldInspector(t *testing.T) {
 	m = enter(t, m)
 	m = enter(t, m)
 	m = enter(t, m)
-	if m.screen != vaultItem || !strings.Contains(framed(m), "memo: long text (2)") || strings.Contains(framed(m), "line-one") || strings.Contains(framed(m), "never-display-me") {
+	if m.screen != vaultItem || !regexp.MustCompile(`memo +long text [(]2[)]`).MatchString(framed(m)) || strings.Contains(framed(m), "line-one") || strings.Contains(framed(m), "never-display-me") {
 		t.Fatal(framed(m))
 	}
 	m = enter(t, m)
@@ -937,7 +937,7 @@ func TestWideInspectorFitsItsValuesAtTheThreshold(t *testing.T) {
 		lines := strings.Split(view, "\n")
 		card := -1
 		for i, line := range lines {
-			if strings.Contains(line, "── "+m.language.text().wideValue+" ─") {
+			if strings.Contains(line, "── "+m.language.text().wideValue+" ─") || strings.Contains(line, "── "+m.language.text().wideValue+": ") {
 				card = i
 			}
 		}

@@ -563,7 +563,24 @@ func (m Model) wideView(modal bool) string {
 			detail = append(detail, m.hintStyle().Render(field[0])+strings.Repeat(" ", gap)+value)
 		}
 		if m.screen == vaultItem {
-			visibleFields := max(1, rows-12)
+			// The column heading is decoration: a short window drops it first.
+			visibleFields, heading := max(1, rows-12), rows >= 16
+			if heading {
+				visibleFields = max(1, rows-13)
+			}
+			// Two columns with a heading, so it is clear which part is the label.
+			column := lipgloss.Width(t.wideLabel)
+			for _, field := range m.itemData.Fields {
+				column = max(column, lipgloss.Width(field.Label))
+			}
+			column = min(column, max(8, (w-2)/2)) + 2
+			cell := func(text string) string {
+				text = wideTrim(text, column-2)
+				return text + strings.Repeat(" ", column-lipgloss.Width(text))
+			}
+			if heading {
+				detail = append(detail, "  "+m.hintStyle().Render(cell(strings.ToUpper(t.wideLabel))+strings.ToUpper(t.wideValue)))
+			}
 			firstField := max(0, min(m.fieldCursor-visibleFields/2, len(m.itemData.Fields)-visibleFields))
 			for i := firstField; i < len(m.itemData.Fields) && i < firstField+visibleFields; i++ {
 				field := m.itemData.Fields[i]
@@ -581,7 +598,7 @@ func (m Model) wideView(modal bool) string {
 				if i == m.fieldCursor {
 					bar = m.styles.accent.Render("▌")
 				}
-				line := wideTrim(field.Label+": "+value, w-2)
+				line := wideTrim(cell(field.Label)+value, w-2)
 				if i == m.fieldCursor {
 					line = m.styles.text.Bold(true).Render(line)
 				}
@@ -589,6 +606,10 @@ func (m Model) wideView(modal bool) string {
 			}
 		}
 		label := t.wideValue
+		if m.screen == vaultItem && m.fieldCursor < len(m.itemData.Fields) {
+			// The card names the secret it shows.
+			label = wideTrim(label+": "+m.itemData.Fields[m.fieldCursor].Label, w-8)
+		}
 		value := "• • • • • •"
 		revealed := m.screen == vaultItem && !modal && m.fieldCursor < len(m.itemData.Fields) && (m.visible || m.itemData.Fields[m.fieldCursor].Kind == vault.FieldVisible)
 		if revealed {
