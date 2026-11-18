@@ -42,7 +42,7 @@ Both flows offer a way into "Restoring an identity".
 
 ## Preview mode
 
-Run `qrypt --preview` to choose a language and explore a vault with two spaces, `Personal` and `Work`, holding fake sample items, without entering a passphrase. Every vault screen marks the session as temporary. The identity and vault live only in a throwaway directory, removed when Qrypt exits; changes are not kept. The Mirror screen is available there too, but accepts only folders inside that temporary directory; a path outside it is refused without reading or writing it. This does not unlock your real identity or vault. The normal `qrypt` command still requires your passphrase. Both commands require an interactive terminal.
+Run `qrypt --preview` to choose a language and explore a vault with three spaces holding fake sample items (`Personal`, `Work`, and `Work: Google Stitch`, which shows one service with two accounts and one key per tool), without entering a passphrase. Every vault screen marks the session as temporary. The identity and vault live only in a throwaway directory, removed when Qrypt exits; changes are not kept. The Mirror screen is available there too, but accepts only folders inside that temporary directory; a path outside it is refused without reading or writing it. This does not unlock your real identity or vault. The normal `qrypt` command still requires your passphrase. Both commands require an interactive terminal.
 
 ## Creating an identity
 

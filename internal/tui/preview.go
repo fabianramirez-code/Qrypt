@@ -47,6 +47,25 @@ func (m *Model) startPreview() {
 			return
 		}
 	}
+	// A realistic case: one service, two accounts, one key per tool. The name
+	// sorts after the other spaces, so they keep their places in the list.
+	service, err := vault.NewScope(vaultDir(m.path), stateFile(m.path), id, "Work: Google Stitch")
+	if err != nil {
+		m.failVault(err)
+		return
+	}
+	m.scopes = append(m.scopes, service)
+	for _, item := range []struct{ name, value string }{
+		{"account-1@example.invalid / Claude Code", "AQ.fake-key-claude-0001"},
+		{"account-1@example.invalid / codex", "AQ.fake-key-codex-0001"},
+		{"account-1@example.invalid / gemini", "AQ.fake-key-gemini-0001"},
+		{"account-2@example.invalid / Claude Code", "AQ.fake-key-claude-0002"},
+	} {
+		if err := service.Put(item.name, []byte(item.value)); err != nil {
+			m.failVault(err)
+			return
+		}
+	}
 	if err := m.sortSpaces(m.scopes[0]); err != nil {
 		m.failVault(err)
 		return
