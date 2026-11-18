@@ -8,6 +8,41 @@ import (
 	"testing"
 )
 
+func TestMotionSetting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings")
+	for _, motion := range []string{"", "reduced"} {
+		if err := Save(path, Settings{Language: "en", Motion: motion}); err != nil {
+			t.Fatal(err)
+		}
+		want := "language=en\n"
+		if motion == "reduced" {
+			want += "motion=reduced\n"
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || string(data) != want {
+			t.Fatalf("saved %q: %v", data, err)
+		}
+		got, err := Load(path)
+		if err != nil || got.Motion != motion {
+			t.Fatalf("loaded %+v: %v", got, err)
+		}
+	}
+	if err := os.WriteFile(path, []byte("language=es\nmotion=invalid\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil || got.Language != "es" || got.Motion != "" {
+		t.Fatalf("invalid line: %+v %v", got, err)
+	}
+	if err := Save(path, Settings{Motion: "invalid"}); err == nil {
+		t.Fatal("invalid motion accepted")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "language=es\nmotion=invalid\n" {
+		t.Fatalf("rejected save changed data: %q %v", data, err)
+	}
+}
+
 func TestIconSetting(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings")
 	for _, set := range []string{"unicode", "emoji", "nerd"} {

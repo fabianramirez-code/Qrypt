@@ -23,7 +23,7 @@ func FuzzLoad(f *testing.F) {
 		if err != nil {
 			return
 		}
-		if (s.Language != "" && !validLanguage(s.Language)) || (s.Theme != "" && !validTheme(s.Theme)) || !validIcons(s.Icons) || strings.ContainsAny(s.Mirror, "\r\n\x00") {
+		if (s.Language != "" && !validLanguage(s.Language)) || (s.Theme != "" && !validTheme(s.Theme)) || !validIcons(s.Icons) || !validMotion(s.Motion) || strings.ContainsAny(s.Mirror, "\r\n\x00") {
 			t.Fatalf("loaded invalid settings: %+v", s)
 		}
 		for role, hex := range s.Colors {

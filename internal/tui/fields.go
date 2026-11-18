@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/fabianramirez-code/qrypt/internal/vault"
@@ -17,10 +18,30 @@ func (m *Model) clearItem() {
 	clear(m.itemValue)
 	m.itemValue = nil
 	m.itemID = ""
-	m.revealed = nil
-	m.visible = false
+	m.hideRevealed()
 	m.fieldCursor = 0
 }
+
+// hideRevealed invalidates any pending reveal timer without touching key activity.
+func (m *Model) hideRevealed() {
+	m.revealToken++
+	m.revealed = nil
+	m.visible = false
+}
+
+func (m *Model) toggleReveal() tea.Cmd {
+	if m.revealed[m.fieldCursor] {
+		m.hideRevealed()
+		return nil
+	}
+	m.hideRevealed()
+	m.revealed = map[int]bool{m.fieldCursor: true}
+	m.visible = true
+	token := m.revealToken
+	// Batch keeps existing key helpers from running a 15-second timer inline.
+	return tea.Batch(tea.Tick(revealLifetime, func(time.Time) tea.Msg { return revealTickMsg{token: token} }), func() tea.Msg { return nil })
+}
+
 func (m *Model) enterEntry(row folderRow) {
 	item, err := m.vlt.Read(row.id)
 	if err != nil {
@@ -238,11 +259,7 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.fieldCursor = min(max(0, len(m.itemData.Fields)-1), m.fieldCursor+1)
 			m.syncFirstField()
 		case v.Code == tea.KeyTab && len(m.itemData.Fields) > 0:
-			if m.revealed == nil {
-				m.revealed = map[int]bool{}
-			}
-			m.revealed[m.fieldCursor] = !m.revealed[m.fieldCursor]
-			m.visible = m.revealed[m.fieldCursor]
+			return m, m.toggleReveal()
 		case plainKey(v, 'c') && len(m.itemData.Fields) > 0:
 			return m, m.copyValueOf(m.itemData.Fields[m.fieldCursor].Value)
 		case plainKey(v, 'e') && len(m.itemData.Fields) > 0:

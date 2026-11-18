@@ -27,10 +27,11 @@ func (m *Model) savePreferences() {
 	}
 	if (s.Language == language || s.Language == "" && m.language == m.initialLanguage) &&
 		(s.Theme == m.themeName || s.Theme == "" && m.themeName == "green") &&
-		(s.Icons == m.icons || (s.Icons == "" && m.icons == settings.DefaultIcons)) {
+		(s.Icons == m.icons || (s.Icons == "" && m.icons == settings.DefaultIcons)) &&
+		s.Motion == m.motion {
 		return
 	}
-	s.Language, s.Theme, s.Icons = language, m.themeName, m.icons
+	s.Language, s.Theme, s.Icons, s.Motion = language, m.themeName, m.icons, m.motion
 	if err := settings.Save(m.settingsPath, s); err != nil {
 		m.message = err.Error()
 		return
@@ -71,6 +72,11 @@ func (m Model) languageView() string {
 		glyphs = append(glyphs, IconGlyph(m.icons, name))
 	}
 	rows = append(rows, "Icons / Iconos: "+m.icons+"  "+strings.Join(glyphs, " "))
+	if m.motion == "reduced" {
+		rows = append(rows, "Animation / Animación: off / detenida")
+	} else {
+		rows = append(rows, "Animation / Animación: on / activa")
+	}
 	return strings.Join(rows, "\n")
 }
 

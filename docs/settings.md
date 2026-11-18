@@ -12,6 +12,7 @@ How Qrypt remembers the interface language and theme, and how a user edits color
 | Theme    | `green`, `carbon`, or `custom`                                      |
 | Colors   | For `custom` only: the hex value of each color role                 |
 | `icons`  | `emoji` (default), `unicode`, or `nerd`                                |
+| `motion` | `reduced` to stop the logo sweep; absent means animated                |
 | `mirror` | Optional folder path as typed on the Mirror screen                  |
 
 The file never holds a secret, a name, a value, a path to the working vault, or anything about the identity. The optional `mirror=<path>` line does reveal where the copy is. It is plain text, so the user can read it and Qrypt can show exactly what it saves.
@@ -28,7 +29,7 @@ The file never holds a secret, a name, a value, a path to the working vault, or 
 - **Whole or not at all:** a temporary file in the same directory, synced, then renamed over the old one.
 - **Owner only:** directory `0700`, file `0600`.
 - **Never fatal.** A missing, unreadable, too large (over 4 KiB) or invalid file is ignored: Qrypt starts with the defaults (system language, theme `green`) and shows a one-line notice on the first screen. It never overwrites a file it could not read until the user changes a setting.
-- **Format:** one `key=value` per line, UTF-8, for example `language=es`, `theme=custom`, `color.accent=#22d3ee`. Unknown keys are ignored. Invalid values make that one line be ignored. An absent or empty `mirror` means no mirror; stopping mirroring removes the line without deleting the folder.
+- **Format:** one `key=value` per line, UTF-8, for example `language=es`, `theme=custom`, `motion=reduced`, `color.accent=#22d3ee`. Unknown keys are ignored. Invalid values make that one line be ignored. An absent or empty `mirror` means no mirror; stopping mirroring removes the line without deleting the folder.
 
 ## Themes
 
@@ -57,6 +58,10 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 - **Removed themes.** Earlier versions also had `violet`, `mono`, `contrast` and `auto`. A settings file that names one of them is read as `green`; the file itself is rewritten only when the user next changes a setting.
 - **`NO_COLOR`.** When the environment variable `NO_COLOR` is set to a non-empty value, Qrypt draws without hue (bold, dim and reverse video only), whichever theme is selected, and the logo does not move.
 
+## Motion
+
+Press A on the first screen to turn the logo animation on or off. Reduced motion saves `motion=reduced` only when selected; the default keeps the animated sweep. The static accent-to-light gradient remains. `NO_COLOR` also stops the animation, regardless of this preference.
+
 ## Icons
 
 The first screen previews the selected glyphs and cycles sets with I (emoji, nerd, unicode). `emoji` is the default, so spaces show as folders without installing anything; a terminal that draws emoji badly can switch to `unicode`, which uses one-cell symbols available in ordinary fonts. `emoji` needs a terminal and font that render emoji (some occupy two cells). `nerd` needs a Nerd Font with the private-use icon glyphs. Qrypt cannot detect the terminal font; choose the set whose preview looks right. Missing or invalid `icons` defaults to `unicode`.
@@ -77,7 +82,7 @@ Language and theme are chosen on the same first screen, as today but with a seco
 - LANGUAGE and THEME appear in side-by-side bordered panels. Up and Down move within the focused panel; Left and Right or Tab switch panels. Both selections keep a `>` marker, and only the focused selection is highlighted. Enter continues. Esc quits with status 1.
 - The theme preview is live: moving in the theme list recolors the screen at once.
 - The saved choice is selected in advance. Without a settings file, the language comes from the system and the theme is `green`.
-- Continuing saves the language, theme and icons only if they differ from what is stored.
+- Continuing saves the language, theme, icons and motion only if they differ from what is stored.
 
 ## What does not change
 

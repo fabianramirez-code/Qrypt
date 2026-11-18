@@ -78,6 +78,7 @@ func (m *Model) failVault(err error) {
 }
 
 func (m *Model) closeVault() tea.Cmd {
+	m.helpOpen = false
 	cmd := m.clearCopied()
 	for _, scope := range m.scopes {
 		scope.Close()

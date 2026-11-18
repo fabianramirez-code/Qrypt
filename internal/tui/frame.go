@@ -59,6 +59,9 @@ const logoPeriod = 80
 func logoTint(accent color.RGBA, col, cols, row, phase int) color.RGBA {
 	ratio := float64(col) / float64(max(cols-1, 1))
 	centre := float64(phase%logoPeriod) - 20 + float64(row)*2
+	if phase < 0 {
+		centre = -1000 // No moving band; retain the static gradient.
+	}
 	d := (float64(col) - centre) / 4
 	t := min(1, ratio*0.42+0.5*math.Exp(-d*d))
 	mix := func(x uint8) uint8 { return uint8(min(255, math.Round(float64(x)*(1-t)+255*t))) }
@@ -78,7 +81,11 @@ func (m Model) logoView() string {
 		}
 		var line strings.Builder
 		for i, r := range []rune(row) {
-			tint := logoTint(accent, i, len([]rune(row)), y, m.logoPhase)
+			phase := m.logoPhase
+			if m.motion == "reduced" {
+				phase = -logoPeriod // Light band stays entirely outside the logo.
+			}
+			tint := logoTint(accent, i, len([]rune(row)), y, phase)
 			line.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(hexColor(tint))).Render(string(r)))
 		}
 		result = append(result, line.String())
@@ -88,7 +95,7 @@ func (m Model) logoView() string {
 
 func (m Model) bottomBar() string {
 	if m.screen == languageScreen {
-		return m.styles.hint.Render("↑/↓: move / mover   ←/→/Tab: list / lista   I: icons\nEnter: select / elegir   Esc: quit / salir")
+		return m.styles.hint.Render("↑/↓: move / mover   ←/→/Tab: list / lista   I: icons\nEnter: select / elegir   Esc: quit / salir  ? help/ayuda")
 	}
 	if m.language == Spanish {
 		return m.styles.hint.Render("Ctrl+C: salir")

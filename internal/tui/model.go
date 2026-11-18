@@ -83,15 +83,17 @@ type rebuiltMsg struct {
 	err    error
 }
 type clipboardTickMsg struct{ token uint64 }
+type revealTickMsg struct{ token uint64 }
 type idleTickMsg struct{}
-type logoTickMsg struct{}
+type logoTickMsg struct{ token uint64 }
 
+const revealLifetime = 15 * time.Second
 const clipboardLifetime = 30 * time.Second
 const idleLifetime = 5 * time.Minute
 const logoFrame = 66 * time.Millisecond
 
-func logoTick() tea.Cmd {
-	return tea.Tick(logoFrame, func(time.Time) tea.Msg { return logoTickMsg{} })
+func logoTick(token uint64) tea.Cmd {
+	return tea.Tick(logoFrame, func(time.Time) tea.Msg { return logoTickMsg{token: token} })
 }
 
 func idleCheck() tea.Cmd {
@@ -125,6 +127,7 @@ type Model struct {
 	// logo static; it is set when NO_COLOR asks for no color.
 	plain           bool
 	icons           string
+	motion          string
 	styles          styles
 	themeList       bool
 	themeIndex      int
@@ -176,6 +179,7 @@ type Model struct {
 	itemData        vault.Item
 	fieldCursor     int
 	revealed        map[int]bool
+	revealToken     uint64
 	formKind        vault.FieldKind
 	formLabel       string
 	formAction      screen
@@ -187,6 +191,9 @@ type Model struct {
 	now             func() time.Time
 	lastKey         time.Time
 	logoPhase       int
+	logoToken       uint64
+	helpOpen        bool
+	helpPage        int
 	copyValue       string
 	copyActive      bool
 	copyToken       uint64
@@ -201,6 +208,7 @@ func New(path string, preferred Language) Model {
 	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", plain: os.Getenv("NO_COLOR") != "", icons: settings.DefaultIcons, darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
 	loaded, err := settings.Load(m.settingsPath)
 	m.settings = loaded
+	m.motion = loaded.Motion
 	if loaded.Icons != "" {
 		m.icons = loaded.Icons
 	}
@@ -240,7 +248,12 @@ func randomPositions() [3]int {
 func (m Model) ExitStatus() int { return m.status }
 
 // Init requests the terminal background; identity work starts only after Enter.
-func (m Model) Init() tea.Cmd { return tea.Batch(tea.RequestBackgroundColor, logoTick()) }
+func (m Model) Init() tea.Cmd {
+	if m.plain || m.motion == "reduced" {
+		return tea.RequestBackgroundColor
+	}
+	return tea.Batch(tea.RequestBackgroundColor, logoTick(m.logoToken))
+}
 
 // Update processes terminal input and completion of slow work.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -345,10 +358,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.scopeID != nil && m.copyActive && v.token == m.copyToken {
 			return m, m.clearCopied()
 		}
+	case revealTickMsg:
+		if v.token == m.revealToken {
+			m.hideRevealed()
+		}
 	case logoTickMsg:
 		// Never touches lastKey: the animation is not user activity.
+		if m.plain || m.motion == "reduced" || v.token != m.logoToken {
+			return m, nil
+		}
 		m.logoPhase++
-		return m, logoTick()
+		return m, logoTick(m.logoToken)
 	case idleTickMsg:
 		if m.scopeID != nil {
 			if !m.now().Before(m.lastKey.Add(idleLifetime)) {
@@ -372,8 +392,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case tea.KeyPressMsg:
+		if m.helpOpen {
+			if v.Code == 'c' && v.Mod&tea.ModCtrl != 0 {
+				m.helpOpen = false
+			} else {
+				switch {
+				case v.Code == tea.KeyEsc, v.Code == tea.KeyF1, plainKey(v, '?'):
+					m.helpOpen = false
+				case v.Code == tea.KeyDown:
+					m.helpPage++
+				case v.Code == tea.KeyUp:
+					m.helpPage = max(0, m.helpPage-1)
+				}
+				return m, nil
+			}
+		}
 		if m.scopeID != nil {
 			m.lastKey = m.now()
+		}
+		if v.Code == tea.KeyF1 || plainKey(v, '?') && !m.textFieldActive() {
+			m.helpOpen = true
+			m.helpPage = 0
+			m.hideRevealed()
+			return m, nil
 		}
 		if m.screen == saving || (m.screen == checkingUnlock || m.screen == rebuilding) && !(v.Code == 'c' && v.Mod&tea.ModCtrl != 0) {
 			return m, nil
@@ -432,6 +473,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch m.screen {
 		case languageScreen:
+			if plainKey(v, 'a') {
+				if m.motion == "reduced" {
+					m.motion = ""
+					m.logoToken++
+					if !m.plain {
+						return m, logoTick(m.logoToken)
+					}
+				} else {
+					m.motion = "reduced"
+					m.logoToken++
+				}
+				return m, nil
+			}
 			if (v.Code == 'i' || v.Code == 'I') && v.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
 				switch m.icons {
 				case "emoji":
@@ -604,6 +658,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) editInput(key tea.KeyPressMsg) {
+	if key.Code == '?' && key.Text == "" && key.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
+		m.input += "?"
+		m.message = ""
+		return
+	}
 	if key.Text != "" {
 		m.message = ""
 		m.input += key.Text
@@ -652,6 +711,7 @@ func openFailure(err error, text texts) string {
 	}
 }
 func (m *Model) clearSecrets() {
+	m.helpOpen = false
 	m.id = nil
 	m.previewID = nil
 	clear(m.sealed)
@@ -724,6 +784,14 @@ func (m *Model) refreshStyles() {
 
 // View renders every state on the alternate screen, including small and waiting screens.
 func (m Model) View() tea.View {
+	if m.helpOpen && m.width >= 60 && m.height >= 20 {
+		view := tea.NewView(m.helpView())
+		if m.styles.palette.Surface.A != 0 {
+			view.BackgroundColor = m.styles.palette.Background
+		}
+		view.AltScreen = true
+		return view
+	}
 	if m.wide() {
 		view := tea.NewView(m.wideView(false))
 		if m.styles.palette.Surface.A != 0 {

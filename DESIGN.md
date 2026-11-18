@@ -120,7 +120,7 @@ When the window is too short, remove in this order and never remove content:
 | Chip | Short label in Info or Special (carbon) or Accent (green). Text always present. |
 | Tree | Folders at any depth; folder icon, name, `(n)` count; indentation of two columns per level. |
 | Inspector | Field list for the selected item: hidden (masked), visible, note. Reveal is explicit. |
-| Modal | Drawn over the panes with the compositor; Raised body, Accent border; Esc closes. |
+| Modal | Drawn over the panes with the compositor; Raised body, Accent border; Esc closes. The help overlay uses this compositor in wide mode. |
 | Key bar | Bottom line: key and action pairs in the chosen language only (both languages before the choice). |
 | Status bar | Wide mode only: space, item count, mirror and integrity state, lock countdown. |
 | Problem screen | Integrity failure. Accepting needs the typed word `ACCEPT` (`ACEPTAR` in Spanish); never a single key. |
@@ -142,7 +142,7 @@ Motion is a signature of Qrypt and is **kept**.
 - Motion only on the logo. No spinners, blinking, or sliding on screens that show secrets.
 - The sweep must never change the logo's width or the layout; it changes color only.
 - With `NO_COLOR` set, Qrypt draws without hue and the logo is bold and static (implemented).
-- **(proposed)** A `reduce motion` setting keeps the gradient and stops the sweep. This is the terminal equivalent of `prefers-reduced-motion`.
+- **(implemented)** A `reduce motion` setting keeps the gradient and stops the sweep. This is the terminal equivalent of `prefers-reduced-motion`.
 - **(proposed)** Stop the tick while a modal covers the logo, to save redraws and battery.
 
 ## 7. Security-driven UX
@@ -152,7 +152,7 @@ These rules are part of the design, not extras.
 - Alternate screen only; secrets never reach the terminal scrollback.
 - Interactive terminal required; refuse piped input and output.
 - Hidden by default; revealing a value is an explicit action.
-- **(proposed)** A revealed value hides again after N seconds (default 15) and on lock.
+- **(implemented)** A revealed value hides again 15 seconds after reveal and on lock; a newer reveal restarts the expiry.
 - Clipboard copy clears after 30 seconds and is excluded from clipboard history (Windows).
 - Idle auto-lock after 5 minutes; lock clears revealed values.
 - Messages never repeat what the user typed.
@@ -167,8 +167,8 @@ How secrets are protected in memory (keys, decrypted values, the passphrase) is 
 - Every action is reachable by keyboard; there is no mouse requirement.
 - Focus is always visible: Accent border on the focused panel, `>` on the focused row.
 - Two languages (English and Spanish); only the interface is translated, recovery words are always English.
-- `NO_COLOR` is respected (implemented). **(proposed)** `reduce motion` setting (section 6.2).
-- **(proposed)** Help overlay on `?` listing every key of the current screen.
+- `NO_COLOR` and the `reduce motion` setting are respected (implemented; section 6.2).
+- **(implemented)** Help overlay on `?` when no text field is active, or F1 anywhere, listing the current screen's keys in the chosen language.
 
 ## 9. Voice and copy
 
@@ -193,7 +193,4 @@ Lint, CI, fuzzing, releases and every other engineering tool are in [ARCHITECTUR
 
 Design items only; engineering work is tracked in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-1. Add the `reduce motion` setting for the logo sweep (section 6.2).
-2. Add auto-hide of revealed values (section 7).
-3. Add the `?` help overlay (section 8).
-4. Add VHS demo scripts and use their output in the README.
+1. Add VHS demo scripts and use their output in the README.

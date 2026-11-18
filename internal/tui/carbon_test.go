@@ -74,8 +74,8 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 		}
 		// Only the first screen has a new line and hint (with the default emoji icon set); welcome is unchanged.
 		wantFirst := map[string]string{
-			"green": "46c2a6463758f1d3d57b7818d633d85c435e6bb4d8d93092761580449cbb1cda",
-			"mono":  "dc71b9768faa6f0cadab3b318dffb97c95ebc9570023f3345b1d4fcba3500add",
+			"green": "cbb495389ee6c53b4dfcd2f59ff2f7514d798d5af35b90b5329638242f2b1728",
+			"mono":  "e812257ef0d6b773987251a1c1a15aceaef8c96d12ecd786a9da98963bcd7254",
 		}[name]
 		if got := fmt.Sprintf("%x", sha256.Sum256([]byte(v.Content))); got != wantFirst {
 			t.Errorf("%s first screen changed: %s", name, got)

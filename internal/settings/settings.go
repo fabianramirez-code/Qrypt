@@ -19,6 +19,7 @@ type Settings struct {
 	Language string
 	Theme    string
 	Icons    string
+	Motion   string
 	Mirror   string
 	Colors   map[string]string
 }
@@ -55,7 +56,8 @@ func retiredTheme(s string) bool {
 // drawn as emoji, which need no extra font.
 const DefaultIcons = "emoji"
 
-func validIcons(s string) bool { return s == "unicode" || s == "emoji" || s == "nerd" }
+func validIcons(s string) bool  { return s == "unicode" || s == "emoji" || s == "nerd" }
+func validMotion(s string) bool { return s == "" || s == "reduced" }
 func validRole(s string) bool {
 	switch s {
 	case "accent", "text", "dim", "success", "error", "warning", "border":
@@ -117,6 +119,9 @@ func Load(path string) (Settings, error) {
 		case key == "icons" && validIcons(value):
 			s.Icons = value
 			valid = true
+		case key == "motion" && value == "reduced":
+			s.Motion = value
+			valid = true
 		case key == "mirror":
 			if value != "" && !strings.ContainsAny(value, "\r\x00") {
 				s.Mirror = value
@@ -147,6 +152,9 @@ func Save(path string, s Settings) error {
 	if s.Icons != "" && !validIcons(s.Icons) {
 		return fmt.Errorf("invalid icons")
 	}
+	if !validMotion(s.Motion) {
+		return fmt.Errorf("invalid motion")
+	}
 	if strings.ContainsAny(s.Mirror, "\r\n\x00") {
 		return fmt.Errorf("invalid mirror path")
 	}
@@ -167,6 +175,9 @@ func Save(path string, s Settings) error {
 	}
 	if s.Icons != "" && s.Icons != DefaultIcons {
 		fmt.Fprintf(&b, "icons=%s\n", s.Icons)
+	}
+	if s.Motion == "reduced" {
+		b.WriteString("motion=reduced\n")
 	}
 	if s.Mirror != "" {
 		fmt.Fprintf(&b, "mirror=%s\n", s.Mirror)

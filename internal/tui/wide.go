@@ -275,7 +275,11 @@ func (m Model) wideModal() (string, bool) {
 	base.screen = m.modalPane()
 	base.visible = false // Never draw a revealed detail value behind any modal.
 	base.revealed = nil
-	background := base.wideView(true)
+	return m.composeModal(panel, base.wideView(true))
+}
+
+// composeModal shares pane placement with forms and the help overlay.
+func (m Model) composeModal(panel, background string) (string, bool) {
 	paneTop := 2
 	if m.height >= 30 {
 		paneTop = 7
