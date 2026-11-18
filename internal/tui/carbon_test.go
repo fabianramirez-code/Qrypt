@@ -65,7 +65,8 @@ func TestCarbonSelectionAndCustomRoles(t *testing.T) {
 func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 	m := send(t, New(filepath.Join(t.TempDir(), "identity"), English), tea.WindowSizeMsg{Width: 60, Height: 20})
 	for _, name := range []string{"green", "mono"} {
-		m.themeName = name
+		// "mono" is the plain look that NO_COLOR selects; it is not a theme.
+		m.plain = name == "mono"
 		m.refreshStyles()
 		v := m.View()
 		if v.BackgroundColor != nil {
@@ -73,8 +74,8 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 		}
 		// Only the first screen has a new line and hint (with the default emoji icon set); welcome is unchanged.
 		wantFirst := map[string]string{
-			"green": "5bf9bc1bba01d3a0cd77eaad000c218cd3da5ef31b43bb39f29ec2dc2c46c4fa",
-			"mono":  "a62b2720cb96bdbdbd1fb0859bf3c639033a9e847ea1119266edd205cb1d1988",
+			"green": "46c2a6463758f1d3d57b7818d633d85c435e6bb4d8d93092761580449cbb1cda",
+			"mono":  "dc71b9768faa6f0cadab3b318dffb97c95ebc9570023f3345b1d4fcba3500add",
 		}[name]
 		if got := fmt.Sprintf("%x", sha256.Sum256([]byte(v.Content))); got != wantFirst {
 			t.Errorf("%s first screen changed: %s", name, got)
@@ -89,6 +90,7 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 		}
 		m.screen = languageScreen
 	}
+	m.plain = false
 	m.themeName = "carbon"
 	m.refreshStyles()
 	v := m.View()

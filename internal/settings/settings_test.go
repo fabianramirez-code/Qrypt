@@ -167,3 +167,33 @@ func TestSaveRoundTripAtomicAndDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// A theme that an older version saved and this one removed is read as green,
+// together with the rest of the file.
+func TestLoadRetiredThemeIsGreen(t *testing.T) {
+	for _, name := range []string{"violet", "mono", "contrast", "auto"} {
+		path := filepath.Join(t.TempDir(), "settings")
+		if err := os.WriteFile(path, []byte("language=es\ntheme="+name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Load(path)
+		if err != nil || got.Theme != "green" || got.Language != "es" {
+			t.Errorf("%s: %+v, %v", name, got, err)
+		}
+		if err := os.WriteFile(path, []byte("theme="+name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := Load(path); err != nil || got.Theme != "green" {
+			t.Errorf("%s alone: %+v, %v", name, got, err)
+		}
+	}
+	for _, name := range []string{"green", "carbon", "custom"} {
+		path := filepath.Join(t.TempDir(), "settings")
+		if err := os.WriteFile(path, []byte("theme="+name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := Load(path); err != nil || got.Theme != name {
+			t.Errorf("%s: %+v, %v", name, got, err)
+		}
+	}
+}

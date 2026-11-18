@@ -2,14 +2,14 @@
 
 How Qrypt remembers the interface language and theme, and how a user edits colors. Decided with the user: settings are saved in a file.
 
-> **Status:** implemented. `auto` requests the terminal background color; without a reply, it uses the dark `green` palette.
+> **Status:** implemented. Qrypt asks the terminal for its background color; `green` uses its light palette on a light background and its dark palette otherwise, including when there is no reply.
 
 ## What is stored
 
 | Setting  | Values                                                              |
 | -------- | ------------------------------------------------------------------- |
 | Language | `en` or `es`                                                        |
-| Theme    | `green`, `violet`, `mono`, `contrast`, `auto`, `carbon`, or `custom` |
+| Theme    | `green`, `carbon`, or `custom`                                      |
 | Colors   | For `custom` only: the hex value of each color role                 |
 | `icons`  | `emoji` (default), `unicode`, or `nerd`                                |
 | `mirror` | Optional folder path as typed on the Mirror screen                  |
@@ -46,19 +46,16 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 
 | Theme      | Look                                                                                  |
 | ---------- | ------------------------------------------------------------------------------------- |
-| `green`    | The green of Gentle Shell (`#68b78d` on dark backgrounds). The default.               |
-| `violet`   | Violet accent.                                                                        |
-| `mono`     | No hue: bold, dim and reverse video only. Sober, and the safest on odd terminals.     |
-| `contrast` | White on black with saturated colors, and thick borders. Meets WCAG AAA for text.     |
-| `auto`     | Uses the light `green` palette on a light terminal background and the dark palette otherwise. Without a response it defaults to dark. |
+| `green`    | The green of Gentle Shell (`#68b78d` on dark backgrounds, `#1f6b47` on light ones). The default. |
 | `carbon`   | Dark only: base background `#1E1F22`, panel surface `#26282D`, green `#50FA7B` and amber `#FFB86C`. It paints its own background; a terminal that ignores the background instruction shows its own background. |
 
 - Every built-in theme keeps text at a contrast ratio of at least 4.5:1 against its background, and a test checks it. `carbon` also meets this ratio against its panel surface.
-- `surface` is a theme property for painting panels, not an editable color role. The other themes do not paint a surface or set the terminal background.
-- `info` (headers, footer keys, inspector title), `special` (chips and value label), and `muted` (secondary text) are theme properties, not editable roles and not stored by `custom`. In the five existing themes they follow accent, accent, and dim; `carbon` uses `#8be9fd`, `#bd93f9`, and `#8b92a5`. `raised` is an optional background level (`#2A2D34` in `carbon`) for selections, chips and keys; the five existing themes do not paint it.
+- `surface` is a theme property for painting panels, not an editable color role. `green` does not paint a surface or set the terminal background.
+- `info` (headers, footer keys, inspector title), `special` (chips and value label), and `muted` (secondary text) are theme properties, not editable roles and not stored by `custom`. In `green` and `custom` they follow accent, accent, and dim; `carbon` uses `#8be9fd`, `#bd93f9`, and `#8b92a5`. `raised` is an optional background level (`#2A2D34` in `carbon`) for selections, chips and keys; `green` and `custom` do not paint it.
 - Every text color has at least 4.5:1 contrast on Background and Surface. On Raised, only Text, Accent, Info, Special, Success and Warning are drawn, each at least 4.5:1; Error, Dim and Muted are never drawn there. A selected problem row uses Error with an accent bar but no Raised background; a selected row's count uses Text.
 - Meaning never depends on color alone: errors and successes also carry words, and the selected row also carries the `>` marker.
-- When the terminal has no color, Qrypt behaves as `mono`.
+- **Removed themes.** Earlier versions also had `violet`, `mono`, `contrast` and `auto`. A settings file that names one of them is read as `green`; the file itself is rewritten only when the user next changes a setting.
+- **`NO_COLOR`.** When the environment variable `NO_COLOR` is set to a non-empty value, Qrypt draws without hue (bold, dim and reverse video only), whichever theme is selected, and the logo does not move.
 
 ## Icons
 

@@ -112,15 +112,18 @@ type unlockedMsg struct {
 
 // Model holds the state of a single identity creation, unlock, or restore session.
 type Model struct {
-	path            string
-	settingsPath    string
-	settings        settings.Settings
-	settingsError   bool
-	mirrorStorage   func(string) mirror.Storage
-	mirrorResult    string
-	mirrorWarning   bool
-	darkBackground  bool
-	themeName       string
+	path           string
+	settingsPath   string
+	settings       settings.Settings
+	settingsError  bool
+	mirrorStorage  func(string) mirror.Storage
+	mirrorResult   string
+	mirrorWarning  bool
+	darkBackground bool
+	themeName      string
+	// plain draws without hue (bold, dim and reverse video only) and keeps the
+	// logo static; it is set when NO_COLOR asks for no color.
+	plain           bool
 	icons           string
 	styles          styles
 	themeList       bool
@@ -195,7 +198,7 @@ type Model struct {
 
 // New constructs a session for the explicit identity path without writing to disk.
 func New(path string, preferred Language) Model {
-	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", icons: settings.DefaultIcons, darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
+	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", plain: os.Getenv("NO_COLOR") != "", icons: settings.DefaultIcons, darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
 	loaded, err := settings.Load(m.settingsPath)
 	m.settings = loaded
 	if loaded.Icons != "" {
@@ -698,7 +701,7 @@ func (m *Model) refreshStyles() {
 		accent: lipgloss.NewStyle().Bold(true), dim: lipgloss.NewStyle().Faint(true),
 		info: lipgloss.NewStyle(), special: lipgloss.NewStyle(), muted: lipgloss.NewStyle(), raised: lipgloss.NewStyle(), palette: palette,
 	}
-	if m.themeName != "mono" {
+	if !m.plain {
 		m.styles.text = m.styles.text.Foreground(lipgloss.Color(hexColor(palette.Text)))
 		m.styles.title = m.styles.title.Foreground(lipgloss.Color(hexColor(palette.Accent)))
 		m.styles.hint = m.styles.hint.Foreground(lipgloss.Color(hexColor(palette.Dim)))

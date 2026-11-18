@@ -3,6 +3,7 @@ package tui
 import (
 	"image/color"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,12 +79,14 @@ func TestLogoTextNeverChanges(t *testing.T) {
 	}
 }
 
-func TestMonoLogoIsStatic(t *testing.T) {
-	m := logoModel(t, "mono")
+func TestPlainLogoIsStatic(t *testing.T) {
+	m := logoModel(t, "green")
+	m.plain = true
+	m.refreshStyles()
 	a := m.logoView()
 	m.logoPhase = 17
 	if m.logoView() != a {
-		t.Fatal("mono logo changed with phase")
+		t.Fatal("plain logo changed with phase")
 	}
 }
 
@@ -101,5 +104,26 @@ func TestLogoTickAdvancesWithoutCountingAsActivity(t *testing.T) {
 	}
 	if !got.lastKey.Equal(before) {
 		t.Fatal("animation tick counted as user activity")
+	}
+}
+
+// NO_COLOR selects the plain look: no hue anywhere and a logo that does not move.
+func TestNoColorSelectsPlainLook(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := send(t, New(filepath.Join(t.TempDir(), "identity"), English), tea.WindowSizeMsg{Width: 80, Height: 24})
+	if !m.plain {
+		t.Fatal("NO_COLOR did not select the plain look")
+	}
+	before := m.View().Content
+	if strings.Contains(before, "\x1b[38;2;") {
+		t.Fatal("plain look draws a color")
+	}
+	m.logoPhase = 17
+	if m.View().Content != before {
+		t.Fatal("plain logo changed with phase")
+	}
+	t.Setenv("NO_COLOR", "")
+	if New(filepath.Join(t.TempDir(), "identity"), English).plain {
+		t.Fatal("empty NO_COLOR selected the plain look")
 	}
 }

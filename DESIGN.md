@@ -16,7 +16,7 @@ Scope: Qrypt is a terminal program only. This file does not cover web, app, or d
 
 ## 2. Themes
 
-Only two themes are part of the design: **green** (default) and **carbon**. Both are dark-first. **(proposed)** The other built-ins (`violet`, `mono`, `contrast`, `auto`) are outside this design and can be removed from `theme.Names()`; see section 11. The custom color editor stays, because it edits the roles below.
+Only two themes exist: **green** (default) and **carbon** (implemented). Both are dark-first; `green` also has a light palette that it uses when the terminal reports a light background. The custom color editor stays, because it edits the roles below. Earlier versions had `violet`, `mono`, `contrast` and `auto`; a saved setting that names one is read as `green`.
 
 ### 2.1 Roles
 
@@ -68,7 +68,7 @@ Three-pane IDE look with layered surfaces and a brighter accent.
 ### 2.4 Color rules
 
 - **Never use a color alone to carry meaning.** Errors and warnings also carry a word or a marker (`!`, `x`, or a label), so the screen works in `NO_COLOR` and for color-blind users.
-- **Contrast floor:** 4.5:1 for text (WCAG 2.2 AA). Carbon Muted on Surface (4.74:1) and Error on Surface (4.69:1) are the lowest accepted values; do not go below them. **(proposed)** Add a theme test that fails below 4.5:1 for every text role.
+- **Contrast floor:** 4.5:1 for text (WCAG 2.2 AA). Carbon Muted on Surface (4.74:1) and Error on Surface (4.69:1) are the lowest accepted values; do not go below them. A theme test fails below 4.5:1 for every text role on every background it is drawn on (implemented).
 - **No loose hex values in views.** Views read roles from the theme; a new color is a new role first.
 - **Custom colors** replace a role's value only and keep the theme's background. Invalid hex is rejected.
 
@@ -141,7 +141,8 @@ Motion is a signature of Qrypt and is **kept**.
 
 - Motion only on the logo. No spinners, blinking, or sliding on screens that show secrets.
 - The sweep must never change the logo's width or the layout; it changes color only.
-- **(proposed)** Static logo (gradient, no sweep) when `NO_COLOR` is set, when the terminal reports no color, or when a setting `reduce motion` is on. This is the terminal equivalent of `prefers-reduced-motion`.
+- With `NO_COLOR` set, Qrypt draws without hue and the logo is bold and static (implemented).
+- **(proposed)** A `reduce motion` setting keeps the gradient and stops the sweep. This is the terminal equivalent of `prefers-reduced-motion`.
 - **(proposed)** Stop the tick while a modal covers the logo, to save redraws and battery.
 
 ## 7. Security-driven UX
@@ -166,7 +167,7 @@ How secrets are protected in memory (keys, decrypted values, the passphrase) is 
 - Every action is reachable by keyboard; there is no mouse requirement.
 - Focus is always visible: Accent border on the focused panel, `>` on the focused row.
 - Two languages (English and Spanish); only the interface is translated, recovery words are always English.
-- **(proposed)** Respect `NO_COLOR`, and offer `reduce motion` (section 6.2).
+- `NO_COLOR` is respected (implemented). **(proposed)** `reduce motion` setting (section 6.2).
 - **(proposed)** Help overlay on `?` listing every key of the current screen.
 
 ## 9. Voice and copy
@@ -182,7 +183,7 @@ How secrets are protected in memory (keys, decrypted values, the passphrase) is 
 | Framework, styles | Bubble Tea v2, Lip Gloss v2 |
 | Visual review and README demos | **(proposed)** VHS scripts under `design/vhs/` |
 | Icons and font | Nerd Fonts `SymbolsNerdFontMono` |
-| Contrast check | **(proposed)** WCAG 2.2 formula in a theme unit test |
+| Contrast check | WCAG 2.2 formula in the theme unit tests (implemented) |
 
 Test conventions (implemented): read content through `plain(m)` (frame stripped) and the frame through `framed(m)`; keep stable text markers and adapt only layout assertions.
 
@@ -192,9 +193,7 @@ Lint, CI, fuzzing, releases and every other engineering tool are in [ARCHITECTUR
 
 Design items only; engineering work is tracked in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-1. Remove `violet`, `mono`, `contrast` and `auto` from the theme list and the first-screen panel; a saved setting that names one falls back to `green`.
-2. Add the per-role contrast test (section 2.4).
-3. Add `NO_COLOR` and `reduce motion` handling for the logo sweep (section 6.2).
-4. Add auto-hide of revealed values (section 7).
-5. Add the `?` help overlay (section 8).
-6. Add VHS demo scripts and use their output in the README.
+1. Add the `reduce motion` setting for the logo sweep (section 6.2).
+2. Add auto-hide of revealed values (section 7).
+3. Add the `?` help overlay (section 8).
+4. Add VHS demo scripts and use their output in the README.

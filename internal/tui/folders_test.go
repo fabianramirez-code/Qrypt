@@ -232,7 +232,7 @@ func TestFolderNestedDeletionAndManyFields(t *testing.T) {
 
 func TestNewScreensLockAndFit(t *testing.T) {
 	for _, lang := range []Language{English, Spanish} {
-		for _, theme := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+		for _, theme := range []string{"green", "carbon"} {
 			m := spacesSession(t, lang)
 			m = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 20})
 			m.themeName = theme

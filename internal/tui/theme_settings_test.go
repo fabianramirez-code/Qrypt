@@ -61,16 +61,16 @@ func TestSettingsSelectionAndPersistence(t *testing.T) {
 	original := m.View().Content
 	m = key(t, m, tea.KeyTab)
 	m = key(t, m, tea.KeyDown)
-	if !strings.Contains(framed(m), "> violet") || original == m.View().Content {
+	if !strings.Contains(framed(m), "> carbon") || original == m.View().Content {
 		t.Fatal("theme preview did not recolor", framed(m))
 	}
 	m = enter(t, m)
 	saved, err := os.ReadFile(filepath.Join(filepath.Dir(path), "settings"))
-	if err != nil || !strings.Contains(string(saved), "theme=violet") {
+	if err != nil || !strings.Contains(string(saved), "theme=carbon") {
 		t.Fatalf("settings %q: %v", saved, err)
 	}
 	next := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
-	if !strings.Contains(framed(next), "> violet") {
+	if !strings.Contains(framed(next), "> carbon") {
 		t.Fatal(framed(next))
 	}
 }
@@ -84,12 +84,12 @@ func TestTabSwitchesListsAndNoChangeWritesNothing(t *testing.T) {
 	}
 	m = key(t, m, tea.KeyTab)
 	m = key(t, m, tea.KeyDown)
-	if !strings.Contains(framed(m), "> violet") || !strings.Contains(framed(m), "> Español") {
+	if !strings.Contains(framed(m), "> carbon") || !strings.Contains(framed(m), "> Español") {
 		t.Fatal(framed(m))
 	}
 	m = key(t, m, tea.KeyTab)
 	m = key(t, m, tea.KeyUp)
-	if !strings.Contains(framed(m), "> English") || !strings.Contains(framed(m), "> violet") {
+	if !strings.Contains(framed(m), "> English") || !strings.Contains(framed(m), "> carbon") {
 		t.Fatal(framed(m))
 	}
 	m = key(t, m, tea.KeyTab)

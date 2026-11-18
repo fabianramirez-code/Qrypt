@@ -65,7 +65,7 @@ func TestValidateRole(t *testing.T) {
 }
 
 func TestBuiltins(t *testing.T) {
-	if !reflect.DeepEqual(Names(), []string{"green", "violet", "mono", "contrast", "auto", "carbon"}) {
+	if !reflect.DeepEqual(Names(), []string{"green", "carbon"}) {
 		t.Fatalf("names: %v", Names())
 	}
 	for _, name := range Names() {
@@ -82,8 +82,10 @@ func TestBuiltins(t *testing.T) {
 			}
 		}
 	}
-	if _, ok := ByName("invalid", true); ok {
-		t.Error("unknown theme accepted")
+	for _, name := range []string{"invalid", "violet", "mono", "contrast", "auto"} {
+		if _, ok := ByName(name, true); ok {
+			t.Errorf("%s accepted as a theme", name)
+		}
 	}
 }
 
@@ -109,7 +111,7 @@ func TestCarbonPaletteAndSurface(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"green", "violet", "mono", "contrast", "auto"} {
+	for _, name := range []string{"green"} {
 		for _, dark := range []bool{false, true} {
 			got, _ := ByName(name, dark)
 			if got.Surface != (color.RGBA{}) {

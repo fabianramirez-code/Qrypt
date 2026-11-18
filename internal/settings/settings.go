@@ -35,7 +35,17 @@ func DefaultPath() (string, error) {
 func validLanguage(s string) bool { return s == "en" || s == "es" }
 func validTheme(s string) bool {
 	switch s {
-	case "green", "violet", "mono", "contrast", "auto", "carbon", "custom":
+	case "green", "carbon", "custom":
+		return true
+	}
+	return false
+}
+
+// retiredTheme reports a theme name that older versions saved and this one no
+// longer has; Load reads it as green.
+func retiredTheme(s string) bool {
+	switch s {
+	case "violet", "mono", "contrast", "auto":
 		return true
 	}
 	return false
@@ -67,7 +77,8 @@ func validHex(s string) bool {
 	return true
 }
 
-// Load reads at most 4 KiB. Invalid lines are skipped; an entirely invalid file is an error.
+// Load reads at most 4 KiB. Invalid lines are skipped; a file with content and
+// no valid line is an error.
 func Load(path string) (Settings, error) {
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -85,7 +96,9 @@ func Load(path string) (Settings, error) {
 		return Settings{}, fmt.Errorf("invalid settings file")
 	}
 	s := Settings{Icons: DefaultIcons}
-	valid := false
+	// Save writes nothing for default values, so an empty file is a valid file
+	// that holds only defaults.
+	valid := len(data) == 0
 	for _, line := range strings.Split(string(data), "\n") {
 		key, value, ok := strings.Cut(line, "=")
 		if !ok {
@@ -97,6 +110,9 @@ func Load(path string) (Settings, error) {
 			valid = true
 		case key == "theme" && validTheme(value):
 			s.Theme = value
+			valid = true
+		case key == "theme" && retiredTheme(value):
+			s.Theme = "green"
 			valid = true
 		case key == "icons" && validIcons(value):
 			s.Icons = value

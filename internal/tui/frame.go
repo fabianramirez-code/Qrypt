@@ -24,9 +24,6 @@ func (m Model) panel(title, body string, width int, focused, rule bool) string {
 		border, header = m.styles.dim, m.styles.dim
 	}
 	edges := lipgloss.RoundedBorder()
-	if m.themeName == "contrast" {
-		edges = lipgloss.ThickBorder()
-	}
 	var lines []string
 	lines = append(lines, border.Render(edges.TopLeft+strings.Repeat(edges.Top, width-2)+edges.TopRight))
 	heading := title
@@ -75,7 +72,7 @@ func (m Model) logoView() string {
 	accent := m.styles.palette.Accent
 	for y, row := range rows {
 		row = strings.TrimRight(row, " ")
-		if m.themeName == "mono" {
+		if m.plain {
 			result = append(result, m.styles.accent.Render(row))
 			continue
 		}

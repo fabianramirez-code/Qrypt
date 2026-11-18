@@ -264,7 +264,7 @@ func TestSpacesClipboardExpiryOnNewScreens(t *testing.T) {
 
 func TestSpacesFramedFit(t *testing.T) {
 	for _, language := range []Language{English, Spanish} {
-		for _, theme := range []string{"green", "violet", "mono", "contrast", "auto"} {
+		for _, theme := range []string{"green"} {
 			m := spacesSession(t, language)
 			m = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 20})
 			m.themeName = theme

@@ -94,7 +94,7 @@ func TestWideFolderTreeAndFieldInspector(t *testing.T) {
 func TestWideEveryScreenFitsEveryPaletteIconAndLanguage(t *testing.T) {
 	for _, lang := range []Language{English, Spanish} {
 		base := wideFixture(t, lang)
-		for _, theme := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+		for _, theme := range []string{"green", "carbon"} {
 			for _, icons := range []string{"unicode", "emoji", "nerd"} {
 				m := base
 				m.themeName = theme
@@ -604,7 +604,7 @@ func TestWideHeaderFooterPreviewAndForms(t *testing.T) {
 
 func TestWideAllThemesLanguagesAndLongValue(t *testing.T) {
 	for _, lang := range []Language{English, Spanish} {
-		for _, name := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+		for _, name := range []string{"green", "carbon"} {
 			t.Run(fmt.Sprintf("%d-%s", lang, name), func(t *testing.T) {
 				m := wideFixture(t, lang)
 				m.themeName = name
@@ -710,7 +710,7 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 
 func TestWideModalScreensThemesAndSecurity(t *testing.T) {
 	for _, lang := range []Language{English, Spanish} {
-		for _, theme := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+		for _, theme := range []string{"green", "carbon"} {
 			m := wideFixture(t, lang)
 			m.themeName = theme
 			m.refreshStyles()
@@ -945,7 +945,7 @@ func TestWideInspectorFitsItsValuesAtTheThreshold(t *testing.T) {
 // Nerd Font glyphs are private-use code points.
 func TestWidePanesFitWithEveryIconSet(t *testing.T) {
 	for _, icons := range []string{"unicode", "emoji", "nerd"} {
-		for _, name := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+		for _, name := range []string{"green", "carbon"} {
 			for _, language := range []Language{English, Spanish} {
 				m := wideFixture(t, language)
 				m.icons = icons

@@ -212,7 +212,7 @@ func (m Model) colorView() string {
 		}
 		value := m.settings.Colors[role]
 		row := fmt.Sprintf("%s%-8s %s  ■ sample / muestra", marker, role, value)
-		if m.themeName != "mono" {
+		if !m.plain {
 			row = lipgloss.NewStyle().Foreground(lipgloss.Color(value)).Render(row)
 		}
 		if i == m.colorIndex {

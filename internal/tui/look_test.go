@@ -18,7 +18,7 @@ func TestArrowOnlyThemeSelection(t *testing.T) {
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = key(t, m, tea.KeyRight)
 	m = key(t, m, tea.KeyDown)
-	if !strings.Contains(framed(m), "> violet") || !strings.Contains(framed(m), "> English") {
+	if !strings.Contains(framed(m), "> carbon") || !strings.Contains(framed(m), "> English") {
 		t.Fatalf("arrow-only theme selection: %s", framed(m))
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(path), "settings")); !os.IsNotExist(err) {
@@ -30,7 +30,7 @@ func TestThemeAccentsOnFirstScreen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity")
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 80, Height: 24})
 	views := map[string]string{}
-	for _, name := range []string{"green", "violet", "contrast"} {
+	for _, name := range []string{"green", "carbon"} {
 		m.themeName = name
 		m.refreshStyles()
 		views[name] = m.View().Content
@@ -40,7 +40,7 @@ func TestThemeAccentsOnFirstScreen(t *testing.T) {
 			t.Errorf("%s: border and header missing accent %s", name, sgr)
 		}
 	}
-	if views["green"] == views["violet"] || views["green"] == views["contrast"] || views["violet"] == views["contrast"] {
+	if views["green"] == views["carbon"] {
 		t.Fatal("theme colors did not change")
 	}
 }
@@ -62,16 +62,14 @@ func TestEmbeddedLogoVerbatim(t *testing.T) {
 	}
 }
 
-func TestAutoTerminalBackground(t *testing.T) {
+func TestGreenFollowsTerminalBackground(t *testing.T) {
 	m := send(t, New(filepath.Join(t.TempDir(), "identity"), English), tea.WindowSizeMsg{Width: 80, Height: 24})
-	m.themeName = "auto"
-	m.refreshStyles()
 	for _, tc := range []struct {
 		bg   color.RGBA
 		dark bool
 	}{{color.RGBA{255, 255, 255, 255}, false}, {color.RGBA{0, 0, 0, 255}, true}} {
 		m = send(t, m, tea.BackgroundColorMsg{Color: tc.bg})
-		palette, _ := theme.ByName("auto", tc.dark)
+		palette, _ := theme.ByName("green", tc.dark)
 		sgr := fmt.Sprintf("\x1b[38;2;%d;%d;%dm", palette.Accent.R, palette.Accent.G, palette.Accent.B)
 		if !strings.Contains(m.View().Content, sgr) {
 			t.Fatalf("background %v: wrong accent", tc.bg)
@@ -99,7 +97,7 @@ func TestWidePanelWidth(t *testing.T) {
 // the request to enlarge, and the frame never exceeds 60 columns by 20 rows.
 func TestFramedScreensFitMinimumWindowInEveryTheme(t *testing.T) {
 	for _, language := range []Language{English, Spanish} {
-		for _, name := range []string{"green", "violet", "mono", "contrast", "auto"} {
+		for _, name := range []string{"green"} {
 			m, _, words := fixture(t)
 			m.language = language
 			m.themeName = name

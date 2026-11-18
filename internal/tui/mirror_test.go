@@ -209,7 +209,7 @@ func TestMirrorPreviewWideAndLock(t *testing.T) {
 }
 func TestMirrorRenderFits(t *testing.T) {
 	for _, lang := range []Language{English, Spanish} {
-		for _, theme := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+		for _, theme := range []string{"green", "carbon"} {
 			for _, width := range []int{60, 100} {
 				m := mirrorFixture(t, lang)
 				m = send(t, m, tea.WindowSizeMsg{Width: width, Height: 20})
