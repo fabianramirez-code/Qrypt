@@ -30,7 +30,7 @@ func (m *Model) startPreview() {
 		return
 	}
 	for _, item := range previewItems {
-		if err := m.vlt.Put(item.name, []byte(item.value)); err != nil {
+		if _, err := m.vlt.Add(vault.Item{Title: item.name, Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "value", Value: []byte(item.value)}}}); err != nil {
 			m.failVault(err)
 			return
 		}
@@ -42,7 +42,7 @@ func (m *Model) startPreview() {
 	}
 	m.scopes = append(m.scopes, work)
 	for _, item := range []struct{ name, value string }{{"example: meeting", "sample-agenda"}, {"example: support", "support@example.invalid"}} {
-		if err := work.Put(item.name, []byte(item.value)); err != nil {
+		if _, err := work.Add(vault.Item{Title: item.name, Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "value", Value: []byte(item.value)}}}); err != nil {
 			m.failVault(err)
 			return
 		}

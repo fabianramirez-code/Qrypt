@@ -242,7 +242,7 @@ func Restore(from Storage, root, statePath string, id *identity.Identity) (ret e
 		if err != nil {
 			return fmt.Errorf("device scope %s: %w", d.Name(), ErrNotEmpty)
 		}
-		items, err := v.List()
+		items, err := v.Entries()
 		v.Close()
 		if err != nil || len(items) > 0 {
 			return ErrNotEmpty
@@ -337,7 +337,7 @@ func Restore(from Storage, root, statePath string, id *identity.Identity) (ret e
 		}
 		// Listing decrypts the names, which proves the scope key belongs to this
 		// identity. Values are not decrypted: their bytes already match the signed manifest.
-		if _, err = v.List(); err != nil {
+		if _, err = v.Entries(); err != nil {
 			v.Close()
 			return fmt.Errorf("%s: %w", sid, ErrForeign)
 		}
