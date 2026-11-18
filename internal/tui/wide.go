@@ -503,7 +503,8 @@ func (m Model) wideView(modal bool) string {
 		}
 		return strings.Join(lines, "\n")
 	}
-	centerTitle := wideLeftTrim(m.location(), center-5)
+	// The column draws "[2] " plus the heading in center-2 cells.
+	centerTitle := wideLeftTrim(m.location(), center-6)
 	if m.selectedProblem() != nil {
 		centerTitle = ""
 	}
