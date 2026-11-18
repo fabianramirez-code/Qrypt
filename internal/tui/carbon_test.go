@@ -71,10 +71,10 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 		if v.BackgroundColor != nil {
 			t.Errorf("%s changed terminal background", name)
 		}
-		// Only the first screen has a new line and hint; welcome is unchanged.
+		// Only the first screen has a new line and hint (with the default emoji icon set); welcome is unchanged.
 		wantFirst := map[string]string{
-			"green": "83349e45933bf5859b92c0897181fc6d463288abb1df214d1a837162f9b1a93b",
-			"mono":  "56d76a4cc885cd35e66d8ae3adcdc2e960536d1ad2237491cee9911b6c385ee8",
+			"green": "5bf9bc1bba01d3a0cd77eaad000c218cd3da5ef31b43bb39f29ec2dc2c46c4fa",
+			"mono":  "a62b2720cb96bdbdbd1fb0859bf3c639033a9e847ea1119266edd205cb1d1988",
 		}[name]
 		if got := fmt.Sprintf("%x", sha256.Sum256([]byte(v.Content))); got != wantFirst {
 			t.Errorf("%s first screen changed: %s", name, got)

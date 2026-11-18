@@ -233,7 +233,8 @@ Start by double-clicking qrypt.exe, or run it from Windows Terminal, PowerShell 
 Windows may show "Windows protected your PC" because the program is not signed.
 To continue, choose "More info", then "Run anyway".
 To look at the interface without creating anything, run: qrypt.exe --preview
-Icons: the first screen chooses the icon set with the key I. The default needs no font.
+Icons: the first screen chooses the icon set with the key I. The default (emoji folders)
+needs no font. If they look misaligned in your terminal, choose "unicode".
 The "nerd" set needs a Nerd Font in your terminal. One is included:
   1. Double-click $fontFile and choose Install.
   2. In Windows Terminal: Settings, your profile, Appearance, Font face. Keep your

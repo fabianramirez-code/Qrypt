@@ -27,7 +27,7 @@ func (m *Model) savePreferences() {
 	}
 	if (s.Language == language || s.Language == "" && m.language == m.initialLanguage) &&
 		(s.Theme == m.themeName || s.Theme == "" && m.themeName == "green") &&
-		(s.Icons == m.icons || (s.Icons == "" && m.icons == "unicode")) {
+		(s.Icons == m.icons || (s.Icons == "" && m.icons == settings.DefaultIcons)) {
 		return
 	}
 	s.Language, s.Theme, s.Icons = language, m.themeName, m.icons

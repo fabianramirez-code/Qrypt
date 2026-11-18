@@ -40,6 +40,11 @@ func validTheme(s string) bool {
 	}
 	return false
 }
+
+// DefaultIcons is the icon set used when the settings file names none: folders
+// drawn as emoji, which need no extra font.
+const DefaultIcons = "emoji"
+
 func validIcons(s string) bool { return s == "unicode" || s == "emoji" || s == "nerd" }
 func validRole(s string) bool {
 	switch s {
@@ -79,7 +84,7 @@ func Load(path string) (Settings, error) {
 	if len(data) > maxSize || !utf8.Valid(data) {
 		return Settings{}, fmt.Errorf("invalid settings file")
 	}
-	s := Settings{Icons: "unicode"}
+	s := Settings{Icons: DefaultIcons}
 	valid := false
 	for _, line := range strings.Split(string(data), "\n") {
 		key, value, ok := strings.Cut(line, "=")
@@ -144,7 +149,7 @@ func Save(path string, s Settings) error {
 	if s.Theme != "" {
 		fmt.Fprintf(&b, "theme=%s\n", s.Theme)
 	}
-	if s.Icons != "" && s.Icons != "unicode" {
+	if s.Icons != "" && s.Icons != DefaultIcons {
 		fmt.Fprintf(&b, "icons=%s\n", s.Icons)
 	}
 	if s.Mirror != "" {

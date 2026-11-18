@@ -16,7 +16,7 @@ func TestIconSetting(t *testing.T) {
 		}
 		data, err := os.ReadFile(path)
 		want := "language=en\n"
-		if set != "unicode" {
+		if set != DefaultIcons {
 			want += "icons=" + set + "\n"
 		}
 		if err != nil || string(data) != want {
@@ -32,7 +32,7 @@ func TestIconSetting(t *testing.T) {
 			t.Fatal(err)
 		}
 		got, err := Load(path)
-		if err != nil || got.Icons != "unicode" || got.Language != "en" {
+		if err != nil || got.Icons != DefaultIcons || got.Language != "en" {
 			t.Fatalf("default %+v: %v", got, err)
 		}
 	}

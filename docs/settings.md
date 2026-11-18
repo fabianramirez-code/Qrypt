@@ -11,7 +11,7 @@ How Qrypt remembers the interface language and theme, and how a user edits color
 | Language | `en` or `es`                                                        |
 | Theme    | `green`, `violet`, `mono`, `contrast`, `auto`, `carbon`, or `custom` |
 | Colors   | For `custom` only: the hex value of each color role                 |
-| `icons`  | `unicode` (default), `emoji`, or `nerd`                              |
+| `icons`  | `emoji` (default), `unicode`, or `nerd`                                |
 | `mirror` | Optional folder path as typed on the Mirror screen                  |
 
 The file never holds a secret, a name, a value, a path to the working vault, or anything about the identity. The optional `mirror=<path>` line does reveal where the copy is. It is plain text, so the user can read it and Qrypt can show exactly what it saves.
@@ -62,7 +62,7 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 
 ## Icons
 
-The first screen previews the selected glyphs and cycles sets with I. `unicode` uses one-cell symbols available in ordinary Unicode fonts. `emoji` needs a terminal and font that render emoji (some occupy two cells). `nerd` needs a Nerd Font with the private-use icon glyphs. Qrypt cannot detect the terminal font; choose the set whose preview looks right. Missing or invalid `icons` defaults to `unicode`.
+The first screen previews the selected glyphs and cycles sets with I (emoji, nerd, unicode). `emoji` is the default, so spaces show as folders without installing anything; a terminal that draws emoji badly can switch to `unicode`, which uses one-cell symbols available in ordinary fonts. `emoji` needs a terminal and font that render emoji (some occupy two cells). `nerd` needs a Nerd Font with the private-use icon glyphs. Qrypt cannot detect the terminal font; choose the set whose preview looks right. Missing or invalid `icons` defaults to `unicode`.
 
 ## Custom colors
 

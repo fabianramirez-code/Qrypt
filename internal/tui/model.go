@@ -176,7 +176,7 @@ type Model struct {
 
 // New constructs a session for the explicit identity path without writing to disk.
 func New(path string, preferred Language) Model {
-	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", icons: "unicode", darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
+	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", icons: settings.DefaultIcons, darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
 	loaded, err := settings.Load(m.settingsPath)
 	m.settings = loaded
 	if loaded.Icons != "" {
@@ -399,12 +399,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case languageScreen:
 			if (v.Code == 'i' || v.Code == 'I') && v.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
 				switch m.icons {
-				case "unicode":
-					m.icons = "emoji"
 				case "emoji":
 					m.icons = "nerd"
-				default:
+				case "nerd":
 					m.icons = "unicode"
+				default:
+					m.icons = "emoji"
 				}
 				break
 			}

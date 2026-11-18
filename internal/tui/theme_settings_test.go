@@ -15,7 +15,7 @@ import (
 func TestIconSelectionPersistenceAndTyping(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity")
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
-	for i, set := range []string{"unicode", "emoji", "nerd", "unicode"} {
+	for i, set := range []string{"emoji", "nerd", "unicode", "emoji"} {
 		if !strings.Contains(framed(m), "Icons / Iconos: "+set) {
 			t.Fatalf("preview %s: %s", set, framed(m))
 		}
@@ -34,11 +34,11 @@ func TestIconSelectionPersistenceAndTyping(t *testing.T) {
 	m = key(t, m, 'I')
 	m = enter(t, m)
 	stored, err := settings.Load(filepath.Join(filepath.Dir(path), "settings"))
-	if err != nil || stored.Icons != "emoji" {
+	if err != nil || stored.Icons != "nerd" {
 		t.Fatalf("saved %+v %v", stored, err)
 	}
 	next := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
-	if !strings.Contains(framed(next), "Icons / Iconos: emoji") {
+	if !strings.Contains(framed(next), "Icons / Iconos: nerd") {
 		t.Fatal("not preselected", framed(next))
 	}
 	next = enter(t, next)

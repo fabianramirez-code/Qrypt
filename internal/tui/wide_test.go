@@ -71,7 +71,7 @@ func TestWideInspectorStatusAndClock(t *testing.T) {
 		m.now = func() time.Time { return now }
 		m.lastKey = now
 		view := framed(m)
-		for _, want := range []string{">_ QRYPT // Personal", "● PQC: ML-KEM-768 + X25519", "[2] Personal", "▸", "▾", "5:00"} {
+		for _, want := range []string{">_ QRYPT // Personal", "● PQC: ML-KEM-768 + X25519", "[2] Personal", IconGlyph(m.icons, "spaceClosed"), IconGlyph(m.icons, "spaceOpen"), "5:00"} {
 			if !strings.Contains(view, want) {
 				t.Errorf("missing %q: %s", want, view)
 			}
