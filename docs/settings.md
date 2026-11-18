@@ -11,6 +11,7 @@ How Qrypt remembers the interface language and theme, and how a user edits color
 | Language | `en` or `es`                                                        |
 | Theme    | `green`, `violet`, `mono`, `contrast`, `auto`, `carbon`, or `custom` |
 | Colors   | For `custom` only: the hex value of each color role                 |
+| `icons`  | `unicode` (default), `emoji`, or `nerd`                              |
 | `mirror` | Optional folder path as typed on the Mirror screen                  |
 
 The file never holds a secret, a name, a value, a path to the working vault, or anything about the identity. The optional `mirror=<path>` line does reveal where the copy is. It is plain text, so the user can read it and Qrypt can show exactly what it saves.
@@ -54,8 +55,14 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 
 - Every built-in theme keeps text at a contrast ratio of at least 4.5:1 against its background, and a test checks it. `carbon` also meets this ratio against its panel surface.
 - `surface` is a theme property for painting panels, not an editable color role. The other themes do not paint a surface or set the terminal background.
+- `info` (headers, footer keys, inspector title), `special` (chips and value label), and `muted` (secondary text) are theme properties, not editable roles and not stored by `custom`. In the five existing themes they follow accent, accent, and dim; `carbon` uses `#8be9fd`, `#bd93f9`, and `#8b92a5`. `raised` is an optional background level (`#2A2D34` in `carbon`) for selections, chips and keys; the five existing themes do not paint it.
+- Every text color has at least 4.5:1 contrast on Background and Surface. On Raised, only Text, Accent, Info, Special, Success and Warning are drawn, each at least 4.5:1; Error, Dim and Muted are never drawn there. A selected problem row uses Error with an accent bar but no Raised background; a selected row's count uses Text.
 - Meaning never depends on color alone: errors and successes also carry words, and the selected row also carries the `>` marker.
 - When the terminal has no color, Qrypt behaves as `mono`.
+
+## Icons
+
+The first screen previews the selected glyphs and cycles sets with I. `unicode` uses one-cell symbols available in ordinary Unicode fonts. `emoji` needs a terminal and font that render emoji (some occupy two cells). `nerd` needs a Nerd Font with the private-use icon glyphs. Qrypt cannot detect the terminal font; choose the set whose preview looks right. Missing or invalid `icons` defaults to `unicode`.
 
 ## Custom colors
 
@@ -73,7 +80,7 @@ Language and theme are chosen on the same first screen, as today but with a seco
 - LANGUAGE and THEME appear in side-by-side bordered panels. Up and Down move within the focused panel; Left and Right or Tab switch panels. Both selections keep a `>` marker, and only the focused selection is highlighted. Enter continues. Esc quits with status 1.
 - The theme preview is live: moving in the theme list recolors the screen at once.
 - The saved choice is selected in advance. Without a settings file, the language comes from the system and the theme is `green`.
-- Continuing saves the language and theme only if they differ from what is stored.
+- Continuing saves the language, theme and icons only if they differ from what is stored.
 
 ## What does not change
 

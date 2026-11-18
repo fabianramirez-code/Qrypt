@@ -91,7 +91,7 @@ func (m Model) logoView() string {
 
 func (m Model) bottomBar() string {
 	if m.screen == languageScreen {
-		return m.styles.hint.Render("↑/↓: move / mover   ←/→/Tab: list / lista\nEnter: select / elegir   Esc: quit / salir")
+		return m.styles.hint.Render("↑/↓: move / mover   ←/→/Tab: list / lista   I: icons\nEnter: select / elegir   Esc: quit / salir")
 	}
 	if m.language == Spanish {
 		return m.styles.hint.Render("Ctrl+C: salir")

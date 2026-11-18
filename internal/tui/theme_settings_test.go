@@ -12,6 +12,43 @@ import (
 	"github.com/fabianramirez-code/qrypt/internal/tui/theme"
 )
 
+func TestIconSelectionPersistenceAndTyping(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "identity")
+	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
+	for i, set := range []string{"unicode", "emoji", "nerd", "unicode"} {
+		if !strings.Contains(framed(m), "Icons / Iconos: "+set) {
+			t.Fatalf("preview %s: %s", set, framed(m))
+		}
+		if i < 3 {
+			m = key(t, m, 'i')
+		}
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(path), "settings")); !os.IsNotExist(err) {
+		t.Fatalf("cycling wrote: %v", err)
+	}
+	m = enter(t, m)
+	if _, err := os.Stat(filepath.Join(filepath.Dir(path), "settings")); !os.IsNotExist(err) {
+		t.Fatalf("unchanged wrote: %v", err)
+	}
+	m = send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
+	m = key(t, m, 'I')
+	m = enter(t, m)
+	stored, err := settings.Load(filepath.Join(filepath.Dir(path), "settings"))
+	if err != nil || stored.Icons != "emoji" {
+		t.Fatalf("saved %+v %v", stored, err)
+	}
+	next := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})
+	if !strings.Contains(framed(next), "Icons / Iconos: emoji") {
+		t.Fatal("not preselected", framed(next))
+	}
+	next = enter(t, next)
+	next.screen = confirmPassphrase
+	next = typeText(t, next, "I")
+	if next.input != "I" {
+		t.Fatalf("text field ate I: %q", next.input)
+	}
+}
+
 func TestSettingsSelectionAndPersistence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity")
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 60, Height: 20})

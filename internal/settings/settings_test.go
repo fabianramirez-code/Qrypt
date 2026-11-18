@@ -8,6 +8,39 @@ import (
 	"testing"
 )
 
+func TestIconSetting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings")
+	for _, set := range []string{"unicode", "emoji", "nerd"} {
+		if err := Save(path, Settings{Language: "en", Icons: set}); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		want := "language=en\n"
+		if set != "unicode" {
+			want += "icons=" + set + "\n"
+		}
+		if err != nil || string(data) != want {
+			t.Fatalf("output %q: %v", data, err)
+		}
+		got, err := Load(path)
+		if err != nil || got.Icons != set {
+			t.Fatalf("roundtrip %+v: %v", got, err)
+		}
+	}
+	for _, content := range []string{"language=en\nunknown=value\n", "language=en\nicons=invalid\nunknown=value\n"} {
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Load(path)
+		if err != nil || got.Icons != "unicode" || got.Language != "en" {
+			t.Fatalf("default %+v: %v", got, err)
+		}
+	}
+	if err := Save(path, Settings{Icons: "bogus"}); err == nil {
+		t.Fatal("invalid icons accepted")
+	}
+}
+
 func TestMirrorSetting(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings")
 	got, err := Load(path)

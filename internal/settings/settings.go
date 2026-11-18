@@ -18,6 +18,7 @@ const maxSize = 4 * 1024
 type Settings struct {
 	Language string
 	Theme    string
+	Icons    string
 	Mirror   string
 	Colors   map[string]string
 }
@@ -39,6 +40,7 @@ func validTheme(s string) bool {
 	}
 	return false
 }
+func validIcons(s string) bool { return s == "unicode" || s == "emoji" || s == "nerd" }
 func validRole(s string) bool {
 	switch s {
 	case "accent", "text", "dim", "success", "error", "warning", "border":
@@ -77,7 +79,7 @@ func Load(path string) (Settings, error) {
 	if len(data) > maxSize || !utf8.Valid(data) {
 		return Settings{}, fmt.Errorf("invalid settings file")
 	}
-	var s Settings
+	s := Settings{Icons: "unicode"}
 	valid := false
 	for _, line := range strings.Split(string(data), "\n") {
 		key, value, ok := strings.Cut(line, "=")
@@ -90,6 +92,9 @@ func Load(path string) (Settings, error) {
 			valid = true
 		case key == "theme" && validTheme(value):
 			s.Theme = value
+			valid = true
+		case key == "icons" && validIcons(value):
+			s.Icons = value
 			valid = true
 		case key == "mirror":
 			if value != "" && !strings.ContainsAny(value, "\r\x00") {
@@ -118,6 +123,9 @@ func Save(path string, s Settings) error {
 	if s.Theme != "" && !validTheme(s.Theme) {
 		return fmt.Errorf("invalid theme")
 	}
+	if s.Icons != "" && !validIcons(s.Icons) {
+		return fmt.Errorf("invalid icons")
+	}
 	if strings.ContainsAny(s.Mirror, "\r\n\x00") {
 		return fmt.Errorf("invalid mirror path")
 	}
@@ -135,6 +143,9 @@ func Save(path string, s Settings) error {
 	}
 	if s.Theme != "" {
 		fmt.Fprintf(&b, "theme=%s\n", s.Theme)
+	}
+	if s.Icons != "" && s.Icons != "unicode" {
+		fmt.Fprintf(&b, "icons=%s\n", s.Icons)
 	}
 	if s.Mirror != "" {
 		fmt.Fprintf(&b, "mirror=%s\n", s.Mirror)

@@ -8,10 +8,11 @@ import (
 	"math"
 )
 
-// Theme contains seven foreground roles, a background, and an optional painted panel surface.
+// Theme contains seven editable foreground roles and additional display properties.
 type Theme struct {
 	Accent, Text, Dim, Success, Error, Warning, Border color.RGBA
-	Background, Surface                                color.RGBA
+	Info, Special, Muted                               color.RGBA
+	Background, Surface, Raised                        color.RGBA
 }
 
 // Lookup returns a named role's color.
@@ -60,6 +61,7 @@ func ByName(name string, dark bool) (Theme, bool) {
 			Accent: mustHex("#50FA7B"), Success: mustHex("#50FA7B"),
 			Warning: mustHex("#FFB86C"), Text: mustHex("#F8F8F2"),
 			Dim: mustHex("#a3a3a3"), Border: mustHex("#a3a3a3"), Error: mustHex("#FF5555"),
+			Info: mustHex("#8be9fd"), Special: mustHex("#bd93f9"), Muted: mustHex("#8b92a5"), Raised: mustHex("#2A2D34"),
 		}, true
 	}
 	if name == "auto" {
@@ -114,6 +116,7 @@ func ByName(name string, dark bool) (Theme, bool) {
 			t.Border = t.Text
 		}
 	}
+	t.Info, t.Special, t.Muted = t.Accent, t.Accent, t.Dim
 	return t, true
 }
 
@@ -141,6 +144,8 @@ func Custom(base Theme, colors map[string]string) Theme {
 			base.Border = c
 		}
 	}
+	base.Info, base.Special, base.Muted = base.Accent, base.Accent, base.Dim
+	base.Surface, base.Raised = color.RGBA{}, color.RGBA{}
 	return base
 }
 

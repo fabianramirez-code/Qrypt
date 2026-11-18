@@ -115,6 +115,7 @@ type Model struct {
 	mirrorWarning   bool
 	darkBackground  bool
 	themeName       string
+	icons           string
 	styles          styles
 	themeList       bool
 	themeIndex      int
@@ -175,9 +176,12 @@ type Model struct {
 
 // New constructs a session for the explicit identity path without writing to disk.
 func New(path string, preferred Language) Model {
-	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
+	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", icons: "unicode", darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
 	loaded, err := settings.Load(m.settingsPath)
 	m.settings = loaded
+	if loaded.Icons != "" {
+		m.icons = loaded.Icons
+	}
 	m.settingsError = err != nil
 	if m.settings.Language == "es" {
 		m.language = Spanish
@@ -393,6 +397,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch m.screen {
 		case languageScreen:
+			if (v.Code == 'i' || v.Code == 'I') && v.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
+				switch m.icons {
+				case "unicode":
+					m.icons = "emoji"
+				case "emoji":
+					m.icons = "nerd"
+				default:
+					m.icons = "unicode"
+				}
+				break
+			}
 			switch v.Code {
 			case tea.KeyEsc:
 				return m, tea.Quit
@@ -629,7 +644,7 @@ func (m *Model) fail(err error) {
 
 type styles struct {
 	text, title, hint, secret, selected, error, success, warning, border lipgloss.Style
-	accent, dim                                                          lipgloss.Style
+	accent, dim, info, special, muted, raised                            lipgloss.Style
 	palette                                                              theme.Theme
 }
 
@@ -646,7 +661,8 @@ func (m *Model) refreshStyles() {
 		selected: lipgloss.NewStyle().Reverse(true),
 		error:    lipgloss.NewStyle().Bold(true), success: lipgloss.NewStyle().Bold(true),
 		warning: lipgloss.NewStyle().Bold(true), border: lipgloss.NewStyle(),
-		accent: lipgloss.NewStyle().Bold(true), dim: lipgloss.NewStyle().Faint(true), palette: palette,
+		accent: lipgloss.NewStyle().Bold(true), dim: lipgloss.NewStyle().Faint(true),
+		info: lipgloss.NewStyle(), special: lipgloss.NewStyle(), muted: lipgloss.NewStyle(), raised: lipgloss.NewStyle(), palette: palette,
 	}
 	if m.themeName != "mono" {
 		m.styles.text = m.styles.text.Foreground(lipgloss.Color(hexColor(palette.Text)))
@@ -659,6 +675,12 @@ func (m *Model) refreshStyles() {
 		m.styles.border = m.styles.border.Foreground(lipgloss.Color(hexColor(palette.Border)))
 		m.styles.accent = m.styles.accent.Foreground(lipgloss.Color(hexColor(palette.Accent)))
 		m.styles.dim = m.styles.dim.Foreground(lipgloss.Color(hexColor(palette.Dim)))
+		m.styles.info = m.styles.info.Foreground(lipgloss.Color(hexColor(palette.Info)))
+		m.styles.special = m.styles.special.Foreground(lipgloss.Color(hexColor(palette.Special)))
+		m.styles.muted = m.styles.muted.Foreground(lipgloss.Color(hexColor(palette.Muted)))
+		if palette.Raised.A != 0 {
+			m.styles.raised = m.styles.raised.Background(lipgloss.Color(hexColor(palette.Raised)))
+		}
 		m.styles.secret = m.styles.secret.BorderForeground(lipgloss.Color(hexColor(palette.Border)))
 	}
 }

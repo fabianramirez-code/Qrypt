@@ -71,13 +71,23 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 		if v.BackgroundColor != nil {
 			t.Errorf("%s changed terminal background", name)
 		}
-		want := map[string]string{
-			"green": "bec835ea8d9a171ae2cfc0cf705386ad7590bd3a13083933f310d10fcbe7b388",
-			"mono":  "9f7dff29ef9de8c8b9f4925807425e8118b6d4321a3334b32c811edfa91af60c",
+		// Only the first screen has a new line and hint; welcome is unchanged.
+		wantFirst := map[string]string{
+			"green": "83349e45933bf5859b92c0897181fc6d463288abb1df214d1a837162f9b1a93b",
+			"mono":  "56d76a4cc885cd35e66d8ae3adcdc2e960536d1ad2237491cee9911b6c385ee8",
 		}[name]
-		if got := fmt.Sprintf("%x", sha256.Sum256([]byte(v.Content))); got != want {
-			t.Errorf("%s view changed: %s", name, got)
+		if got := fmt.Sprintf("%x", sha256.Sum256([]byte(v.Content))); got != wantFirst {
+			t.Errorf("%s first screen changed: %s", name, got)
 		}
+		m.screen = welcome
+		wantWelcome := map[string]string{
+			"green": "2d0d44808623e1abfcffb17ab3711f1de671b7bda2605744f4aa4969cfd6c7f6",
+			"mono":  "60f4d8efc7dc6d287865fa78d9b73a28c94aae8b6f88aecb2ea5912f4f195031",
+		}[name]
+		if got := fmt.Sprintf("%x", sha256.Sum256([]byte(m.View().Content))); got != wantWelcome {
+			t.Errorf("%s welcome screen changed: %s", name, got)
+		}
+		m.screen = languageScreen
 	}
 	m.themeName = "carbon"
 	m.refreshStyles()

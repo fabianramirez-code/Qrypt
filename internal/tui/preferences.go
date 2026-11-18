@@ -26,10 +26,11 @@ func (m *Model) savePreferences() {
 		language = "es"
 	}
 	if (s.Language == language || s.Language == "" && m.language == m.initialLanguage) &&
-		(s.Theme == m.themeName || s.Theme == "" && m.themeName == "green") {
+		(s.Theme == m.themeName || s.Theme == "" && m.themeName == "green") &&
+		(s.Icons == m.icons || (s.Icons == "" && m.icons == "unicode")) {
 		return
 	}
-	s.Language, s.Theme = language, m.themeName
+	s.Language, s.Theme, s.Icons = language, m.themeName, m.icons
 	if err := settings.Save(m.settingsPath, s); err != nil {
 		m.message = err.Error()
 		return
@@ -65,6 +66,11 @@ func (m Model) languageView() string {
 	if m.settingsError {
 		rows = append(rows, "Settings could not be read / No se pudieron leer los ajustes.")
 	}
+	glyphs := make([]string, 0, 8)
+	for _, name := range []string{"spaceClosed", "spaceOpen", "item", "locked", "reveal", "copy", "problem", "verified"} {
+		glyphs = append(glyphs, IconGlyph(m.icons, name))
+	}
+	rows = append(rows, "Icons / Iconos: "+m.icons+"  "+strings.Join(glyphs, " "))
 	return strings.Join(rows, "\n")
 }
 

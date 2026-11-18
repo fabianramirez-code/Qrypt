@@ -93,6 +93,7 @@ func TestCarbonPaletteAndSurface(t *testing.T) {
 		Accent: mustHex("#50FA7B"), Success: mustHex("#50FA7B"),
 		Warning: mustHex("#FFB86C"), Text: mustHex("#F8F8F2"),
 		Dim: mustHex("#a3a3a3"), Border: mustHex("#a3a3a3"), Error: mustHex("#FF5555"),
+		Info: mustHex("#8be9fd"), Special: mustHex("#bd93f9"), Muted: mustHex("#8b92a5"), Raised: mustHex("#2A2D34"),
 	}
 	for _, dark := range []bool{false, true} {
 		got, ok := ByName("carbon", dark)
@@ -118,6 +119,49 @@ func TestCarbonPaletteAndSurface(t *testing.T) {
 	}
 	if _, ok := want.Lookup("surface"); ok {
 		t.Error("surface became an editable role")
+	}
+}
+
+func TestAdditionalPaletteProperties(t *testing.T) {
+	for _, name := range Names() {
+		for _, dark := range []bool{false, true} {
+			p, _ := ByName(name, dark)
+			if name == "carbon" {
+				if p.Info != mustHex("#8be9fd") || p.Special != mustHex("#bd93f9") || p.Muted != mustHex("#8b92a5") || p.Raised != mustHex("#2A2D34") {
+					t.Errorf("carbon: %+v", p)
+				}
+			} else if p.Info != p.Accent || p.Special != p.Accent || p.Muted != p.Dim || p.Raised != (color.RGBA{}) {
+				t.Errorf("%s dark=%v: %+v", name, dark, p)
+			}
+			backgrounds := []color.RGBA{p.Background}
+			if name == "carbon" {
+				backgrounds = append(backgrounds, p.Surface)
+			}
+			for _, bg := range backgrounds {
+				for _, c := range []color.RGBA{p.Accent, p.Text, p.Dim, p.Success, p.Error, p.Warning, p.Info, p.Special, p.Muted} {
+					if Contrast(c, bg) < 4.5 {
+						t.Errorf("%s dark=%v color=%v background=%v contrast=%v", name, dark, c, bg, Contrast(c, bg))
+					}
+				}
+			}
+			if name == "carbon" {
+				for _, c := range []color.RGBA{p.Text, p.Accent, p.Info, p.Special, p.Success, p.Warning} {
+					if Contrast(c, p.Raised) < 4.5 {
+						t.Errorf("%s dark=%v color=%v raised contrast=%v", name, dark, c, Contrast(c, p.Raised))
+					}
+				}
+			}
+		}
+	}
+	base, _ := ByName("carbon", true)
+	custom := Custom(base, map[string]string{"accent": "#ffffff", "dim": "#aaaaaa", "info": "#ffffff", "special": "#ffffff", "muted": "#ffffff", "raised": "#ffffff"})
+	if custom.Info != custom.Accent || custom.Special != custom.Accent || custom.Muted != custom.Dim || custom.Raised != (color.RGBA{}) || custom.Surface != (color.RGBA{}) {
+		t.Errorf("custom: %+v", custom)
+	}
+	for _, role := range []string{"info", "special", "muted", "raised"} {
+		if _, ok := custom.Lookup(role); ok {
+			t.Errorf("%s editable", role)
+		}
 	}
 }
 
