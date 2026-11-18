@@ -38,6 +38,13 @@ func addVaultItem(t *testing.T, m Model, name, value string) Model {
 	m = key(t, m, 'a')
 	m = send(t, m, tea.PasteMsg{Content: name})
 	m = enter(t, m)
+	m = typeText(t, m, "value")
+	m = enter(t, m)
+	if m.language == Spanish {
+		m = key(t, m, 'o')
+	} else {
+		m = key(t, m, 'h')
+	}
 	if !strings.Contains(plain(m), "Value") && !strings.Contains(plain(m), "Valor") {
 		t.Fatalf("not in value field: %q", plain(m))
 	}
@@ -108,7 +115,7 @@ func TestVaultAddShowEditAndDelete(t *testing.T) {
 	dir := filepath.Join(filepath.Dir(path), "vault")
 	m = addVaultItem(t, m, "account", "private-token")
 	m = enter(t, m)
-	if !strings.Contains(plain(m), "*************") || strings.Contains(plain(m), "private-token") {
+	if !strings.Contains(plain(m), "••••••") || strings.Contains(plain(m), "private-token") {
 		t.Fatalf("item value not hidden: %q", plain(m))
 	}
 	m = key(t, m, tea.KeyTab)
@@ -125,7 +132,7 @@ func TestVaultAddShowEditAndDelete(t *testing.T) {
 		t.Fatal("list leaked value")
 	}
 	m = enter(t, m)
-	if strings.Contains(plain(m), "private-token") || !strings.Contains(plain(m), "*************") {
+	if strings.Contains(plain(m), "private-token") || !strings.Contains(plain(m), "••••••") {
 		t.Fatal("reopened item did not hide value")
 	}
 	m = key(t, m, 'e')
@@ -173,9 +180,9 @@ func TestVaultRejectedInputAndPaste(t *testing.T) {
 			dir := filepath.Join(filepath.Dir(path), "vault")
 			m = addVaultItem(t, m, "existing", "first-value")
 			baseline := vaultFiles(t, dir)
-			invalid, duplicate, oversized, lineBreak := "That name is not valid. Use 1 to 255 characters, with no control characters.", "An item with that name already exists.", "That value is too large. The limit is 64 KiB.", "Values are one line. Remove the line break."
+			invalid, duplicate, oversized, lineBreak := "That name is not valid. Use 1 to 255 characters, with no control characters.", "An item with that name already exists.", "That item is too large. The limit is 65,788 bytes.", "Values are one line. Remove the line break."
 			if language == Spanish {
-				invalid, duplicate, oversized, lineBreak = "Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.", "Ya existe un elemento con ese nombre.", "Ese valor es demasiado grande. El límite es 64 KiB.", "Los valores son de una línea. Quita el salto de línea."
+				invalid, duplicate, oversized, lineBreak = "Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.", "Ya existe un elemento con ese nombre.", "Ese elemento es demasiado grande. El límite es 65.788 bytes.", "Los valores son de una línea. Quita el salto de línea."
 			}
 			for _, tc := range []struct{ name, message string }{{"", invalid}, {"bad\tname", invalid}, {strings.Repeat("x", 256), invalid}, {"existing", duplicate}} {
 				m = key(t, m, 'a')
@@ -193,19 +200,35 @@ func TestVaultRejectedInputAndPaste(t *testing.T) {
 				t.Fatal("plain name paste rejected")
 			}
 			m = enter(t, m)
+			m = typeText(t, m, "value")
+			m = enter(t, m)
+			if language == Spanish {
+				m = key(t, m, 'o')
+			} else {
+				m = key(t, m, 'h')
+			}
 			m = send(t, m, tea.PasteMsg{Content: "line\nbreak"})
 			if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), lineBreak) {
 				t.Fatalf("line break message: %q", plain(m))
 			}
 			sameVaultFiles(t, dir, baseline)
-			m = send(t, m, tea.PasteMsg{Content: strings.Repeat("v", 65537)})
+			m = send(t, m, tea.PasteMsg{Content: strings.Repeat("v", 66000)})
 			m = enter(t, m)
 			if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), oversized) {
 				t.Fatalf("oversized value message missing")
 			}
 			sameVaultFiles(t, dir, baseline)
 			m = key(t, m, tea.KeyEsc)
-			m = enter(t, m) // return to the value field with the name preserved
+			m = key(t, m, tea.KeyEsc)
+			m = key(t, m, tea.KeyEsc)
+			m = enter(t, m) // title preserved; re-enter field steps
+			m = typeText(t, m, "value")
+			m = enter(t, m)
+			if language == Spanish {
+				m = key(t, m, 'o')
+			} else {
+				m = key(t, m, 'h')
+			}
 			m = send(t, m, tea.PasteMsg{Content: "pasted-value"})
 			m = enter(t, m)
 			if !strings.Contains(plain(m), "pasted-name") || strings.Contains(plain(m), "pasted-value") {
@@ -227,6 +250,14 @@ func TestVaultExitAndMinimumWidth(t *testing.T) {
 			m = send(t, m, tea.PasteMsg{Content: strings.Repeat("N", 255)})
 			requireVaultView(t, m)
 			m = enter(t, m)
+			check("add label", m)
+			m = typeText(t, m, "value")
+			m = enter(t, m)
+			if language == Spanish {
+				m = key(t, m, 'o')
+			} else {
+				m = key(t, m, 'h')
+			}
 			check("add value", m)
 			m = send(t, m, tea.PasteMsg{Content: strings.Repeat("v", 80)})
 			requireVaultView(t, m)

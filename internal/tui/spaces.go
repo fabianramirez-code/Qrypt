@@ -57,7 +57,7 @@ func (m *Model) refreshSpaces() {
 			m.failVault(err)
 			return
 		}
-		items, err := scope.List()
+		items, err := scope.Entries()
 		if err != nil {
 			m.failVault(err)
 			return
@@ -111,6 +111,7 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.openProblem()
 		case v.Code == tea.KeyEnter && m.vlt != nil:
 			m.cursor = 0
+			m.folderPath = nil
 			m.message = ""
 			m.screen = vaultList
 			m.refresh()

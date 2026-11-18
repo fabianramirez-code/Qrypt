@@ -3,7 +3,6 @@ package tui
 import (
 	"errors"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -24,7 +23,7 @@ func stateFile(identityPath string) string { return filepath.Join(filepath.Dir(i
 
 func isVaultScreen(s screen) bool {
 	switch s {
-	case vaultList, vaultItem, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, spacesList, spacesAdd, spacesRename, spacesDelete, problemScreen, mirrorScreen, mirrorEdit, mirrorStop:
+	case vaultList, vaultItem, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, folderName, fieldLabel, fieldKind, fieldNote, vaultRename, fieldDelete, spacesList, spacesAdd, spacesRename, spacesDelete, problemScreen, mirrorScreen, mirrorEdit, mirrorStop:
 		return true
 	}
 	return false
@@ -93,6 +92,10 @@ func (m *Model) closeVault() tea.Cmd {
 	clear(m.itemValue)
 	m.itemValue = nil
 	m.names = nil
+	m.clearItem()
+	m.folderPath = nil
+	m.folderRows = nil
+	m.entries = nil
 	return cmd
 }
 
@@ -113,16 +116,18 @@ func (m *Model) clearCopied() tea.Cmd {
 }
 
 func (m *Model) copyItem(name string) tea.Cmd {
-	value := m.itemValue
 	if m.screen == vaultList {
-		var err error
-		value, err = m.vlt.Get(name)
-		if err != nil {
-			m.failVault(err)
-			return nil
+		for _, row := range m.folderRows {
+			if row.id != "" && row.name == name {
+				return m.copyEntry(row.id)
+			}
 		}
-		defer clear(value)
+		return nil
 	}
+	return m.copyValueOf(m.itemData.Fields[m.fieldCursor].Value)
+}
+
+func (m *Model) copyValueOf(value []byte) tea.Cmd {
 	text := string(value)
 	err := m.copyFn(text)
 	fallback := errors.Is(err, clipboard.ErrUnavailable)
@@ -141,39 +146,22 @@ func (m *Model) copyItem(name string) tea.Cmd {
 	return tick
 }
 
-// refresh reloads the names, keeping the cursor inside the list.
-func (m *Model) refresh() {
-	names, err := m.vlt.List()
-	if err != nil {
-		m.failVault(err)
-		return
-	}
-	m.names = names
-	m.cursor = min(m.cursor, max(len(names)-1, 0))
-}
-
 func plainKey(v tea.KeyPressMsg, letter rune) bool {
 	return (v.Code == letter || v.Code == letter-'a'+'A') && v.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0
 }
 
 func (m *Model) enterItem(name string) {
-	value, err := m.vlt.Get(name)
-	if err != nil {
-		m.failVault(err)
-		return
+	for _, row := range m.folderRows {
+		if row.id != "" && row.name == name {
+			m.enterEntry(row)
+			return
+		}
 	}
-	m.item, m.itemValue = name, value
-	m.visible = false
-	m.message = ""
-	m.screen = vaultItem
 }
 
 func (m *Model) leaveItem() {
-	clear(m.itemValue)
-	m.itemValue = nil
-	m.visible = false
-	m.input = ""
-	m.message = ""
+	m.clearItem()
+	m.input, m.message = "", ""
 	m.screen = vaultList
 }
 
@@ -186,123 +174,141 @@ func (m *Model) writeError(err error) {
 	case errors.Is(err, vault.ErrNameExists):
 		m.message = t.nameExists
 	case errors.Is(err, vault.ErrValueTooLarge):
-		m.message = t.valueTooLarge
+		m.message = t.itemTooLarge
+	case errors.Is(err, vault.ErrLabelExists):
+		m.message = t.labelExists
+	case errors.Is(err, vault.ErrTooManyFields):
+		m.message = t.tooManyFields
+	case errors.Is(err, vault.ErrPathTooLong):
+		m.message = t.pathTooLong
+	case errors.Is(err, vault.ErrInvalidField):
+		m.message = t.lineBreak
 	default:
 		m.failVault(err)
 	}
 }
 
-func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch m.screen {
-	case vaultList:
-		switch {
-		case v.Code == tea.KeyEsc:
-			m.screen = spacesList
-			m.message = ""
-			m.refreshSpaces()
-		case v.Code == tea.KeyUp:
-			m.cursor = max(m.cursor-1, 0)
-		case v.Code == tea.KeyDown:
-			m.cursor = min(m.cursor+1, max(len(m.names)-1, 0))
-		case v.Code == tea.KeyEnter && len(m.names) > 0:
-			m.enterItem(m.names[m.cursor])
-		case plainKey(v, 'a'):
-			m.input, m.message, m.visible = "", "", false
-			m.screen = vaultAddName
-		case plainKey(v, 'c') && len(m.names) > 0:
-			return m, m.copyItem(m.selectedName())
-		case plainKey(v, 'd') && len(m.names) > 0:
-			m.screen = vaultDelete
-		}
-	case vaultItem:
-		switch {
-		case v.Code == tea.KeyEsc:
-			m.leaveItem()
-		case v.Code == tea.KeyTab:
-			m.visible = !m.visible
-		case plainKey(v, 'c'):
-			return m, m.copyItem(m.item)
-		case plainKey(v, 'e'):
-			m.input, m.message, m.visible = "", "", false
-			m.screen = vaultEdit
-		}
-	case vaultAddName:
-		switch v.Code {
-		case tea.KeyEsc:
-			m.input, m.message = "", ""
-			m.screen = vaultList
-		case tea.KeyEnter:
+/*
+legacy vaultKey replaced by folderKey and fieldsKey.
+
+	func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+		switch m.screen {
+		case vaultList:
 			switch {
-			case vault.ValidateName(m.input) != nil:
-				m.message = m.language.text().invalidName
-			case slices.Contains(m.names, m.input):
-				m.message = m.language.text().nameExists
+			case v.Code == tea.KeyEsc:
+				m.screen = spacesList
+				m.message = ""
+				m.refreshSpaces()
+			case v.Code == tea.KeyUp:
+				m.cursor = max(m.cursor-1, 0)
+			case v.Code == tea.KeyDown:
+				m.cursor = min(m.cursor+1, max(len(m.names)-1, 0))
+			case v.Code == tea.KeyEnter && len(m.names) > 0:
+				m.enterItem(m.names[m.cursor])
+			case plainKey(v, 'a'):
+				m.input, m.message, m.visible = "", "", false
+				m.screen = vaultAddName
+			case plainKey(v, 'c') && len(m.names) > 0:
+				return m, m.copyItem(m.selectedName())
+			case plainKey(v, 'd') && len(m.names) > 0:
+				m.screen = vaultDelete
+			}
+		case vaultItem:
+			switch {
+			case v.Code == tea.KeyEsc:
+				m.leaveItem()
+			case v.Code == tea.KeyTab:
+				m.visible = !m.visible
+			case plainKey(v, 'c'):
+				return m, m.copyItem(m.item)
+			case plainKey(v, 'e'):
+				m.input, m.message, m.visible = "", "", false
+				m.screen = vaultEdit
+			}
+		case vaultAddName:
+			switch v.Code {
+			case tea.KeyEsc:
+				m.input, m.message = "", ""
+				m.screen = vaultList
+			case tea.KeyEnter:
+				switch {
+				case vault.ValidateName(m.input) != nil:
+					m.message = m.language.text().invalidName
+				case slices.Contains(m.names, m.input):
+					m.message = m.language.text().nameExists
+				default:
+					m.newName, m.input, m.message = m.input, "", ""
+					m.screen = vaultAddValue
+				}
 			default:
-				m.newName, m.input, m.message = m.input, "", ""
-				m.screen = vaultAddValue
+				m.editInput(v)
 			}
-		default:
-			m.editInput(v)
-		}
-	case vaultAddValue:
-		switch v.Code {
-		case tea.KeyEsc:
-			m.input, m.message, m.visible = m.newName, "", false
-			m.screen = vaultAddName
-		case tea.KeyTab:
-			m.visible = !m.visible
-		case tea.KeyEnter:
-			if err := m.vlt.Put(m.newName, []byte(m.input)); err != nil {
-				m.writeError(err)
-				return m, nil
+		case vaultAddValue:
+			switch v.Code {
+			case tea.KeyEsc:
+				m.input, m.message, m.visible = m.newName, "", false
+				m.screen = vaultAddName
+			case tea.KeyTab:
+				m.visible = !m.visible
+			case tea.KeyEnter:
+				if err := m.vlt.Put(m.newName, []byte(m.input)); err != nil {
+					m.writeError(err)
+					return m, nil
+				}
+				name := m.newName
+				m.input, m.newName, m.message, m.visible = "", "", "", false
+				m.screen = vaultList
+				m.refresh()
+				if m.vlt != nil {
+					m.cursor = max(slices.Index(m.names, name), 0)
+					m.mirrorUpdate()
+				}
+			default:
+				m.editInput(v)
 			}
-			name := m.newName
-			m.input, m.newName, m.message, m.visible = "", "", "", false
-			m.screen = vaultList
-			m.refresh()
-			if m.vlt != nil {
-				m.cursor = max(slices.Index(m.names, name), 0)
+		case vaultEdit:
+			switch v.Code {
+			case tea.KeyEsc:
+				m.input, m.message, m.visible = "", "", false
+				m.screen = vaultItem
+			case tea.KeyTab:
+				m.visible = !m.visible
+			case tea.KeyEnter:
+				if err := m.vlt.Update(m.item, []byte(m.input)); err != nil {
+					m.writeError(err)
+					return m, nil
+				}
+				clear(m.itemValue)
+				m.itemValue = []byte(m.input)
+				m.input, m.message, m.visible = "", "", false
+				m.screen = vaultItem
 				m.mirrorUpdate()
+			default:
+				m.editInput(v)
 			}
-		default:
-			m.editInput(v)
-		}
-	case vaultEdit:
-		switch v.Code {
-		case tea.KeyEsc:
-			m.input, m.message, m.visible = "", "", false
-			m.screen = vaultItem
-		case tea.KeyTab:
-			m.visible = !m.visible
-		case tea.KeyEnter:
-			if err := m.vlt.Update(m.item, []byte(m.input)); err != nil {
-				m.writeError(err)
-				return m, nil
+		case vaultDelete:
+			if plainKey(v, 'y') {
+				if err := m.vlt.Delete(m.selectedName()); err != nil {
+					m.failVault(err)
+					return m, nil
+				}
+				m.refresh()
+				if m.vlt != nil {
+					m.mirrorUpdate()
+				}
 			}
-			clear(m.itemValue)
-			m.itemValue = []byte(m.input)
-			m.input, m.message, m.visible = "", "", false
-			m.screen = vaultItem
-			m.mirrorUpdate()
-		default:
-			m.editInput(v)
-		}
-	case vaultDelete:
-		if plainKey(v, 'y') {
-			if err := m.vlt.Delete(m.selectedName()); err != nil {
-				m.failVault(err)
-				return m, nil
-			}
-			m.refresh()
 			if m.vlt != nil {
-				m.mirrorUpdate()
+				m.screen = vaultList
 			}
 		}
-		if m.vlt != nil {
-			m.screen = vaultList
-		}
+		return m, nil
 	}
-	return m, nil
+*/
+func (m Model) vaultKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.screen == vaultList {
+		return m.folderKey(v)
+	}
+	return m.fieldsKey(v)
 }
 
 // vaultPaste accepts pasted text into a vault field, unless it breaks a line.
@@ -335,6 +341,7 @@ func (m Model) itemValueView(t texts) string {
 	return wrapWidth(hide(string(m.itemValue), m.visible), m.innerWidth())
 }
 
+/* legacy listView retained only for backwards-compatible wide rendering.
 func (m Model) listView(t texts) string {
 	title, hint := m.styles.title, m.styles.hint
 	if len(m.names) == 0 {
@@ -357,6 +364,7 @@ func (m Model) listView(t texts) string {
 	return title.Render(m.spaceTitle()) + "\n" + strings.Join(lines, "\n") + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.listHint)
 }
 
+*/
 // firstLine fits a name on one row by cutting it, since the full name is shown on the Item screen.
 func firstLine(text string) string {
 	runes := []rune(text)

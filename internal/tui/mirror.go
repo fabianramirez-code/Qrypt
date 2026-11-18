@@ -86,7 +86,7 @@ func (m *Model) mirrorIsForFreshDevice() (bool, error) {
 	}
 	local := map[string]bool{}
 	for _, scope := range m.scopes {
-		names, err := scope.List()
+		names, err := scope.Entries()
 		if err != nil {
 			return false, nil // The update itself reports a scope that cannot be listed.
 		}

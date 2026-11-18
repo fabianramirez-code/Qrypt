@@ -364,6 +364,9 @@ func TestWideActionsPreviewAndNarrowPreservation(t *testing.T) {
 	}
 	m = typeText(t, m, "new-item")
 	m = enter(t, m)
+	m = typeText(t, m, "value")
+	m = enter(t, m)
+	m = key(t, m, 'h')
 	m = typeText(t, m, "new-secret")
 	m = enter(t, m)
 	if !strings.Contains(framed(m), "new-item") || !strings.Contains(framed(m), "Office (2)") {
@@ -533,6 +536,9 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 		t.Fatal("name not in modal")
 	}
 	m = enter(t, m)
+	m = typeText(t, m, "value")
+	m = enter(t, m)
+	m = key(t, m, 'h')
 	m = typeText(t, m, "fresh-value")
 	if strings.Contains(framed(m), "fresh-value") {
 		t.Fatal("value exposed")

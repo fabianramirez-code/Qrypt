@@ -50,6 +50,12 @@ const (
 	vaultAddValue
 	vaultEdit
 	vaultDelete
+	folderName
+	fieldLabel
+	fieldKind
+	fieldNote
+	vaultRename
+	fieldDelete
 	vaultFailed
 	cannotOpen
 	restoreIntro
@@ -158,6 +164,17 @@ type Model struct {
 	item            string
 	itemValue       []byte
 	newName         string
+	folderPath      []string
+	folderRows      []folderRow
+	entries         []vault.Entry
+	itemID          string
+	itemData        vault.Item
+	fieldCursor     int
+	revealed        map[int]bool
+	formKind        vault.FieldKind
+	formLabel       string
+	formAction      screen
+	deleteID        string
 	generate        func() (*identity.Identity, error)
 	pick            func() [3]int
 	copyFn          func(string) error
@@ -341,8 +358,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = m.language.text().pasted
 		} else if m.screen == problemScreen && m.selectedProblem() != nil && m.selectedProblem().Kind != vault.ProblemUnreadable {
 			m.message = m.language.text().problemPaste
-		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit || m.screen == spacesAdd || m.screen == spacesRename || m.screen == mirrorEdit {
-			m.vaultPaste(v.Content)
+		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit || m.screen == spacesAdd || m.screen == spacesRename || m.screen == mirrorEdit || m.screen == folderName || m.screen == fieldLabel || m.screen == fieldNote || m.screen == vaultRename {
+			if m.screen == fieldNote {
+				m.input += v.Content
+				m.message = ""
+			} else {
+				m.vaultPaste(v.Content)
+			}
 		}
 	case tea.KeyPressMsg:
 		if m.scopeID != nil {
@@ -630,6 +652,8 @@ func (m *Model) clearSecrets() {
 	m.visible = false
 	m.closeVault()
 	m.newName = ""
+	m.clearItem()
+	m.folderPath = nil
 }
 func (m *Model) fail(err error) {
 	m.screen = notSaved
@@ -753,7 +777,7 @@ func (m Model) viewContent() string {
 	case checkingUnlock:
 		return title.Render(t.unlockTitle) + "\n" + t.checking
 	case vaultList:
-		return m.listView(t)
+		return m.folderView(t)
 	case spacesList, spacesAdd, spacesRename, spacesDelete:
 		return m.spacesView(t)
 	case problemScreen:
@@ -761,15 +785,9 @@ func (m Model) viewContent() string {
 	case mirrorScreen, mirrorEdit, mirrorStop:
 		return m.mirrorView(t)
 	case vaultItem:
-		return title.Render(t.itemTitle) + "\n" + wrapLine(m.item) + "\n" + m.itemValueView(t) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.itemHint)
-	case vaultAddName:
-		return title.Render(t.addTitle) + "\n" + t.namePrompt + "\n" + wrapWidth(m.input, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.addNameHint)
-	case vaultAddValue:
-		return title.Render(t.addTitle) + "\n" + wrapLine(m.newName) + "\n" + t.valuePrompt + "\n" + wrapWidth(hide(m.input, m.visible), m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.valueHint)
-	case vaultEdit:
-		return title.Render(t.editTitle) + "\n" + wrapLine(m.item) + "\n" + t.valuePrompt + "\n" + wrapWidth(hide(m.input, m.visible), m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.valueHint)
-	case vaultDelete:
-		return title.Render(t.deleteTitle) + "\n" + wrapLine(m.selectedName()) + "\n" + t.deleteQuestion + "\n" + hint.Render(t.deleteHint)
+		return m.fieldsView(t)
+	case vaultAddName, vaultAddValue, vaultEdit, vaultDelete, folderName, fieldLabel, fieldKind, fieldNote, vaultRename, fieldDelete:
+		return m.formView(t)
 	case vaultFailed:
 		return title.Render(t.vaultFailedTitle) + "\n" + wrapLine(m.message) + "\n" + wrapLine(t.vaultLabel+vaultDir(m.path)) + "\n" + hint.Render(t.exitHint)
 	case cannotOpen:
