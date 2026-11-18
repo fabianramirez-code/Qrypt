@@ -376,7 +376,7 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case plainKey(v, 'v'):
 			kind = vault.FieldVisible
-		case plainKey(v, 'n'):
+		case plainKey(v, 'n'), m.language == Spanish && plainKey(v, 't'), m.language != Spanish && plainKey(v, 'l'):
 			kind = vault.FieldNote
 		case m.language == Spanish && plainKey(v, 'o'), m.language != Spanish && plainKey(v, 'h'):
 			kind = vault.FieldHidden

@@ -53,8 +53,8 @@ func actionTexts(lang Language) (space, item, folder, field string) {
 
 func TestActionRowsAndInspectorButtonText(t *testing.T) {
 	want := map[Language][4]string{
-		English: {"+ [A] New space", "+ [A] New item", "+ [F] New folder", "[A] Add field"},
-		Spanish: {"+ [A] Nuevo espacio", "+ [A] Nuevo elemento", "+ [F] Nueva carpeta", "[A] Añadir campo"},
+		English: {"+ [A] New space", "+ [A] New item", "+ [F] New folder", "[A] Add another entry"},
+		Spanish: {"+ [A] Nuevo espacio", "+ [A] Nuevo elemento", "+ [F] Nueva carpeta", "[A] Añadir otro dato"},
 	}
 	for _, lang := range []Language{English, Spanish} {
 		for _, size := range actionSizes {
@@ -471,7 +471,7 @@ func TestNarrowModeHasNoActionRowsAndSpecificWording(t *testing.T) {
 				wideFit(t, m, size[0], size[1])
 			}
 			m.screen = spacesList
-			want := map[Language][2]string{English: {"A: space", "A: field"}, Spanish: {"A espacio", "A campo"}}[lang]
+			want := map[Language][2]string{English: {"A: space", "A: entry"}, Spanish: {"A espacio", "A dato"}}[lang]
 			if !strings.Contains(framed(m), want[0]) {
 				t.Fatalf("spaces hint: %s", framed(m))
 			}

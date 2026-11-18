@@ -173,7 +173,7 @@ A space is browsed one folder at a time. The Spaces screen counts items at any d
 | **Folder** | A adds an item here; F names a folder and opens it; R renames the selected folder or item; D deletes a selected item after Y. D on a folder does nothing: it disappears when its last item is deleted. |
 | **Item** | The title and location line precede one row per field. Up and Down select a field; Tab shows or hides the selected hidden field or note; C copies its value; E edits its value; A adds a field; D deletes a field after Y; R renames the title; Esc returns to the folder. |
 | **Add item** | Enter a title, then the first field's label, kind and value. Esc cancels or goes back a step. |
-| **Add field** | Enter a label, choose H (hidden), V (visible) or N (note); in Spanish choose O (oculto), V (visible) or N (nota); then enter its value. |
+| **Add field** | Enter a label, choose H (hidden), V (visible) or L (long text); in Spanish choose O (oculto), V (visible) or T (texto largo); N is still accepted in both languages; then enter its value. |
 | **Edit value** | Enter saves a single-line value; Esc cancels. Tab shows or hides hidden text while typing. |
 | **Note editor** | Enter starts a new line; pasted text retains line breaks; Ctrl+S saves; Esc cancels without changing the item. |
 | **Delete** | Y confirms an item or field deletion; any other key cancels. |
@@ -204,8 +204,8 @@ A hidden field always displays a fixed number of dots regardless of its value. A
 | Name empty, too long, or with control characters | `That name is not valid. Use 1 to 255 characters, with no control characters.` | `Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.` |
 | Name already used                                | `An item with that name already exists.`                                       | `Ya existe un elemento con ese nombre.`                                          |
 | Item too large                                  | `That item is too large. The limit is 65,788 bytes.` | `Ese elemento es demasiado grande. El límite es 65.788 bytes.` |
-| Too many fields | `An item can have at most 64 fields.` | `Un elemento puede tener como máximo 64 campos.` |
-| Label already used | `A field with that label already exists.` | `Ya existe un campo con esa etiqueta.` |
+| Too many fields | `An item can have at most 64 entries.` | `Un elemento puede tener como máximo 64 datos.` |
+| Label already used | `An entry with that label already exists.` | `Ya existe un dato con esa etiqueta.` |
 | Folder path too long | `That folder path is too long.` | `La ruta de esa carpeta es demasiado larga.` |
 | Folder cannot be deleted directly | `A folder disappears when its last item is deleted.` | `Una carpeta desaparece cuando se borra su último elemento.` |
 | Newly created folder is empty | `This folder is temporary until you save an item in it.` | `Esta carpeta es temporal hasta que guardes un elemento en ella.` |

@@ -63,7 +63,7 @@ func TestWideFolderTreeAndFieldInspector(t *testing.T) {
 	m = enter(t, m)
 	m = enter(t, m)
 	m = enter(t, m)
-	if m.screen != vaultItem || !strings.Contains(framed(m), "memo: note (2)") || strings.Contains(framed(m), "line-one") || strings.Contains(framed(m), "never-display-me") {
+	if m.screen != vaultItem || !strings.Contains(framed(m), "memo: long text (2)") || strings.Contains(framed(m), "line-one") || strings.Contains(framed(m), "never-display-me") {
 		t.Fatal(framed(m))
 	}
 	m = enter(t, m)
