@@ -112,7 +112,7 @@ Each decision lists context, decision, alternatives and consequences.
 | Tests | `go vet ./...` and `go test ./...`; TUI tests read content through `plain(m)` and the frame through `framed(m)`; cross-platform vets cover page locking | implemented |
 | Fuzzing | Native Go fuzz tests kept in the repository for every parser of untrusted bytes: item file, fields, manifest, record, settings | implemented |
 | Lint | `golangci-lint` v2 with a committed `.golangci.yml` and an Ubuntu CI job; reports 0 issues. Unchecked errors on cleanup paths that predate the linter are excluded by narrow rules | implemented |
-| Vulnerabilities | `govulncheck` Ubuntu CI job; weekly Dependabot for Go modules and GitHub Actions | implemented |
+| Vulnerabilities | `govulncheck` Ubuntu CI job; dependency updates are done by hand (Dependabot was removed at the owner's request) | implemented |
 | CI | GitHub Actions: vet and test on Windows, Linux and macOS; lint and `govulncheck` on Ubuntu | implemented |
 | Releases | `build.ps1` builds a trimmed static Windows binary, bundles licenses and the Symbols Nerd Font (pinned SHA-256), and writes checksums | implemented |
 | Releases | GoReleaser v2 builds amd64 Windows/Linux/macOS archives and checksums; Cosign signs the checksum file; draft prerelease (Scoop/Homebrew publishing deferred) | implemented |
