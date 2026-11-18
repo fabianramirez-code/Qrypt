@@ -2,12 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/fabianramirez-code/qrypt/internal/vault"
 )
 
 // wideColumn paints a fixed-cell column without a surrounding box.
@@ -36,6 +38,64 @@ func (m Model) wideColumn(heading string, lines []string, width, height int, foc
 	return column
 }
 
+type treeRow struct {
+	space int
+	path  []string
+	name  string
+	count int
+	depth int
+}
+
+// refreshTree uses the already decrypted listing; painting and animation never read the vault.
+func (m *Model) refreshTree() {
+	rows := make([]treeRow, 0, len(m.spaceRows))
+	for i, space := range m.spaceRows {
+		rows = append(rows, treeRow{space: i, name: space.name, count: space.count})
+		if i != m.spaceCursor || space.problem >= 0 {
+			continue
+		}
+		// The open branch follows the current location. Siblings stay closed.
+		var walk func([]string, int)
+		walk = func(parent []string, depth int) {
+			counts := map[string]int{}
+			for _, entry := range m.entries {
+				if hasPath(entry.Path, parent) && len(entry.Path) > len(parent) {
+					counts[entry.Path[len(parent)]]++
+				}
+			}
+			names := make([]string, 0, len(counts))
+			for name := range counts {
+				names = append(names, name)
+			}
+			slices.Sort(names)
+			for _, name := range names {
+				path := append(slices.Clone(parent), name)
+				rows = append(rows, treeRow{space: i, path: path, name: name, count: counts[name], depth: depth})
+				if hasPath(m.folderPath, path) {
+					walk(path, depth+1)
+				}
+			}
+		}
+		walk(nil, 1)
+	}
+	m.treeRows = rows
+	// Keep the selection on the location after navigation, but preserve a manually
+	// selected sibling while it remains visible.
+	if m.treeCursor >= len(rows) {
+		m.treeCursor = max(0, len(rows)-1)
+	}
+}
+
+func (m *Model) treeFollow() {
+	m.refreshTree()
+	for i, row := range m.treeRows {
+		if row.space == m.spaceCursor && samePath(row.path, m.folderPath) {
+			m.treeCursor = i
+			return
+		}
+	}
+}
+
 // wide applies only to the three vault navigation screens; modals use their own renderer.
 func (m Model) wide() bool {
 	return m.width >= 100 && m.height >= 20 && (m.screen == spacesList || m.screen == vaultList || m.screen == vaultItem)
@@ -43,16 +103,70 @@ func (m Model) wide() bool {
 
 // wideKey translates focus navigation to the existing screen handlers.
 func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.screen == spacesList {
+		if v.Code == tea.KeyUp || v.Code == tea.KeyDown {
+			m.refreshTree()
+			step := 1
+			if v.Code == tea.KeyUp {
+				step = -1
+			}
+			m.treeCursor = max(0, min(len(m.treeRows)-1, m.treeCursor+step))
+			row := m.treeRows[m.treeCursor]
+			if row.space != m.spaceCursor {
+				m.spaceCursor = row.space
+				m.selectSpace()
+				m.folderPath = nil
+				m.cursor = 0
+				if m.vlt != nil {
+					m.refresh()
+				}
+			}
+			return m, nil
+		}
+		if (v.Code == tea.KeyEnter || v.Code == tea.KeyRight || v.Code == tea.KeyTab && v.Mod&tea.ModShift == 0) && m.selectedProblem() == nil && len(m.treeRows) > 0 {
+			row := m.treeRows[m.treeCursor]
+			m.spaceCursor = row.space
+			m.selectSpace()
+			if m.vlt != nil {
+				m.folderPath = slices.Clone(row.path)
+				m.cursor = 0
+				m.screen = vaultList
+				m.refresh()
+				m.treeFollow()
+			}
+			return m, nil
+		}
+	}
+	if m.screen == spacesList && (v.Code == tea.KeyLeft || v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0) {
+		return m, nil
+	}
+	if m.screen == vaultList && (v.Code == tea.KeyLeft || v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0) {
+		if len(m.folderPath) > 0 {
+			m.leaveFolder()
+			m.treeFollow()
+		} else {
+			m.screen = spacesList
+			m.treeFollow()
+		}
+		return m, nil
+	}
+	if m.screen == vaultItem && plainKey(v, 'e') {
+		delete(m.revealed, m.fieldCursor)
+	}
+	if m.screen == vaultItem && (v.Code == tea.KeyUp || v.Code == tea.KeyDown) {
+		m.revealed = nil
+		m.visible = false
+	}
 	{
 		switch {
 		case m.screen == vaultItem && v.Code == tea.KeyRight:
 			// The detail pane is the last one: Right has nowhere to go and must never reveal the value.
 			return m, nil
 		case m.screen == vaultItem && v.Code == tea.KeyTab && v.Mod&tea.ModShift == 0:
-			// Tab wraps to the spaces pane through the same steps as Esc twice,
-			// so the value is cleared and the space is left as the narrow flow leaves it.
 			m.leaveItem()
-			v = tea.KeyPressMsg{Code: tea.KeyEsc}
+			m.screen = spacesList
+			m.treeFollow()
+			return m, nil
 		case v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0, v.Code == tea.KeyLeft:
 			if m.screen == spacesList {
 				return m, nil
@@ -80,12 +194,30 @@ func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.refreshSpaces()
 		if m.vlt != nil {
 			m.refresh()
+			m.treeFollow()
 		}
 		return m, cmd
 	}
 }
 
 // wideTrim cuts names and UI text by display cells, never secret values.
+func wideLeftTrim(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	if width == 1 {
+		return "…"
+	}
+	r := []rune(s)
+	for len(r) > 0 && lipgloss.Width(string(r))+1 > width {
+		r = r[1:]
+	}
+	return "…" + string(r)
+}
+
 func wideTrim(s string, width int) string {
 	if lipgloss.Width(s) <= width {
 		return s
@@ -106,9 +238,9 @@ func wideTrim(s string, width int) string {
 // modalPane is the navigation screen whose selection remains behind a modal.
 func (m Model) modalPane() screen {
 	switch m.screen {
-	case vaultAddName, vaultAddValue, vaultDelete:
+	case vaultAddName, vaultAddValue, vaultDelete, folderName:
 		return vaultList
-	case vaultEdit:
+	case vaultEdit, fieldLabel, fieldKind, fieldNote, fieldDelete, vaultRename:
 		return vaultItem
 	default:
 		return spacesList
@@ -120,7 +252,8 @@ func (m Model) isWideModal() bool {
 		return false
 	}
 	switch m.screen {
-	case vaultAddName, vaultAddValue, vaultEdit, vaultDelete,
+	case vaultAddName, vaultAddValue, vaultEdit, vaultDelete, folderName,
+		fieldLabel, fieldKind, fieldNote, vaultRename, fieldDelete,
 		spacesAdd, spacesRename, spacesDelete, problemScreen,
 		mirrorScreen, mirrorEdit, mirrorStop:
 		return true
@@ -141,6 +274,7 @@ func (m Model) wideModal() (string, bool) {
 	base := m
 	base.screen = m.modalPane()
 	base.visible = false // Never draw a revealed detail value behind any modal.
+	base.revealed = nil
 	background := base.wideView(true)
 	paneTop := 2
 	if m.height >= 30 {
@@ -192,29 +326,29 @@ func (m Model) wideView(modal bool) string {
 	if rows >= 5 && len(m.spaceNames) <= rows-2 {
 		spaceRows -= 2
 	}
-	start := max(0, min(m.spaceCursor-spaceRows/2, len(m.spaceNames)-spaceRows))
-	for i := start; i < len(m.spaceNames) && len(spaces) < spaceRows; i++ {
+	start := max(0, min(m.treeCursor-spaceRows/2, len(m.treeRows)-spaceRows))
+	for i := start; i < len(m.treeRows) && len(spaces) < spaceRows; i++ {
+		tree := m.treeRows[i]
+		spaceIndex := tree.space
 		suffix := ""
-		if i < len(m.spaceCounts) {
-			if i < len(m.spaceRows) && m.spaceRows[i].problem < 0 {
-				suffix = " (" + strconv.Itoa(m.spaceCounts[i]) + ")"
-			}
+		if spaceIndex < len(m.spaceRows) && m.spaceRows[spaceIndex].problem < 0 {
+			suffix = " (" + strconv.Itoa(tree.count) + ")"
 		}
-		problem := i < len(m.spaceRows) && m.spaceRows[i].problem >= 0
+		problem := spaceIndex < len(m.spaceRows) && m.spaceRows[spaceIndex].problem >= 0
 		glyph := IconGlyph(m.icons, "spaceClosed")
-		if i == m.spaceCursor {
+		if tree.depth == 0 && spaceIndex == m.spaceCursor || tree.depth > 0 && hasPath(m.folderPath, tree.path) {
 			glyph = IconGlyph(m.icons, "spaceOpen")
 		}
-		name := m.spaceNames[i]
+		name := tree.name
 		if problem {
 			glyph = IconGlyph(m.icons, "problem")
 			name = "! " + name
 		}
 		bar := " "
-		if i == m.spaceCursor {
+		if i == m.treeCursor {
 			bar = m.styles.accent.Render("▌")
 		}
-		label := glyph + " " + name
+		label := strings.Repeat(" ", tree.depth*2) + glyph + " " + name
 		count := suffix
 		if problem {
 			count = ""
@@ -224,7 +358,7 @@ func (m Model) wideView(modal bool) string {
 		gap := 0 // The count, which starts with a space, stays beside the name: "Name (n)".
 		if problem {
 			spaces = append(spaces, bar+m.styles.error.Render(label)+strings.Repeat(" ", gap)+m.styles.error.Render(count))
-		} else if i == m.spaceCursor {
+		} else if i == m.treeCursor {
 			spaces = append(spaces, m.styles.raised.Render(bar+m.styles.text.Bold(true).Render(label+strings.Repeat(" ", gap)+count)))
 		} else {
 			spaces = append(spaces, bar+label+strings.Repeat(" ", gap)+m.styles.muted.Render(count))
@@ -244,41 +378,44 @@ func (m Model) wideView(modal bool) string {
 		remaining := max(0, int((m.lastKey.Add(idleLifetime).Sub(m.now())+time.Second-1)/time.Second))
 		spaces = append(spaces, m.styles.special.Render(wideTrim("["+mirrorState+"]", left-2)), m.styles.muted.Render(fmt.Sprintf("%s %d:%02d ", t.wideLock, remaining/60, remaining%60))+m.styles.accent.Render(strings.Repeat("━", remaining*8/300))+m.styles.muted.Render(strings.Repeat("─", 8-remaining*8/300)))
 	}
-	names := m.names
+	listRows := m.folderRows
 	if m.selectedProblem() != nil {
-		names = nil
+		listRows = nil
 	}
 	items := make([]string, 0, rows)
-	count := strconv.Itoa(len(names))
+	count := strconv.Itoa(len(listRows))
 	items = append(items, m.styles.info.Render(t.wideName)+strings.Repeat(" ", max(1, center-3-lipgloss.Width(t.wideName)-len(count)))+m.styles.muted.Render(count))
-	selected := min(m.cursor, max(0, len(names)-1))
+	selected := min(m.cursor, max(0, len(listRows)-1))
 	if m.screen == spacesList {
 		selected = 0
 	}
-	first := max(0, min(selected-(rows-1)/2, len(names)-(rows-1)))
-	for i := first; i < len(names) && len(items) < rows; i++ {
+	first := max(0, min(selected-(rows-1)/2, len(listRows)-(rows-1)))
+	for i := first; i < len(listRows) && len(items) < rows; i++ {
 		bar := " "
 		if i == selected {
 			bar = m.styles.accent.Render("▌")
 		}
-		name := wideTrim(names[i], center-7-lipgloss.Width(IconGlyph(m.icons, "item")))
-		label := name
-		if at := strings.LastIndex(name, " / "); at >= 0 && i != selected {
-			label = m.styles.muted.Render(name[:at+3]) + m.styles.text.Render(name[at+3:])
+		entry := listRows[i]
+		icon := "item"
+		if entry.folder {
+			icon = "spaceClosed"
 		}
-		row := bar + " " + IconGlyph(m.icons, "item") + " " + label
+		name := entry.name
+		if entry.folder {
+			name += fmt.Sprintf(" (%d)", entry.count)
+		}
+		name = wideTrim(name, center-7-lipgloss.Width(IconGlyph(m.icons, icon)))
+		row := bar + " " + IconGlyph(m.icons, icon) + " " + name
 		if i == selected {
-			row = m.styles.raised.Render(bar + m.styles.text.Bold(true).Render(" "+IconGlyph(m.icons, "item")+" "+name))
+			row = m.styles.raised.Render(bar + m.styles.text.Bold(true).Render(" "+IconGlyph(m.icons, icon)+" "+name))
 		}
 		items = append(items, row)
 	}
+	if len(listRows) == 0 && len(m.folderPath) > 0 && m.screen != spacesList {
+		items = append(items, m.styles.muted.Render(wideTrim(t.folderTemporary, center-3)))
+	}
 	detail := []string{}
-	if m.screen != spacesList && len(names) > 0 {
-		name := names[selected]
-		if m.screen == vaultItem {
-			name = m.item
-		}
-		_ = name // The inspector heading carries the selected item's name.
+	if m.screen != spacesList && len(listRows) > 0 && !listRows[selected].folder {
 		generation := uint64(0)
 		if m.vlt != nil {
 			generation = m.vlt.Generation()
@@ -295,11 +432,37 @@ func (m Model) wideView(modal bool) string {
 			gap := max(1, w-lipgloss.Width(field[0])-lipgloss.Width(value))
 			detail = append(detail, m.styles.dim.Render(field[0])+strings.Repeat(" ", gap)+value)
 		}
+		if m.screen == vaultItem {
+			visibleFields := max(1, rows-12)
+			firstField := max(0, min(m.fieldCursor-visibleFields/2, len(m.itemData.Fields)-visibleFields))
+			for i := firstField; i < len(m.itemData.Fields) && i < firstField+visibleFields; i++ {
+				field := m.itemData.Fields[i]
+				value := "••••••"
+				if !modal {
+					value = m.fieldValue(field, i)
+					if field.Kind == vault.FieldNote {
+						value = fmt.Sprintf("%s (%d)", t.noteWord, strings.Count(string(field.Value), "\n")+1)
+					}
+					if len([]rune(string(field.Value))) > maxShownRunes && (field.Kind == vault.FieldVisible || m.revealed[i]) {
+						value = t.tooLong
+					}
+				}
+				bar := " "
+				if i == m.fieldCursor {
+					bar = m.styles.accent.Render("▌")
+				}
+				line := wideTrim(field.Label+": "+value, w-2)
+				if i == m.fieldCursor {
+					line = m.styles.text.Bold(true).Render(line)
+				}
+				detail = append(detail, bar+" "+line)
+			}
+		}
 		label := t.wideValue
 		value := "• • • • • •"
-		revealed := m.screen == vaultItem && m.visible && !modal
+		revealed := m.screen == vaultItem && !modal && m.fieldCursor < len(m.itemData.Fields) && (m.visible || m.itemData.Fields[m.fieldCursor].Kind == vault.FieldVisible)
 		if revealed {
-			value = string(m.itemValue)
+			value = string(m.itemData.Fields[m.fieldCursor].Value)
 		}
 		lines := strings.Split(lipgloss.Wrap(value, w-2, ""), "\n")
 		// Three rows stay for the box borders and the buttons below it.
@@ -336,14 +499,17 @@ func (m Model) wideView(modal bool) string {
 		}
 		return strings.Join(lines, "\n")
 	}
-	centerTitle := m.spaceTitle()
+	centerTitle := wideLeftTrim(m.location(), center-5)
 	if m.selectedProblem() != nil {
 		centerTitle = ""
 	}
 	_ = pad
 	inspectorName := ""
-	if len(names) > 0 && m.screen != spacesList {
-		inspectorName = names[selected]
+	if len(listRows) > 0 && m.screen != spacesList && !listRows[selected].folder {
+		inspectorName = listRows[selected].name
+	}
+	if m.screen == vaultItem {
+		inspectorName = m.item
 	}
 	itemHeading := "[3] " + strings.ToUpper(t.itemTitle)
 	if inspectorName != "" {
@@ -383,7 +549,7 @@ func (m Model) wideView(modal bool) string {
 	coloredHints := strings.Join(hintParts, "  ")
 	status := m.message
 	if status == "" && !modal {
-		status = t.wideCount(len(names))
+		status = t.wideCount(len(listRows))
 	}
 	style := m.styles.hint
 	if m.message != "" {

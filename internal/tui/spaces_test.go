@@ -221,12 +221,12 @@ func TestSpacesLockAndPreview(t *testing.T) {
 	}
 	p := filepath.Join(t.TempDir(), "identity")
 	preview := enter(t, send(t, NewPreview(p, English, id), tea.WindowSizeMsg{Width: 60, Height: 20}))
-	if !strings.Contains(plain(preview), "Personal (4)") || !strings.Contains(plain(preview), "Work (2)") || !strings.Contains(plain(preview), "PREVIEW:") {
+	if !strings.Contains(plain(preview), "Personal (4)") || !strings.Contains(plain(preview), "Work (5)") || !strings.Contains(plain(preview), "PREVIEW:") {
 		t.Fatal(plain(preview))
 	}
 	preview = key(t, preview, tea.KeyDown)
 	preview = enter(t, preview)
-	if !strings.Contains(plain(preview), "PREVIEW:") || !strings.Contains(plain(preview), "example: meeting") || !strings.Contains(plain(preview), "example: support") || strings.Contains(plain(preview), "example: bank") {
+	if !strings.Contains(plain(preview), "PREVIEW:") || !strings.Contains(plain(preview), "example: meeting") || !strings.Contains(plain(preview), "example: support") || !strings.Contains(plain(preview), "Google Stitch (2)") || !strings.Contains(plain(preview), "AWS (1)") || strings.Contains(plain(preview), "example: bank") {
 		t.Fatal(plain(preview))
 	}
 }

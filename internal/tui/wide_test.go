@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
+	"github.com/fabianramirez-code/qrypt/internal/vault"
 )
 
 func wideFixture(t *testing.T, language Language) Model {
@@ -40,6 +41,148 @@ func wideFit(t *testing.T, m Model, width, height int) {
 		if lipgloss.Width(line) > width {
 			t.Fatalf("line %d > %d: %q", lipgloss.Width(line), width, line)
 		}
+	}
+}
+
+func TestWideFolderTreeAndFieldInspector(t *testing.T) {
+	m := spacesSession(t, English)
+	_, err := m.vlt.Add(vault.Item{Path: []string{"outer", "inner", "deep"}, Title: "nested", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "secret", Value: []byte("never-display-me")}, {Kind: vault.FieldNote, Label: "memo", Value: []byte("line-one\nline-two")}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.refreshSpaces()
+	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = enter(t, m)
+	if !strings.Contains(framed(m), "outer (1)") || !strings.Contains(framed(m), "[2] Personal") {
+		t.Fatal(framed(m))
+	}
+	m = enter(t, m)
+	if !strings.Contains(framed(m), "[2] Personal / outer") || !strings.Contains(framed(m), "inner (1)") {
+		t.Fatal(framed(m))
+	}
+	m = enter(t, m)
+	m = enter(t, m)
+	m = enter(t, m)
+	if m.screen != vaultItem || !strings.Contains(framed(m), "memo: note (2)") || strings.Contains(framed(m), "line-one") || strings.Contains(framed(m), "never-display-me") {
+		t.Fatal(framed(m))
+	}
+	m = enter(t, m)
+	if !strings.Contains(framed(m), "never-display-me") {
+		t.Fatal("chosen field did not reveal")
+	}
+	m = key(t, m, tea.KeyDown)
+	if strings.Contains(framed(m), "never-display-me") {
+		t.Fatal("previous field remained revealed")
+	}
+	copied := ""
+	m.copyFn = func(s string) error { copied = s; return nil }
+	m = copyKey(m)
+	if copied != "line-one\nline-two" {
+		t.Fatalf("copied %q", copied)
+	}
+	m = enter(t, m)
+	if !strings.Contains(framed(m), "line-one") || strings.Contains(framed(m), "never-display-me") {
+		t.Fatal(framed(m))
+	}
+	m = key(t, m, tea.KeyRight)
+	m = enter(t, m)
+	if strings.Contains(framed(m), "line-one") {
+		t.Fatal("note not hidden")
+	}
+}
+
+func TestWideEveryScreenFitsEveryPaletteIconAndLanguage(t *testing.T) {
+	for _, lang := range []Language{English, Spanish} {
+		base := wideFixture(t, lang)
+		for _, theme := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+			for _, icons := range []string{"unicode", "emoji", "nerd"} {
+				m := base
+				m.themeName = theme
+				m.icons = icons
+				m.refreshStyles()
+				for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 20}, {Width: 120, Height: 30}, {Width: 160, Height: 40}} {
+					m = send(t, m, size)
+					for _, state := range []screen{spacesList, vaultList, vaultItem, spacesAdd, spacesRename, spacesDelete, problemScreen, mirrorScreen, mirrorEdit, mirrorStop, vaultAddName, vaultAddValue, vaultEdit, vaultDelete, folderName, fieldLabel, fieldKind, fieldNote, vaultRename, fieldDelete} {
+						x := m
+						x.screen = state
+						wideFit(t, x, size.Width, size.Height)
+						if strings.Contains(framed(x), "private-token") {
+							t.Fatalf("%s %s %d: secret leaked", theme, icons, state)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestWideInspectorScrollKeepsChosenFieldAndCard(t *testing.T) {
+	m := spacesSession(t, English)
+	fields := make([]vault.Field, 64)
+	for i := range fields {
+		fields[i] = vault.Field{Kind: vault.FieldHidden, Label: fmt.Sprintf("field-%02d", i), Value: []byte("not-visible")}
+	}
+	if _, err := m.vlt.Add(vault.Item{Title: "many", Fields: fields}); err != nil {
+		t.Fatal(err)
+	}
+	m = send(t, m, tea.WindowSizeMsg{Width: 100, Height: 20})
+	m = enter(t, enter(t, m))
+	for range 63 {
+		m = key(t, m, tea.KeyDown)
+	}
+	if !strings.Contains(framed(m), "field-63") || !strings.Contains(framed(m), "• • • • • •") || strings.Contains(framed(m), "not-visible") {
+		t.Fatal(framed(m))
+	}
+	wideFit(t, m, 100, 20)
+}
+
+func TestWideTreeSelectionAndPreviewStructure(t *testing.T) {
+	id, err := identity.FromSeed(make([]byte, identity.SeedSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewPreview(filepath.Join(t.TempDir(), "identity"), English, id)
+	m.copyFn = func(string) error { return nil }
+	m.clearFn = func(string) error { return nil }
+	m = enter(t, send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30}))
+	if strings.Contains(framed(m), "Work: Google Stitch") || !strings.Contains(framed(m), "Work (5)") {
+		t.Fatal(framed(m))
+	}
+	m = key(t, m, tea.KeyDown)
+	if !strings.Contains(framed(m), "AWS (1)") || !strings.Contains(framed(m), "Google Stitch (2)") {
+		t.Fatal(framed(m))
+	}
+	m = key(t, m, tea.KeyDown) // AWS in the tree
+	if !strings.Contains(framed(m), "▌") {
+		t.Fatal(framed(m))
+	}
+	m = key(t, m, tea.KeyRight)
+	if m.screen != vaultList || !strings.Contains(framed(m), "[2] Work / AWS") || !strings.Contains(framed(m), "prod (1)") {
+		t.Fatal(framed(m))
+	}
+	m = enter(t, m)
+	if !strings.Contains(framed(m), "[2] Work / AWS / prod") || !strings.Contains(framed(m), "sample deployment") {
+		t.Fatal(framed(m))
+	}
+	m = enter(t, m)
+	if strings.Contains(framed(m), "Fake preview instructions") {
+		t.Fatal("hidden note leaked")
+	}
+	m = enter(t, m)
+	if !strings.Contains(framed(m), "Fake preview instructions") {
+		t.Fatal("note reveal missing")
+	}
+	m = key(t, m, tea.KeyLeft)
+	if strings.Contains(framed(m), "Fake preview instructions") {
+		t.Fatal("note leaked after leaving")
+	}
+	m = send(t, m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	if !strings.Contains(framed(m), "[2] Work / AWS") {
+		t.Fatal("folder back missing")
+	}
+	m = key(t, m, tea.KeyEsc)
+	if !strings.Contains(framed(m), "[2] Work") {
+		t.Fatal("Esc did not ascend")
 	}
 }
 
@@ -210,7 +353,7 @@ func TestWideNavigationRevealAndResize(t *testing.T) {
 	}
 	m = send(t, m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	if m.screen != spacesList || m.vlt == nil {
-		t.Fatal("shift-tab locked spaces")
+		t.Fatalf("shift-tab locked spaces: screen=%d vlt=%v wide=%v", m.screen, m.vlt != nil, m.wide())
 	}
 	m = key(t, m, tea.KeyRight)
 	if m.screen != vaultList {
@@ -325,7 +468,7 @@ func TestWideActionsPreviewAndNarrowPreservation(t *testing.T) {
 	m = typeText(t, m, "Office")
 	m = enter(t, m)
 	if m.screen != spacesList || !strings.Contains(framed(m), "Office (1)") {
-		t.Fatal("rename preview stale")
+		t.Fatalf("rename preview stale: %s", framed(m))
 	}
 	m = key(t, m, 'a')
 	if m.screen != spacesAdd {
@@ -651,7 +794,7 @@ func TestWideModalSpaceAndMirrorActions(t *testing.T) {
 	m = typeText(t, m, "New Space")
 	m = enter(t, m)
 	if m.screen != spacesList || !strings.Contains(framed(m), "New Space (0)") {
-		t.Fatal("space add not reflected in panes")
+		t.Fatalf("space add not reflected in panes: %s", framed(m))
 	}
 	m = key(t, m, 'r')
 	m = typeText(t, m, "Renamed")

@@ -63,6 +63,7 @@ func (m *Model) refresh() {
 	slices.SortFunc(folders, func(a, b folderRow) int { return strings.Compare(a.name, b.name) })
 	m.folderRows = append(folders, rows...)
 	m.cursor = min(m.cursor, max(0, len(m.folderRows)-1))
+	m.refreshTree()
 }
 
 func (m Model) selectedRow() folderRow {

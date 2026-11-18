@@ -179,7 +179,7 @@ func TestMirrorPreviewWideAndLock(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "mirror")
 	m := enter(t, send(t, NewPreview(filepath.Join(root, "identity"), English, id), tea.WindowSizeMsg{Width: 100, Height: 20}))
 	m = key(t, m, 'm')
-	if m.screen != mirrorScreen || strings.Contains(framed(m), "example: bank") {
+	if m.screen != mirrorScreen || strings.Contains(framed(m), "DEMO-ACCOUNT-0000") || !strings.Contains(framed(m), "Mirror") {
 		t.Fatal(framed(m))
 	}
 	m = key(t, m, 'e')

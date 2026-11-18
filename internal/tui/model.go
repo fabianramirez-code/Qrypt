@@ -166,6 +166,8 @@ type Model struct {
 	newName         string
 	folderPath      []string
 	folderRows      []folderRow
+	treeRows        []treeRow
+	treeCursor      int
 	entries         []vault.Entry
 	itemID          string
 	itemData        vault.Item
@@ -408,12 +410,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.mirrorKey(v)
 			}
 			if isSpaceScreen(m.screen) {
-				return m.spacesKey(v)
+				next, cmd := m.spacesKey(v)
+				n := next.(Model)
+				if n.screen == spacesList && n.width >= 100 && n.vlt != nil {
+					n.refresh()
+					n.treeFollow()
+				}
+				return n, cmd
 			}
 			next, cmd := m.vaultKey(v)
 			m = next.(Model)
 			if m.vlt != nil && m.wide() {
 				m.refreshSpaces()
+				m.refresh()
+				m.treeFollow()
 			}
 			return m, cmd
 		}

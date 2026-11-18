@@ -34,7 +34,7 @@ func TestPreviewScreensAndExit(t *testing.T) {
 			if m.ExitStatus() != 0 || !strings.Contains(plain(m), "Spaces") && !strings.Contains(plain(m), "Espacios") {
 				t.Fatal("not vault", plain(m))
 			}
-			if strings.Contains(plain(m), "passphrase") || !strings.Contains(plain(m), "Personal (4)") || !strings.Contains(plain(m), "Work (2)") {
+			if strings.Contains(plain(m), "passphrase") || !strings.Contains(plain(m), "Personal (4)") || !strings.Contains(plain(m), "Work (5)") {
 				t.Fatal("not sample vault", plain(m))
 			}
 			check := func() {

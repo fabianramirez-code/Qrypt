@@ -47,21 +47,17 @@ func (m *Model) startPreview() {
 			return
 		}
 	}
-	// A realistic case: one service, two accounts, one key per tool. The name
-	// sorts after the other spaces, so they keep their places in the list.
-	service, err := vault.NewScope(vaultDir(m.path), stateFile(m.path), id, "Work: Google Stitch")
-	if err != nil {
-		m.failVault(err)
-		return
-	}
-	m.scopes = append(m.scopes, service)
-	for _, item := range []struct{ name, value string }{
-		{"account-1@example.invalid / Claude Code", "AQ.fake-key-claude-0001"},
-		{"account-1@example.invalid / codex", "AQ.fake-key-codex-0001"},
-		{"account-1@example.invalid / gemini", "AQ.fake-key-gemini-0001"},
-		{"account-2@example.invalid / Claude Code", "AQ.fake-key-claude-0002"},
+	for _, item := range []vault.Item{
+		{Path: []string{"Google Stitch"}, Title: "account-1@example.invalid", Fields: []vault.Field{
+			{Kind: vault.FieldHidden, Label: "Claude Code", Value: []byte("FAKE-CLAUDE-0001")},
+			{Kind: vault.FieldHidden, Label: "codex", Value: []byte("FAKE-CODEX-0001")},
+			{Kind: vault.FieldHidden, Label: "gemini", Value: []byte("FAKE-GEMINI-0001")},
+			{Kind: vault.FieldVisible, Label: "plan", Value: []byte("demo-only")},
+		}},
+		{Path: []string{"Google Stitch"}, Title: "account-2@example.invalid", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "Claude Code", Value: []byte("FAKE-CLAUDE-0002")}}},
+		{Path: []string{"AWS", "prod"}, Title: "sample deployment", Fields: []vault.Field{{Kind: vault.FieldNote, Label: "instructions", Value: []byte("Fake preview instructions\nNo real credentials")}}},
 	} {
-		if err := service.Put(item.name, []byte(item.value)); err != nil {
+		if _, err := work.Add(item); err != nil {
 			m.failVault(err)
 			return
 		}
@@ -71,4 +67,6 @@ func (m *Model) startPreview() {
 		return
 	}
 	m.refreshSpaces()
+	m.refresh()
+	m.treeFollow()
 }
