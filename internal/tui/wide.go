@@ -10,6 +10,32 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// wideColumn paints a fixed-cell column without a surrounding box.
+// The focused column is the one whose heading and rule carry the accent.
+func (m Model) wideColumn(heading string, lines []string, width, height int, focused bool) string {
+	var result []string
+	headStyle, ruleStyle := m.styles.muted, m.styles.dim
+	if focused {
+		headStyle, ruleStyle = m.styles.info.Bold(true), m.styles.accent
+	}
+	header := headStyle.Render(wideTrim(heading, width-2))
+	result = append(result, " "+header+strings.Repeat(" ", max(0, width-1-lipgloss.Width(header))))
+	result = append(result, ruleStyle.Render(strings.Repeat("─", width)))
+	for i := 0; i < height-2; i++ {
+		line := ""
+		if i < len(lines) {
+			line = lines[i]
+		}
+		line = wideTrim(line, width-2)
+		result = append(result, " "+line+strings.Repeat(" ", max(0, width-1-lipgloss.Width(line))))
+	}
+	column := strings.Join(result, "\n")
+	if m.styles.palette.Surface.A != 0 {
+		column = lipgloss.NewStyle().Background(lipgloss.Color(hexColor(m.styles.palette.Surface))).Render(column)
+	}
+	return column
+}
+
 // wide applies only to the three vault navigation screens; modals use their own renderer.
 func (m Model) wide() bool {
 	return m.width >= 100 && m.height >= 20 && (m.screen == spacesList || m.screen == vaultList || m.screen == vaultItem)
@@ -159,8 +185,8 @@ func (m Model) wideView(modal bool) string {
 	if banner != "" {
 		paneHeight--
 	}
-	// A panel has a top, heading, divider and bottom border.
-	rows := max(paneHeight-4, 0)
+	// Each column uses a header and rule, without an outer border.
+	rows := max(paneHeight-2, 0)
 	spaces := make([]string, 0, rows)
 	spaceRows := rows
 	if rows >= 5 && len(m.spaceNames) <= rows-2 {
@@ -174,25 +200,35 @@ func (m Model) wideView(modal bool) string {
 				suffix = " (" + strconv.Itoa(m.spaceCounts[i]) + ")"
 			}
 		}
-		prefix := "  "
+		problem := i < len(m.spaceRows) && m.spaceRows[i].problem >= 0
+		glyph := IconGlyph(m.icons, "spaceClosed")
 		if i == m.spaceCursor {
-			prefix = "> "
-		}
-		if i == len(m.spaceNames)-1 {
-			prefix += "└─ "
-		} else {
-			prefix += "├─ "
+			glyph = IconGlyph(m.icons, "spaceOpen")
 		}
 		name := m.spaceNames[i]
-		if i < len(m.spaceRows) && m.spaceRows[i].problem >= 0 {
+		if problem {
+			glyph = IconGlyph(m.icons, "problem")
 			name = "! " + name
 		}
-		name = wideTrim(name, left-4-lipgloss.Width(prefix)-lipgloss.Width(suffix))
-		row := prefix + name + suffix
+		bar := " "
 		if i == m.spaceCursor {
-			row = m.styles.selected.Render(row)
+			bar = m.styles.accent.Render("▌")
 		}
-		spaces = append(spaces, row)
+		label := glyph + " " + name
+		count := suffix
+		if problem {
+			count = ""
+		}
+		available := left - 3 - lipgloss.Width(bar) - lipgloss.Width(count)
+		label = wideTrim(label, available)
+		gap := 0 // The count, which starts with a space, stays beside the name: "Name (n)".
+		if problem {
+			spaces = append(spaces, bar+m.styles.error.Render(label)+strings.Repeat(" ", gap)+m.styles.error.Render(count))
+		} else if i == m.spaceCursor {
+			spaces = append(spaces, m.styles.raised.Render(bar+m.styles.text.Bold(true).Render(label+strings.Repeat(" ", gap)+count)))
+		} else {
+			spaces = append(spaces, bar+label+strings.Repeat(" ", gap)+m.styles.muted.Render(count))
+		}
 	}
 	if spaceRows < rows {
 		for len(spaces) < spaceRows {
@@ -206,7 +242,7 @@ func (m Model) wideView(modal bool) string {
 			}
 		}
 		remaining := max(0, int((m.lastKey.Add(idleLifetime).Sub(m.now())+time.Second-1)/time.Second))
-		spaces = append(spaces, m.styles.dim.Render(wideTrim(mirrorState, left-4)), m.styles.dim.Render(fmt.Sprintf("%s %d:%02d", t.wideLock, remaining/60, remaining%60)))
+		spaces = append(spaces, m.styles.special.Render(wideTrim("["+mirrorState+"]", left-2)), m.styles.muted.Render(fmt.Sprintf("%s %d:%02d ", t.wideLock, remaining/60, remaining%60))+m.styles.accent.Render(strings.Repeat("━", remaining*8/300))+m.styles.muted.Render(strings.Repeat("─", 8-remaining*8/300)))
 	}
 	names := m.names
 	if m.selectedProblem() != nil {
@@ -214,22 +250,25 @@ func (m Model) wideView(modal bool) string {
 	}
 	items := make([]string, 0, rows)
 	count := strconv.Itoa(len(names))
-	items = append(items, m.styles.dim.Render(t.wideName+strings.Repeat(" ", max(1, center-4-lipgloss.Width(t.wideName)-len(count)))+count))
+	items = append(items, m.styles.info.Render(t.wideName)+strings.Repeat(" ", max(1, center-3-lipgloss.Width(t.wideName)-len(count)))+m.styles.muted.Render(count))
 	selected := min(m.cursor, max(0, len(names)-1))
 	if m.screen == spacesList {
 		selected = 0
 	}
 	first := max(0, min(selected-(rows-1)/2, len(names)-(rows-1)))
 	for i := first; i < len(names) && len(items) < rows; i++ {
-		prefix := "  "
+		bar := " "
 		if i == selected {
-			prefix = "> "
+			bar = m.styles.accent.Render("▌")
 		}
-		row := wideTrim(prefix+names[i], center-4)
+		name := wideTrim(names[i], center-7-lipgloss.Width(IconGlyph(m.icons, "item")))
+		label := name
+		if at := strings.LastIndex(name, " / "); at >= 0 && i != selected {
+			label = m.styles.muted.Render(name[:at+3]) + m.styles.text.Render(name[at+3:])
+		}
+		row := bar + " " + IconGlyph(m.icons, "item") + " " + label
 		if i == selected {
-			row = m.styles.selected.Render(row)
-		} else if i%2 == 1 {
-			row = m.styles.dim.Render(row)
+			row = m.styles.raised.Render(bar + m.styles.text.Bold(true).Render(" "+IconGlyph(m.icons, "item")+" "+name))
 		}
 		items = append(items, row)
 	}
@@ -239,7 +278,7 @@ func (m Model) wideView(modal bool) string {
 		if m.screen == vaultItem {
 			name = m.item
 		}
-		detail = append(detail, m.styles.title.Render(wideTrim(name, right-4)))
+		_ = name // The inspector heading carries the selected item's name.
 		generation := uint64(0)
 		if m.vlt != nil {
 			generation = m.vlt.Generation()
@@ -257,30 +296,39 @@ func (m Model) wideView(modal bool) string {
 			detail = append(detail, m.styles.dim.Render(field[0])+strings.Repeat(" ", gap)+value)
 		}
 		label := t.wideValue
-		value := "************"
+		value := "• • • • • •"
 		revealed := m.screen == vaultItem && m.visible && !modal
 		if revealed {
 			value = string(m.itemValue)
 		}
-		lines := strings.Split(lipgloss.Wrap(value, w-4, ""), "\n")
+		lines := strings.Split(lipgloss.Wrap(value, w-2, ""), "\n")
 		// Three rows stay for the box borders and the buttons below it.
-		if revealed && (len([]rune(value)) > maxShownRunes || len(lines) > max(1, rows-len(detail)-4)) {
-			lines = strings.Split(lipgloss.Wrap(t.tooLong, w-4, ""), "\n")
+		if revealed && (len([]rune(value)) > maxShownRunes || len(lines) > max(1, rows-len(detail)-6)) {
+			lines = strings.Split(lipgloss.Wrap(t.tooLong, w-2, ""), "\n")
 		}
-		detail = append(detail, m.styles.border.Render("╭─"+label+strings.Repeat("─", max(0, w-3-lipgloss.Width(label)))+"╮"))
+		// The value sits in a card drawn with two rules, the label on the upper one.
+		detail = append(detail, "", m.styles.border.Render("── ")+m.styles.special.Render(label)+" "+m.styles.border.Render(strings.Repeat("─", max(0, w-4-lipgloss.Width(label)))))
 		for _, line := range lines {
-			detail = append(detail, m.styles.border.Render("│ ")+line+strings.Repeat(" ", max(0, w-4-lipgloss.Width(line)))+m.styles.border.Render(" │"))
+			detail = append(detail, "  "+line)
 		}
-		detail = append(detail, m.styles.border.Render("╰"+strings.Repeat("─", max(0, w-2))+"╯"))
-		button := m.styles.selected
+		detail = append(detail, m.styles.border.Render(strings.Repeat("─", w)), "")
+		reveal, copyButton := m.styles.info, m.styles.selected
 		if m.screen != vaultItem || modal {
-			button = m.styles.dim
+			reveal, copyButton = m.styles.dim, m.styles.dim
 		}
 		action := t.wideReveal
 		if m.visible && !modal {
 			action = t.wideHide
 		}
-		detail = append(detail, button.Render(" [Enter] "+action+" "), button.Render(" [C] "+t.wideCopy+" ")+" "+button.Render(" [E] "+t.wideEdit+" "))
+		revealButton := reveal.Render(IconGlyph(m.icons, "reveal") + " [Enter] " + action)
+		copyChip := copyButton.Render(" " + IconGlyph(m.icons, "copy") + " [C] " + t.wideCopy + " ")
+		if lipgloss.Width(revealButton)+2+lipgloss.Width(copyChip) <= w {
+			detail = append(detail, revealButton+"  "+copyChip)
+		} else {
+			// Side by side when they fit; one under the other in a narrow inspector.
+			detail = append(detail, revealButton, copyChip)
+		}
+		detail = append(detail, m.styles.muted.Render("[E] "+t.wideEdit))
 	}
 	pad := func(lines []string) string {
 		for len(lines) < rows {
@@ -292,10 +340,21 @@ func (m Model) wideView(modal bool) string {
 	if m.selectedProblem() != nil {
 		centerTitle = ""
 	}
+	_ = pad
+	inspectorName := ""
+	if len(names) > 0 && m.screen != spacesList {
+		inspectorName = names[selected]
+	}
+	itemHeading := "[3] " + strings.ToUpper(t.itemTitle)
+	if inspectorName != "" {
+		itemHeading += " // " + inspectorName
+	}
+	// One line between panes, crossing the rule under the headings.
+	separator := m.styles.border.Render("│" + "\n" + "┼" + strings.Repeat("\n"+"│", max(0, paneHeight-2)))
 	panes := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.panel("[1] "+strings.ToUpper(t.spacesTitle), pad(spaces), left, m.screen == spacesList, true), " ",
-		m.panel(wideTrim("[2] "+centerTitle, center-4), pad(items), center, m.screen == vaultList, true), " ",
-		m.panel("[3] "+strings.ToUpper(t.itemTitle), pad(detail), right, m.screen == vaultItem, true))
+		m.wideColumn("[1] "+strings.ToUpper(t.spacesTitle)+"  "+strconv.Itoa(len(m.spaceNames)), spaces, left, paneHeight, m.screen == spacesList), separator,
+		m.wideColumn(strings.TrimSpace("[2] "+centerTitle), items, center, paneHeight, m.screen == vaultList), separator,
+		m.wideColumn(itemHeading, detail, right, paneHeight, m.screen == vaultItem))
 	if modal {
 		panes = lipgloss.NewStyle().Faint(true).Render(panes)
 	}
@@ -316,7 +375,7 @@ func (m Model) wideView(modal bool) string {
 	for _, part := range strings.Split(hints, "  ") {
 		at := strings.Index(part, "]")
 		if strings.HasPrefix(part, "[") && at >= 0 {
-			hintParts = append(hintParts, m.styles.accent.Render(part[:at+1])+m.styles.hint.Render(part[at+1:]))
+			hintParts = append(hintParts, m.styles.raised.Render(m.styles.info.Render(part[:at+1]))+m.styles.muted.Render(part[at+1:]))
 		} else {
 			hintParts = append(hintParts, m.styles.hint.Render(part))
 		}

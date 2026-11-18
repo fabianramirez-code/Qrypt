@@ -43,6 +43,27 @@ func wideFit(t *testing.T, m Model, width, height int) {
 	}
 }
 
+func TestWideUnboxedColumnsAndRoles(t *testing.T) {
+	m := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m.themeName = "carbon"
+	m.refreshStyles()
+	view := framed(m)
+	for _, corner := range []string{"╭", "╮", "╰", "╯"} {
+		if strings.Contains(view, corner) {
+			t.Fatalf("pane has rounded corner %q", corner)
+		}
+	}
+	for _, want := range []string{"[1] SPACES", "NAME", "[3] ITEM", "▌", "─", "│", IconGlyph(m.icons, "spaceOpen"), IconGlyph(m.icons, "item"), "(1)"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if !strings.Contains(m.View().Content, "48;2;38;40;45") {
+		t.Error("surface background missing")
+	}
+	wideFit(t, m, 120, 30)
+}
+
 func TestWideInspectorStatusAndClock(t *testing.T) {
 	for _, lang := range []Language{English, Spanish} {
 		m := send(t, wideFixture(t, lang), tea.WindowSizeMsg{Width: 120, Height: 30})
@@ -50,7 +71,7 @@ func TestWideInspectorStatusAndClock(t *testing.T) {
 		m.now = func() time.Time { return now }
 		m.lastKey = now
 		view := framed(m)
-		for _, want := range []string{">_ QRYPT // Personal", "● PQC: ML-KEM-768 + X25519", "[2] Personal", "├─", "└─", "5:00"} {
+		for _, want := range []string{">_ QRYPT // Personal", "● PQC: ML-KEM-768 + X25519", "[2] Personal", "▸", "▾", "5:00"} {
 			if !strings.Contains(view, want) {
 				t.Errorf("missing %q: %s", want, view)
 			}
@@ -73,7 +94,7 @@ func TestWideInspectorStatusAndClock(t *testing.T) {
 		}
 		m = enter(t, enter(t, m))
 		view = framed(m)
-		for _, want := range []string{"XChaCha20-Poly1305", "ML-KEM-768 + X25519", "Ed25519 + ML-DSA-65", "************", "[Enter]", "[C]", "[E]"} {
+		for _, want := range []string{"XChaCha20-Poly1305", "ML-KEM-768 + X25519", "Ed25519 + ML-DSA-65", "• • • • • •", "[Enter]", "[C]", "[E]"} {
 			if !strings.Contains(view, want) {
 				t.Errorf("missing inspector %q: %s", want, view)
 			}
@@ -131,19 +152,20 @@ func TestWideThresholdPanesAndFocus(t *testing.T) {
 				x = enter(t, x)
 			}
 			view := framed(x)
-			panelTop := ""
+			// The rule under the headings is crossed once per separator: it gives the pane widths.
+			rule := ""
 			for _, line := range strings.Split(view, "\n") {
-				if strings.HasPrefix(line, "╭") || strings.HasPrefix(line, "┏") {
-					panelTop = line
+				if strings.Contains(line, "┼") {
+					rule = line
 					break
 				}
 			}
-			if panelTop == "" {
-				t.Fatal("no panes")
+			if rule == "" || strings.ContainsAny(view, "╭╮╰╯") {
+				t.Fatalf("no unboxed panes: %s", view)
 			}
-			borders := strings.Fields(panelTop)
+			borders := strings.Split(rule, "┼")
 			if len(borders) != 3 {
-				t.Fatalf("expected three bordered panes: %q", panelTop)
+				t.Fatalf("expected three panes: %q", rule)
 			}
 			wantLeft := 25 + (size.Width-100)*25/100
 			wantCenter := 43 + (size.Width-100)*45/100
@@ -162,13 +184,14 @@ func TestWideThresholdPanesAndFocus(t *testing.T) {
 				t.Fatal("hidden value leaked")
 			}
 			focus := map[screen]int{spacesList: 0, vaultList: 1, vaultItem: 2}[state]
+			// The focused pane is the one whose heading rule carries the accent.
 			for i, w := range []int{wantLeft, wantCenter, size.Width - wantLeft - wantCenter - 2} {
 				style := x.styles.dim
 				if i == focus {
 					style = x.styles.accent
 				}
-				if !strings.Contains(x.View().Content, style.Render("╭"+strings.Repeat("─", w-2)+"╮")) {
-					t.Fatalf("pane %d lacks expected focus border on %d", i, state)
+				if !strings.Contains(x.View().Content, style.Render(strings.Repeat("─", w))) {
+					t.Fatalf("pane %d lacks expected focus rule on %d", i, state)
 				}
 			}
 		}
@@ -499,7 +522,8 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 	}
 	for i := range before {
 		if (i < start || i > end) && i < len(before)-2 {
-			if rows[i] != before[i] {
+			// The compositor drops the trailing spaces of an unboxed row.
+			if strings.TrimRight(rows[i], " ") != strings.TrimRight(before[i], " ") {
 				t.Fatalf("background row %d changed: %q / %q", i, rows[i], before[i])
 			}
 		}
@@ -566,7 +590,7 @@ func TestWideModalScreensThemesAndSecurity(t *testing.T) {
 	m = key(t, m, 'e')
 	background := m
 	background.screen, background.visible = vaultItem, false
-	if strings.Contains(m.View().Content, "private-token") || !strings.Contains(framed(background), "************") {
+	if strings.Contains(m.View().Content, "private-token") || !strings.Contains(framed(background), "• • • • • •") {
 		t.Fatal("edit leaked previously revealed value or background not masked")
 	}
 	m = typeText(t, m, "private-token")
@@ -578,7 +602,7 @@ func TestWideModalScreensThemesAndSecurity(t *testing.T) {
 		t.Fatal("edit Tab did not reveal field")
 	}
 	m = key(t, m, tea.KeyEsc)
-	if strings.Contains(framed(m), "private-token") || !strings.Contains(framed(m), "************") {
+	if strings.Contains(framed(m), "private-token") || !strings.Contains(framed(m), "• • • • • •") {
 		t.Fatal("edit Esc did not restore mask")
 	}
 }
@@ -747,31 +771,16 @@ func TestWideInspectorFitsItsValuesAtTheThreshold(t *testing.T) {
 		if before == nil {
 			t.Fatalf("generation missing:\n%s", view)
 		}
-		// The value box is closed: its corners and sides line up in the same columns.
+		// The value card: a rule carrying the label, the hidden dots, and a closing rule.
 		lines := strings.Split(view, "\n")
-		top, left, right := -1, -1, -1
+		card := -1
 		for i, line := range lines {
-			cells := []rune(line)
-			for c := 0; c+1 < len(cells); c++ {
-				if cells[c] == '╭' && cells[c+1] == '─' && c > 60 && strings.ContainsRune(string(cells[c:]), 'V') {
-					top, left = i, c
-				}
-			}
-			if top == i {
-				for c := len(cells) - 1; c > left; c-- {
-					if cells[c] == '╮' {
-						right = c
-						break
-					}
-				}
+			if strings.Contains(line, "── "+m.language.text().wideValue+" ─") {
+				card = i
 			}
 		}
-		if top < 0 || right < 0 || top+2 >= len(lines) {
-			t.Fatalf("value box not found:\n%s", view)
-		}
-		middle, bottom := []rune(lines[top+1]), []rune(lines[top+2])
-		if len(middle) <= right || len(bottom) <= right || middle[left] != '│' || middle[right] != '│' || bottom[left] != '╰' || bottom[right] != '╯' {
-			t.Fatalf("value box is not closed evenly:\n%s", view)
+		if card < 0 || card+2 >= len(lines) || !strings.Contains(lines[card+1], "• • • • • •") || !strings.Contains(lines[card+2], "──────") {
+			t.Fatalf("value card not found:\n%s", view)
 		}
 		m = key(t, m, 'e')
 		m = typeText(t, m, "new value")
@@ -779,6 +788,37 @@ func TestWideInspectorFitsItsValuesAtTheThreshold(t *testing.T) {
 		after := generation.FindStringSubmatch(framed(m))
 		if after == nil || after[1] == before[1] {
 			t.Fatalf("generation did not change after an edit: %v -> %v\n%s", before, after, framed(m))
+		}
+	}
+}
+
+// Every icon set fits every wide pane screen: emoji are two cells wide and the
+// Nerd Font glyphs are private-use code points.
+func TestWidePanesFitWithEveryIconSet(t *testing.T) {
+	for _, icons := range []string{"unicode", "emoji", "nerd"} {
+		for _, name := range []string{"green", "violet", "mono", "contrast", "auto", "carbon"} {
+			for _, language := range []Language{English, Spanish} {
+				m := wideFixture(t, language)
+				m.icons = icons
+				m.themeName = name
+				m.refreshStyles()
+				for _, size := range [][2]int{{100, 20}, {120, 30}, {160, 40}} {
+					x := send(t, m, tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+					for _, state := range []screen{spacesList, vaultList, vaultItem} {
+						y := x
+						if state != spacesList {
+							y = enter(t, y)
+						}
+						if state == vaultItem {
+							y = enter(t, y)
+						}
+						wideFit(t, y, size[0], size[1])
+						if !strings.Contains(framed(y), IconGlyph(icons, "spaceOpen")) {
+							t.Fatalf("%s %s: the open space icon is missing", icons, name)
+						}
+					}
+				}
+			}
 		}
 	}
 }
