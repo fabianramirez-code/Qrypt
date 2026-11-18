@@ -149,10 +149,14 @@ func TestVaultAddShowEditAndDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := opened.Get("account")
+	entries, err := opened.Entries()
+	if err != nil || len(entries) != 1 || entries[0].Title != "account" {
+		t.Fatalf("persisted entries: %+v, %v", entries, err)
+	}
+	got, err := opened.Read(entries[0].ID)
 	opened.Close()
-	if err != nil || string(got) != "replacement" {
-		t.Fatalf("persisted edit: %q, %v", got, err)
+	if err != nil || len(got.Fields) != 1 || got.Fields[0].Label != "value" || string(got.Fields[0].Value) != "replacement" {
+		t.Fatalf("persisted edit: %+v, %v", got, err)
 	}
 	m = key(t, m, tea.KeyEsc)
 	before := vaultFiles(t, dir)

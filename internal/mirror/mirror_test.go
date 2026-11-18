@@ -68,6 +68,58 @@ func must(t *testing.T, e error) {
 		t.Fatal(e)
 	}
 }
+
+// Root-value conveniences for mirror tests; all writes use the item API.
+func addValue(v *vault.Vault, name string, value []byte) error {
+	if err := vault.ValidateName(name); err != nil {
+		return err
+	}
+	if len(value) > vault.MaxValueSize {
+		return vault.ErrValueTooLarge
+	}
+	kind := vault.FieldHidden
+	if bytes.ContainsAny(value, "\r\n") {
+		kind = vault.FieldNote
+	}
+	_, err := v.Add(vault.Item{Title: name, Fields: []vault.Field{{Kind: kind, Label: "value", Value: value}}})
+	return err
+}
+func entryID(v *vault.Vault, name string) (string, error) {
+	entries, err := v.Entries()
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if len(entry.Path) == 0 && entry.Title == name {
+			return entry.ID, nil
+		}
+	}
+	return "", vault.ErrNotFound
+}
+func changeValue(v *vault.Vault, name string, value []byte) error {
+	if err := vault.ValidateName(name); err != nil {
+		return err
+	}
+	if len(value) > vault.MaxValueSize {
+		return vault.ErrValueTooLarge
+	}
+	id, err := entryID(v, name)
+	if err != nil {
+		return err
+	}
+	kind := vault.FieldHidden
+	if bytes.ContainsAny(value, "\r\n") {
+		kind = vault.FieldNote
+	}
+	return v.Replace(id, vault.Item{Title: name, Fields: []vault.Field{{Kind: kind, Label: "value", Value: value}}})
+}
+func dropValue(v *vault.Vault, name string) error {
+	id, err := entryID(v, name)
+	if err != nil {
+		return err
+	}
+	return v.Remove(id)
+}
 func TestDir(t *testing.T) {
 	base := filepath.Join(t.TempDir(), "mirror")
 	s := mirror.Dir(base)
@@ -135,9 +187,9 @@ func TestDirAtomicAndOwnerOnly(t *testing.T) {
 func TestPushRestore(t *testing.T) {
 	root, state, id := device(t)
 	a := scope(t, root, state, id, "Work")
-	must(t, a.Put("one", []byte("alpha")))
+	must(t, addValue(a, "one", []byte("alpha")))
 	b := scope(t, root, state, id, "Home")
-	must(t, b.Put("two", []byte("beta")))
+	must(t, addValue(b, "two", []byte("beta")))
 	m := newMemory()
 	r, e := mirror.Push(root, state, id, m)
 	must(t, e)
@@ -174,15 +226,15 @@ func TestPushRestore(t *testing.T) {
 	for _, v := range opened {
 		n, e := v.Name()
 		must(t, e)
-		names, e := v.List()
+		entries, e := v.Entries()
 		must(t, e)
-		if len(names) != 1 {
-			t.Fatal(names)
+		if len(entries) != 1 {
+			t.Fatal(entries)
 		}
-		value, e := v.Get(names[0])
+		item, e := v.Read(entries[0].ID)
 		must(t, e)
-		if string(value) != want[n][names[0]] {
-			t.Fatalf("%s %s %q", n, names[0], value)
+		if len(item.Fields) != 1 || item.Fields[0].Label != "value" || string(item.Fields[0].Value) != want[n][entries[0].Title] {
+			t.Fatalf("%s %s %+v", n, entries[0].Title, item)
 		}
 	}
 	if e := mirror.Restore(m, fresh, record, id); !errors.Is(e, mirror.ErrNotEmpty) {
@@ -192,7 +244,7 @@ func TestPushRestore(t *testing.T) {
 func TestPushChangesAndRefusals(t *testing.T) {
 	root, state, id := device(t)
 	v := scope(t, root, state, id, "A")
-	must(t, v.Put("old", []byte("old")))
+	must(t, addValue(v, "old", []byte("old")))
 	m := newMemory()
 	_, e := mirror.Push(root, state, id, m)
 	must(t, e)
@@ -200,9 +252,9 @@ func TestPushChangesAndRefusals(t *testing.T) {
 	for k, b := range m.files {
 		before[k] = bytes.Clone(b)
 	}
-	must(t, v.Update("old", []byte("new")))
-	must(t, v.Put("added", nil))
-	must(t, v.Delete("old"))
+	must(t, changeValue(v, "old", []byte("new")))
+	must(t, addValue(v, "added", nil))
+	must(t, dropValue(v, "old"))
 	must(t, v.SetName("Renamed"))
 	r, e := mirror.Push(root, state, id, m)
 	must(t, e)
@@ -246,7 +298,7 @@ func TestPushChangesAndRefusals(t *testing.T) {
 func TestMirrorAheadForeignAndLocalProblem(t *testing.T) {
 	root, state, id := device(t)
 	v := scope(t, root, state, id, "A")
-	must(t, v.Put("x", []byte("one")))
+	must(t, addValue(v, "x", []byte("one")))
 	m := newMemory()
 	_, e := mirror.Push(root, state, id, m)
 	must(t, e)
@@ -256,7 +308,7 @@ func TestMirrorAheadForeignAndLocalProblem(t *testing.T) {
 	}
 	stale, staleState, _ := device(t)
 	must(t, mirror.Restore(old, stale, staleState, id))
-	must(t, v.Update("x", []byte("two")))
+	must(t, changeValue(v, "x", []byte("two")))
 	_, e = mirror.Push(root, state, id, m)
 	must(t, e)
 	snapshot := newMemory()
@@ -303,7 +355,7 @@ func TestMirrorAheadForeignAndLocalProblem(t *testing.T) {
 func TestRestoreRejectsIncompleteWithoutChangingEmptyDevice(t *testing.T) {
 	root, state, id := device(t)
 	v := scope(t, root, state, id, "Source")
-	must(t, v.Put("item", []byte("value")))
+	must(t, addValue(v, "item", []byte("value")))
 	m := newMemory()
 	_, e := mirror.Push(root, state, id, m)
 	must(t, e)
@@ -361,13 +413,13 @@ func TestRestoreRejectsIncompleteWithoutChangingEmptyDevice(t *testing.T) {
 func TestForkAndForeignRestore(t *testing.T) {
 	root, state, id := device(t)
 	v := scope(t, root, state, id, "A")
-	must(t, v.Put("x", []byte("base")))
+	must(t, addValue(v, "x", []byte("base")))
 	m := newMemory()
 	_, e := mirror.Push(root, state, id, m)
 	must(t, e)
 	second, secondState, _ := device(t)
 	must(t, mirror.Restore(m, second, secondState, id))
-	must(t, v.Update("x", []byte("first")))
+	must(t, changeValue(v, "x", []byte("first")))
 	_, e = mirror.Push(root, state, id, m)
 	must(t, e)
 	scopes, problems, e := vault.OpenScopes(second, secondState, id)
@@ -375,7 +427,7 @@ func TestForkAndForeignRestore(t *testing.T) {
 	if len(problems) != 0 || len(scopes) != 1 {
 		t.Fatal(problems)
 	}
-	must(t, scopes[0].Update("x", []byte("different")))
+	must(t, changeValue(scopes[0], "x", []byte("different")))
 	scopes[0].Close()
 	snapshot := newMemory()
 	for k, b := range m.files {
@@ -389,7 +441,7 @@ func TestForkAndForeignRestore(t *testing.T) {
 	other := newMemory()
 	foreignRoot, foreignState, foreignID := device(t)
 	foreign := scope(t, foreignRoot, foreignState, foreignID, "Foreign")
-	must(t, foreign.Put("item", []byte("value")))
+	must(t, addValue(foreign, "item", []byte("value")))
 	_, e = mirror.Push(foreignRoot, foreignState, foreignID, other)
 	must(t, e)
 	fresh, record, _ := device(t)
@@ -406,7 +458,7 @@ func TestForkAndForeignRestore(t *testing.T) {
 func TestRestoreReplacesEmptyAndRecordsRollback(t *testing.T) {
 	root, state, id := device(t)
 	v := scope(t, root, state, id, "Real")
-	must(t, v.Put("item", []byte("first")))
+	must(t, addValue(v, "item", []byte("first")))
 	m := newMemory()
 	_, e := mirror.Push(root, state, id, m)
 	must(t, e)
@@ -429,7 +481,7 @@ func TestRestoreReplacesEmptyAndRecordsRollback(t *testing.T) {
 	if len(issues) != 0 || len(restored) != 1 {
 		t.Fatal(issues)
 	}
-	must(t, restored[0].Update("item", []byte("second")))
+	must(t, changeValue(restored[0], "item", []byte("second")))
 	restored[0].Close()
 	// Putting an older signed scope back after a higher generation was recorded is a rollback.
 	for k, b := range m.files {
@@ -449,11 +501,11 @@ func TestInterruptedPush(t *testing.T) {
 		t.Run(string(rune('0'+nth)), func(t *testing.T) {
 			root, state, id := device(t)
 			v := scope(t, root, state, id, "A")
-			must(t, v.Put("x", []byte("one")))
+			must(t, addValue(v, "x", []byte("one")))
 			m := newMemory()
 			_, e := mirror.Push(root, state, id, m)
 			must(t, e)
-			must(t, v.Update("x", []byte("two")))
+			must(t, changeValue(v, "x", []byte("two")))
 			must(t, v.SetName("New"))
 			m.writes = 0
 			m.fail = nth
@@ -475,7 +527,7 @@ func TestInterruptedPush(t *testing.T) {
 func TestRestoreRefusals(t *testing.T) {
 	root, state, id := device(t)
 	v := scope(t, root, state, id, "A")
-	must(t, v.Put("x", []byte("x")))
+	must(t, addValue(v, "x", []byte("x")))
 	m := newMemory()
 	_, e := mirror.Push(root, state, id, m)
 	must(t, e)

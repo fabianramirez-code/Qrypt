@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
+	"github.com/fabianramirez-code/qrypt/internal/vault"
 )
 
 func TestPreviewScreensAndExit(t *testing.T) {
@@ -78,6 +80,62 @@ func TestPreviewScreensAndExit(t *testing.T) {
 				t.Fatal("lock failed")
 			}
 		})
+	}
+}
+
+// The expected decrypted items retain the preview fixture's original contents.
+func TestPreviewDecryptedFixture(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "identity")
+	id, err := identity.FromSeed(make([]byte, identity.SeedSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := enter(t, send(t, NewPreview(path, English, id), tea.WindowSizeMsg{Width: 60, Height: 20}))
+	defer func() { m.closeVault() }()
+	want := map[string][]vault.Item{
+		"Personal": {
+			{Title: "example: bank", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "value", Value: []byte("DEMO-ACCOUNT-0000")}}},
+			{Title: "example: email", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "value", Value: []byte("demo@example.invalid")}}},
+			{Title: "example: github token", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "value", Value: []byte("fake-token-not-valid")}}},
+			{Title: "example: wifi", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "value", Value: []byte("sample-wifi-password")}}},
+		},
+		"Work": {
+			{Title: "example: meeting", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "value", Value: []byte("sample-agenda")}}},
+			{Title: "example: support", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "value", Value: []byte("support@example.invalid")}}},
+			{Path: []string{"AWS", "prod"}, Title: "sample deployment", Fields: []vault.Field{{Kind: vault.FieldNote, Label: "instructions", Value: []byte("Fake preview instructions\nNo real credentials")}}},
+			{Path: []string{"Google Stitch"}, Title: "account-1@example.invalid", Fields: []vault.Field{
+				{Kind: vault.FieldHidden, Label: "Claude Code", Value: []byte("FAKE-CLAUDE-0001")},
+				{Kind: vault.FieldHidden, Label: "codex", Value: []byte("FAKE-CODEX-0001")},
+				{Kind: vault.FieldHidden, Label: "gemini", Value: []byte("FAKE-GEMINI-0001")},
+				{Kind: vault.FieldVisible, Label: "plan", Value: []byte("demo-only")},
+			}},
+			{Path: []string{"Google Stitch"}, Title: "account-2@example.invalid", Fields: []vault.Field{{Kind: vault.FieldHidden, Label: "Claude Code", Value: []byte("FAKE-CLAUDE-0002")}}},
+		},
+	}
+	for _, scope := range m.scopes {
+		name, err := scope.Name()
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries, err := scope.Entries()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []vault.Item
+		for _, entry := range entries {
+			item, err := scope.Read(entry.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = append(got, item)
+		}
+		if !reflect.DeepEqual(got, want[name]) {
+			t.Fatalf("%s decrypted items: got %+v, want %+v", name, got, want[name])
+		}
+		delete(want, name)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing preview spaces: %v", want)
 	}
 }
 

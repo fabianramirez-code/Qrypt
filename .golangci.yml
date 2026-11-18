@@ -27,5 +27,3 @@ linters:
       - { path: '^internal/tui/theme_settings_test\.go$', linters: [ineffassign, staticcheck], text: 'ineffectual assignment to m|SA4006' }
       - { path: '^internal/tui/problems_test\.go$', linters: [staticcheck], text: 'SA4006' }
       - { path: '^internal/tui/model\.go$', linters: [staticcheck], text: 'QF1001|QF1003' }
-      - { path: '^internal/tui/items\.go$', linters: [unused], text: 'copyItem|enterItem|itemValueView|firstLine|selectedName' }
-      - { path: '^internal/vault/vault\.go$', linters: [unused], text: 'encode|entry|scan|find' }

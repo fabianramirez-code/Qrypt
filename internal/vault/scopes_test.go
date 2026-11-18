@@ -166,10 +166,10 @@ func TestScopeManagement(t *testing.T) {
 	if e := vault.RenameScope(root, filepath.Join(filepath.Dir(root), "state"), id, work, "Work"); e != nil {
 		t.Fatal(e)
 	}
-	if e := work.Put("item", []byte("private")); e != nil {
+	if e := putValue(work, "item", []byte("private")); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := personal.Get("item"); !errors.Is(e, vault.ErrNotFound) {
+	if _, e := readValue(personal, "item"); !errors.Is(e, vault.ErrNotFound) {
 		t.Fatalf("foreign secret: %v", e)
 	}
 	foreign := secretFiles(t, dir)[0]
@@ -180,7 +180,7 @@ func TestScopeManagement(t *testing.T) {
 	if e := os.WriteFile(filepath.Join(root, "scopes", personal.ID(), "secrets", filepath.Base(foreign)), blob, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := personal.List(); !errors.Is(e, vault.ErrIntegrity) {
+	if _, e := rootTitles(personal); !errors.Is(e, vault.ErrIntegrity) {
 		t.Fatalf("foreign ciphertext: %v", e)
 	}
 	if e := os.Remove(filepath.Join(root, "scopes", personal.ID(), "secrets", filepath.Base(foreign))); e != nil {
@@ -290,7 +290,7 @@ func TestEarlierLayoutMoveAndRecovery(t *testing.T) {
 				t.Fatal(e)
 			}
 			defer v.Close()
-			if e := v.Put("old", []byte("still readable")); e != nil {
+			if e := putValue(v, "old", []byte("still readable")); e != nil {
 				t.Fatal(e)
 			}
 			prior := snapshot(t, root)
@@ -322,7 +322,7 @@ func TestEarlierLayoutMoveAndRecovery(t *testing.T) {
 			if e != nil || n != "Personal" {
 				t.Fatalf("name: %q %v", n, e)
 			}
-			value, e := opened[0].Get("old")
+			value, e := readValue(opened[0], "old")
 			if e != nil || string(value) != "still readable" {
 				t.Fatalf("value: %q %v", value, e)
 			}

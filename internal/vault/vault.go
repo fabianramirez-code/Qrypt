@@ -15,7 +15,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -295,45 +294,6 @@ func open(key, nonce, sealed, aad []byte) ([]byte, error) {
 	return plain, nil
 }
 
-// encode builds a whole secret file with fresh random nonces.
-func (v *Vault) encode(fileID []byte, name string, value []byte) ([]byte, error) {
-	namePlain := make([]byte, namePadded)
-	defer clear(namePlain)
-	namePlain[0] = byte(len(name))
-	copy(namePlain[1:], name)
-
-	valueLen := lengthPrefixSize + len(value)
-	valuePlain := make([]byte, (valueLen+valueBlock-1)/valueBlock*valueBlock)
-	defer clear(valuePlain)
-	binary.BigEndian.PutUint32(valuePlain, uint32(len(value)))
-	copy(valuePlain[lengthPrefixSize:], value)
-
-	nameNonce := make([]byte, nonceSize)
-	valueNonce := make([]byte, nonceSize)
-	if _, err := io.ReadFull(rand.Reader, nameNonce); err != nil {
-		return nil, err
-	}
-	if _, err := io.ReadFull(rand.Reader, valueNonce); err != nil {
-		return nil, err
-	}
-	sealedName, err := seal(v.nameKey, nameNonce, namePlain, v.aad(fileID, segmentName))
-	if err != nil {
-		return nil, err
-	}
-	sealedValue, err := seal(v.valueKey, valueNonce, valuePlain, v.aad(fileID, segmentValue))
-	if err != nil {
-		return nil, err
-	}
-	file := make([]byte, 0, valueOffset+len(sealedValue))
-	file = append(file, secretMagic...)
-	file = append(file, formatVersion)
-	file = append(file, nameNonce...)
-	file = append(file, sealedName...)
-	file = append(file, valueNonce...)
-	file = binary.BigEndian.AppendUint32(file, uint32(len(sealedValue)))
-	return append(file, sealedValue...), nil
-}
-
 // checkSecretFile validates the layout of a secret file before any decryption.
 func checkSecretFile(file []byte) error {
 	if len(file) < headerSize || !bytes.Equal(file[:magicSize], []byte(secretMagic)) {
@@ -429,47 +389,6 @@ func allZero(b []byte) bool {
 	return true
 }
 
-type entry struct {
-	id   []byte
-	name string
-}
-
-// scan decrypts the name segment of every secret file, never a value.
-func (v *Vault) scan() ([]entry, error) {
-	if v.nameKey == nil {
-		return nil, ErrClosed
-	}
-	if err := v.checkDisk(); err != nil {
-		return nil, err
-	}
-	// A scope with no secret may have no directory for them, as one copied
-	// from a mirror has: the manifest check above already vouches for it.
-	files, err := os.ReadDir(filepath.Join(v.dir, secretDir))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	var entries []entry
-	for _, f := range files {
-		id, ok := parseFileName(f.Name())
-		if !ok || f.IsDir() {
-			continue
-		}
-		file, err := readLimited(v.secretPath(id), maxItemFile)
-		if err != nil {
-			return nil, err
-		}
-		if err := v.verifyFile(id, file); err != nil {
-			return nil, err
-		}
-		name, err := v.decodeName(id, file)
-		if err != nil {
-			return nil, err
-		}
-		entries = append(entries, entry{id, name})
-	}
-	return entries, nil
-}
-
 func parseFileName(name string) ([]byte, bool) {
 	stem, ok := strings.CutSuffix(name, secretExt)
 	if !ok || len(stem) != fileIDSize*2 || stem != strings.ToLower(stem) {
@@ -481,116 +400,6 @@ func parseFileName(name string) ([]byte, bool) {
 
 func (v *Vault) secretPath(id []byte) string {
 	return filepath.Join(v.dir, secretDir, hex.EncodeToString(id)+secretExt)
-}
-
-func (v *Vault) find(name string) ([]byte, error) {
-	entries, err := v.scan()
-	if err != nil {
-		return nil, err
-	}
-	for _, e := range entries {
-		if e.name == name {
-			return e.id, nil
-		}
-	}
-	return nil, ErrNotFound
-}
-
-func checkSecret(name string, value []byte) error {
-	if err := validateName(name); err != nil {
-		return err
-	}
-	if len(value) > MaxValueSize {
-		return ErrValueTooLarge
-	}
-	return nil
-}
-
-// Put adds a root item with one value field.
-func (v *Vault) Put(name string, value []byte) error {
-	if err := checkSecret(name, value); err != nil {
-		return err
-	}
-	kind := FieldHidden
-	if bytes.ContainsAny(value, "\r\n") {
-		kind = FieldNote
-	}
-	_, err := v.Add(Item{Title: name, Fields: []Field{{Kind: kind, Label: "value", Value: value}}})
-	return err
-}
-
-// Update replaces the value of an existing root item, keeping its id.
-func (v *Vault) Update(name string, value []byte) error {
-	if err := checkSecret(name, value); err != nil {
-		return err
-	}
-	id, err := v.rootID(name)
-	if err != nil {
-		return err
-	}
-	kind := FieldHidden
-	if bytes.ContainsAny(value, "\r\n") {
-		kind = FieldNote
-	}
-	return v.Replace(id, Item{Title: name, Fields: []Field{{Kind: kind, Label: "value", Value: value}}})
-}
-
-// Get returns the value field of a root item.
-func (v *Vault) Get(name string) ([]byte, error) {
-	id, err := v.rootID(name)
-	if err != nil {
-		return nil, err
-	}
-	item, err := v.Read(id)
-	if err != nil {
-		return nil, err
-	}
-	var value []byte
-	for _, field := range item.Fields {
-		if field.Label == "value" {
-			value = field.Value
-		} else {
-			clear(field.Value)
-		}
-	}
-	return value, nil
-}
-func (v *Vault) rootID(name string) (string, error) {
-	entries, err := v.Entries()
-	if err != nil {
-		return "", err
-	}
-	for _, e := range entries {
-		if len(e.Path) == 0 && e.Title == name {
-			return e.ID, nil
-		}
-	}
-	return "", ErrNotFound
-}
-
-// List returns root item titles in byte order.
-func (v *Vault) List() ([]string, error) {
-	entries, err := v.Entries()
-	if err != nil {
-		return nil, err
-	}
-	var names []string
-	for _, e := range entries {
-		if len(e.Path) == 0 {
-			names = append(names, e.Title)
-		}
-	}
-	sort.Strings(names)
-	return names, nil
-}
-
-// Delete removes a root item.
-func (v *Vault) Delete(name string) error {
-	id, err := v.rootID(name)
-	if err != nil {
-		return err
-	}
-	return v.Remove(id)
 }
 
 func readLimited(path string, max int) ([]byte, error) {

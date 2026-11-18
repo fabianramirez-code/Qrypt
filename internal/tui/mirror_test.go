@@ -160,7 +160,11 @@ func TestMirrorFailureThenRepair(t *testing.T) {
 	if m.screen != vaultList || !strings.Contains(plain(m), "Mirror not updated: storage unavailable") || m.ExitStatus() != 0 {
 		t.Fatal(plain(m))
 	}
-	if _, err := m.vlt.Get("account"); err != nil {
+	entries, err := m.vlt.Entries()
+	if err != nil || len(entries) != 1 || entries[0].Title != "account" {
+		t.Fatalf("account entries: %+v, %v", entries, err)
+	}
+	if _, err := m.vlt.Read(entries[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	m.mirrorStorage = func(path string) mirror.Storage { return mirror.Dir(path) }

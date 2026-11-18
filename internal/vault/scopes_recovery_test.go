@@ -49,7 +49,7 @@ func TestRemoveScopeKeepsSecretsAndOtherScopes(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "vault")
 	id := newIdentity(t, 1)
 	keep := scopeAt(t, root, id, "Personal")
-	if err := keep.Put("a", []byte("1")); err != nil {
+	if err := putValue(keep, "a", []byte("1")); err != nil {
 		t.Fatal(err)
 	}
 	if err := vault.RemoveScope(keep); !errors.Is(err, vault.ErrScopeNotEmpty) {
@@ -64,7 +64,7 @@ func TestRemoveScopeKeepsSecretsAndOtherScopes(t *testing.T) {
 		t.Fatalf("OpenScopes after a removal = %v, %v", list, err)
 	}
 	defer list[0].Close()
-	if got, err := list[0].Get("a"); err != nil || string(got) != "1" {
+	if got, err := readValue(list[0], "a"); err != nil || string(got) != "1" {
 		t.Fatalf("remaining secret = %q, %v", got, err)
 	}
 }

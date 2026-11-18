@@ -38,7 +38,7 @@ func TestRecordLifecycle(t *testing.T) {
 	if info, e := os.Stat(state); e != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatalf("record permissions: %v %v", info, e)
 	}
-	for _, op := range []func() error{func() error { return v.Put("a", []byte("one")) }, func() error { return v.Update("a", []byte("two")) }, func() error { return v.Delete("a") }, func() error { return vault.RenameScope(root, state, id, v, "New") }, func() error { return v.SetName("Next") }} {
+	for _, op := range []func() error{func() error { return putValue(v, "a", []byte("one")) }, func() error { return replaceValue(v, "a", []byte("two")) }, func() error { return removeValue(v, "a") }, func() error { return vault.RenameScope(root, state, id, v, "New") }, func() error { return v.SetName("Next") }} {
 		if e := op(); e != nil {
 			t.Fatal(e)
 		}
@@ -74,7 +74,7 @@ func TestRecordComparisonAndAccept(t *testing.T) {
 		{"rollback", func(t *testing.T, d string, v *vault.Vault, s string) {
 			t.Helper()
 			old := snapshot(t, d)
-			if e := v.Update("a", []byte("new")); e != nil {
+			if e := replaceValue(v, "a", []byte("new")); e != nil {
 				t.Fatal(e)
 			}
 			for p, b := range old {
@@ -86,7 +86,7 @@ func TestRecordComparisonAndAccept(t *testing.T) {
 		{"fork", func(t *testing.T, d string, v *vault.Vault, s string) {
 			t.Helper()
 			old := snapshot(t, d)
-			if e := v.Update("a", []byte("new")); e != nil {
+			if e := replaceValue(v, "a", []byte("new")); e != nil {
 				t.Fatal(e)
 			}
 			record, e := os.ReadFile(s)
@@ -103,7 +103,7 @@ func TestRecordComparisonAndAccept(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			if e = other.Update("a", []byte("alternate")); e != nil {
+			if e = replaceValue(other, "a", []byte("alternate")); e != nil {
 				t.Fatal(e)
 			}
 			other.Close()
@@ -121,7 +121,7 @@ func TestRecordComparisonAndAccept(t *testing.T) {
 				t.Fatal(e)
 			}
 			defer v.Close()
-			if e = v.Put("a", []byte("old")); e != nil {
+			if e = putValue(v, "a", []byte("old")); e != nil {
 				t.Fatal(e)
 			}
 			d := filepath.Join(root, "scopes", v.ID())
@@ -147,7 +147,7 @@ func TestRecordComparisonAndAccept(t *testing.T) {
 				if tc.name == "fork" {
 					want = "alternate"
 				}
-				if got, e := scopes[0].Get("a"); e != nil || string(got) != want {
+				if got, e := readValue(scopes[0], "a"); e != nil || string(got) != want {
 					t.Fatalf("surviving value %q %v, want %q", got, e, want)
 				}
 			}
@@ -180,7 +180,7 @@ func TestRecordFirstOpenAndCrashOrder(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = plain.Put("a", []byte("value")); e != nil {
+	if e = putValue(plain, "a", []byte("value")); e != nil {
 		t.Fatal(e)
 	}
 	plain.Close()
@@ -192,7 +192,7 @@ func TestRecordFirstOpenAndCrashOrder(t *testing.T) {
 	if e != nil || len(problems) != 0 || len(scopes) != 1 {
 		t.Fatalf("manifest ahead: %v %+v %v", scopes, problems, e)
 	}
-	if got, e := scopes[0].Get("a"); e != nil || string(got) != "value" {
+	if got, e := readValue(scopes[0], "a"); e != nil || string(got) != "value" {
 		t.Fatalf("value %q %v", got, e)
 	}
 	scopes[0].Close()
@@ -215,7 +215,7 @@ func TestRecordRemovedAndIsolated(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer b.Close()
-	if e = b.Put("keep", []byte("alive")); e != nil {
+	if e = putValue(b, "keep", []byte("alive")); e != nil {
 		t.Fatal(e)
 	}
 	if e = os.RemoveAll(filepath.Join(root, "scopes", a.ID())); e != nil {
@@ -225,7 +225,7 @@ func TestRecordRemovedAndIsolated(t *testing.T) {
 	if e != nil || len(scopes) != 1 || len(problems) != 1 || problems[0].Kind != vault.ProblemRemoved || problems[0].ScopeID != a.ID() {
 		t.Fatalf("isolated: %v %+v %v", scopes, problems, e)
 	}
-	if got, e := scopes[0].Get("keep"); e != nil || string(got) != "alive" {
+	if got, e := readValue(scopes[0], "keep"); e != nil || string(got) != "alive" {
 		t.Fatalf("survivor: %q %v", got, e)
 	}
 	scopes[0].Close()
@@ -250,7 +250,7 @@ func TestAcceptRetainsDecryptableAndRejectsWrongIdentity(t *testing.T) {
 				t.Fatal(e)
 			}
 			defer v.Close()
-			if e = v.Put("a", []byte("one")); e != nil {
+			if e = putValue(v, "a", []byte("one")); e != nil {
 				t.Fatal(e)
 			}
 			dir := filepath.Join(root, "scopes", v.ID())
@@ -270,7 +270,7 @@ func TestAcceptRetainsDecryptableAndRejectsWrongIdentity(t *testing.T) {
 				if e != nil {
 					t.Fatal(e)
 				}
-				if e = plain.Put("b", []byte("two")); e != nil {
+				if e = putValue(plain, "b", []byte("two")); e != nil {
 					t.Fatal(e)
 				}
 				plain.Close()
@@ -332,12 +332,12 @@ func TestAcceptRetainsDecryptableAndRejectsWrongIdentity(t *testing.T) {
 			}
 			defer scopes[0].Close()
 			if damage == "broken name" || damage == "unexpected valid" || damage == "unexpected broken" {
-				if got, e := scopes[0].Get("a"); e != nil || string(got) != "one" {
+				if got, e := readValue(scopes[0], "a"); e != nil || string(got) != "one" {
 					t.Fatalf("survivor %q %v", got, e)
 				}
 			}
 			if damage == "unexpected valid" {
-				if got, e := scopes[0].Get("b"); e != nil || string(got) != "two" {
+				if got, e := readValue(scopes[0], "b"); e != nil || string(got) != "two" {
 					t.Fatalf("valid unexpected lost: %q %v", got, e)
 				}
 			}
@@ -354,7 +354,7 @@ func TestLegacyRecordAndHealthyAccept(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer v.Close()
-	if e = v.Put("old", []byte("readable")); e != nil {
+	if e = putValue(v, "old", []byte("readable")); e != nil {
 		t.Fatal(e)
 	}
 	if e = os.Remove(filepath.Join(root, "manifest")); e != nil {
@@ -369,7 +369,7 @@ func TestLegacyRecordAndHealthyAccept(t *testing.T) {
 	if scope.Generation() != 1 {
 		t.Fatalf("first generation %d", scope.Generation())
 	}
-	if got, e := scope.Get("old"); e != nil || string(got) != "readable" {
+	if got, e := readValue(scope, "old"); e != nil || string(got) != "readable" {
 		t.Fatalf("legacy value %q %v", got, e)
 	}
 	before := snapshot(t, root)

@@ -55,7 +55,7 @@ func TestAcceptNeverEmptiesAScopeWhoseKeyWasReplaced(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, name := range []string{"a", "b", "c"} {
-			if err := v.Put(name, []byte("value of "+name)); err != nil {
+			if err := putValue(v, name, []byte("value of "+name)); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -97,7 +97,7 @@ func TestAcceptNeverEmptiesAScopeWhoseKeyWasReplaced(t *testing.T) {
 		if err != nil || len(scopes) != 1 || len(problems) != 0 {
 			t.Fatalf("named=%v: after restoring the scope file = %v, %+v, %v", named, scopes, problems, err)
 		}
-		if got, err := scopes[0].Get("b"); err != nil || string(got) != "value of b" {
+		if got, err := readValue(scopes[0], "b"); err != nil || string(got) != "value of b" {
 			t.Fatalf("named=%v: Get = %q, %v", named, got, err)
 		}
 		scopes[0].Close()
@@ -138,7 +138,7 @@ func TestScopesCanBeAddedAndRenamedBesideAProblem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := broken.Put("a", []byte("1")); err != nil {
+	if err := putValue(broken, "a", []byte("1")); err != nil {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(root, "scopes", broken.ID())

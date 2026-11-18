@@ -23,7 +23,7 @@ func TestManifestConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, n := range []string{"a", "b"} {
-		if err := v.Put(n, []byte(n)); err != nil {
+		if err := putValue(v, n, []byte(n)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -98,15 +98,15 @@ func TestManifestGenerationAndLegacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(2)
-	if err := v.Put("x", []byte("one")); err != nil {
+	if err := putValue(v, "x", []byte("one")); err != nil {
 		t.Fatal(err)
 	}
 	check(3)
-	if err := v.Update("x", []byte("two")); err != nil {
+	if err := replaceValue(v, "x", []byte("two")); err != nil {
 		t.Fatal(err)
 	}
 	check(4)
-	if err := v.Delete("x"); err != nil {
+	if err := removeValue(v, "x"); err != nil {
 		t.Fatal(err)
 	}
 	check(5)
@@ -123,7 +123,7 @@ func TestManifestGenerationAndLegacy(t *testing.T) {
 		t.Fatalf("legacy generation: %d", opened.Generation())
 	}
 	opened.Close()
-	if err := opened.Put("x", nil); !errors.Is(err, vault.ErrClosed) {
+	if err := putValue(opened, "x", nil); !errors.Is(err, vault.ErrClosed) {
 		t.Fatalf("closed Put: %v", err)
 	}
 	if err := opened.SetName("x"); !errors.Is(err, vault.ErrClosed) {
@@ -136,16 +136,16 @@ func TestManifestDamage(t *testing.T) {
 	if err := v.SetName("Work"); err != nil {
 		t.Fatal(err)
 	}
-	if err := v.Put("a", []byte("old")); err != nil {
+	if err := putValue(v, "a", []byte("old")); err != nil {
 		t.Fatal(err)
 	}
 	file := secretFiles(t, dir)[0]
 	old, _ := os.ReadFile(file)
-	if err := v.Update("a", []byte("new")); err != nil {
+	if err := replaceValue(v, "a", []byte("new")); err != nil {
 		t.Fatal(err)
 	}
 	other, otherDir, _ := newVault(t)
-	if err := other.Put("b", nil); err != nil {
+	if err := putValue(other, "b", nil); err != nil {
 		t.Fatal(err)
 	}
 	otherFile := secretFiles(t, otherDir)[0]
@@ -189,7 +189,7 @@ func TestManifestDamage(t *testing.T) {
 				t.Fatal(err)
 			}
 			damaged := snapshot(t, dir)
-			for _, probe := range []func() error{func() error { _, e := v.List(); return e }, func() error { _, e := v.Get("a"); return e }, func() error { _, e := vault.Open(dir, id); return e }} {
+			for _, probe := range []func() error{func() error { _, e := rootTitles(v); return e }, func() error { _, e := readValue(v, "a"); return e }, func() error { _, e := vault.Open(dir, id); return e }} {
 				err := probe()
 				var p *vault.Problem
 				if !errors.As(err, &p) || !errors.Is(err, vault.ErrIntegrity) || p.Kind != tc.kind || p.ScopeID != v.ID() || p.Missing != tc.missing || p.Unexpected != tc.unexpected || p.Changed != tc.changed {
@@ -221,7 +221,7 @@ func TestManifestInterruptedChanges(t *testing.T) {
 		for _, step := range []int{1, 2} {
 			t.Run(op+string(rune('0'+step)), func(t *testing.T) {
 				v, dir, id := newVault(t)
-				if err := v.Put("a", []byte("old")); err != nil {
+				if err := putValue(v, "a", []byte("old")); err != nil {
 					t.Fatal(err)
 				}
 				old := snapshot(t, dir)
@@ -229,11 +229,11 @@ func TestManifestInterruptedChanges(t *testing.T) {
 				var err error
 				switch op {
 				case "put":
-					err = v.Put("b", []byte("new"))
+					err = putValue(v, "b", []byte("new"))
 				case "update":
-					err = v.Update("a", []byte("new"))
+					err = replaceValue(v, "a", []byte("new"))
 				case "delete":
-					err = v.Delete("a")
+					err = removeValue(v, "a")
 				case "name":
 					err = v.SetName("New")
 				}
@@ -296,7 +296,7 @@ func TestManifestInterruptedChanges(t *testing.T) {
 
 func TestManifestInvalidNextIsNotApplied(t *testing.T) {
 	v, dir, id := newVault(t)
-	if err := v.Put("a", nil); err != nil {
+	if err := putValue(v, "a", nil); err != nil {
 		t.Fatal(err)
 	}
 	manifest, _ := os.ReadFile(filepath.Join(dir, "manifest"))

@@ -71,12 +71,101 @@ func snapshot(t *testing.T, dir string) map[string]string {
 	return out
 }
 
+// These test-only conveniences exercise the item API with the old root-value shape.
+func valueItem(name string, value []byte) vault.Item {
+	kind := vault.FieldHidden
+	if bytes.ContainsAny(value, "\r\n") {
+		kind = vault.FieldNote
+	}
+	return vault.Item{Title: name, Fields: []vault.Field{{Kind: kind, Label: "value", Value: value}}}
+}
+
+func putValue(v *vault.Vault, name string, value []byte) error {
+	if err := vault.ValidateName(name); err != nil {
+		return err
+	}
+	if len(value) > vault.MaxValueSize {
+		return vault.ErrValueTooLarge
+	}
+	_, err := v.Add(valueItem(name, value))
+	return err
+}
+
+func rootEntry(v *vault.Vault, name string) (string, error) {
+	entries, err := v.Entries()
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if len(entry.Path) == 0 && entry.Title == name {
+			return entry.ID, nil
+		}
+	}
+	return "", vault.ErrNotFound
+}
+
+func readValue(v *vault.Vault, name string) ([]byte, error) {
+	id, err := rootEntry(v, name)
+	if err != nil {
+		return nil, err
+	}
+	item, err := v.Read(id)
+	if err != nil {
+		return nil, err
+	}
+	var value []byte
+	for _, field := range item.Fields {
+		if field.Label == "value" {
+			value = field.Value
+		} else {
+			clear(field.Value)
+		}
+	}
+	return value, nil
+}
+
+func replaceValue(v *vault.Vault, name string, value []byte) error {
+	if err := vault.ValidateName(name); err != nil {
+		return err
+	}
+	if len(value) > vault.MaxValueSize {
+		return vault.ErrValueTooLarge
+	}
+	id, err := rootEntry(v, name)
+	if err != nil {
+		return err
+	}
+	return v.Replace(id, valueItem(name, value))
+}
+
+func removeValue(v *vault.Vault, name string) error {
+	id, err := rootEntry(v, name)
+	if err != nil {
+		return err
+	}
+	return v.Remove(id)
+}
+
+func rootTitles(v *vault.Vault) ([]string, error) {
+	entries, err := v.Entries()
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range entries {
+		if len(entry.Path) == 0 {
+			names = append(names, entry.Title)
+		}
+	}
+	return names, nil
+}
+
 func TestRoundTripAndReopen(t *testing.T) {
 	v, dir, id := newVault(t)
-	if err := v.Put("github token", []byte("ghp_secret")); err != nil {
+	if err := putValue(v, "github token", []byte("ghp_secret")); err != nil {
 		t.Fatal(err)
 	}
-	if err := v.Put("bank", []byte{}); err != nil {
+	if err := putValue(v, "bank", []byte{}); err != nil {
 		t.Fatal(err)
 	}
 	reopened, err := vault.Open(dir, id)
@@ -84,15 +173,15 @@ func TestRoundTripAndReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reopened.Close()
-	got, err := reopened.Get("github token")
+	got, err := readValue(reopened, "github token")
 	if err != nil || string(got) != "ghp_secret" {
 		t.Fatalf("Get = %q, %v", got, err)
 	}
-	empty, err := reopened.Get("bank")
+	empty, err := readValue(reopened, "bank")
 	if err != nil || len(empty) != 0 {
 		t.Fatalf("empty Get = %q, %v", empty, err)
 	}
-	names, err := reopened.List()
+	names, err := rootTitles(reopened)
 	if err != nil || !slices.Equal(names, []string{"bank", "github token"}) {
 		t.Fatalf("List = %v, %v", names, err)
 	}
@@ -103,38 +192,41 @@ func TestValueSizeBoundaries(t *testing.T) {
 	for _, size := range []int{0, 1, 251, 252, 253, 508, vault.MaxValueSize} {
 		value := bytes.Repeat([]byte{0xab}, size)
 		name := "v" + string(rune('a'+size%26)) + hex.EncodeToString([]byte{byte(size), byte(size >> 8), byte(size >> 16)})
-		if err := v.Put(name, value); err != nil {
+		if err := putValue(v, name, value); err != nil {
 			t.Fatalf("size %d: %v", size, err)
 		}
-		got, err := v.Get(name)
+		got, err := readValue(v, name)
 		if err != nil || !bytes.Equal(got, value) {
 			t.Fatalf("size %d: round trip failed: %v", size, err)
 		}
 	}
-	if err := v.Put("too big", make([]byte, vault.MaxValueSize+1)); !errors.Is(err, vault.ErrValueTooLarge) {
-		t.Fatalf("oversized value = %v", err)
+	if err := putValue(v, "too big", make([]byte, vault.MaxValueSize+1)); !errors.Is(err, vault.ErrValueTooLarge) {
+		t.Fatalf("legacy-sized value = %v", err)
+	}
+	if _, err := v.Add(valueItem("too big", make([]byte, 65777))); !errors.Is(err, vault.ErrValueTooLarge) {
+		t.Fatalf("oversized item field = %v", err)
 	}
 }
 
 func TestInvalidNamesAreRejectedAndLeaveTheVaultUnchanged(t *testing.T) {
 	v, dir, _ := newVault(t)
-	if err := v.Put("keep", []byte("1")); err != nil {
+	if err := putValue(v, "keep", []byte("1")); err != nil {
 		t.Fatal(err)
 	}
 	before := snapshot(t, dir)
 	for _, name := range []string{"", strings.Repeat("a", vault.MaxNameSize+1), "bad\x00name", "line\nbreak", "\xff\xfe"} {
-		if err := v.Put(name, []byte("x")); !errors.Is(err, vault.ErrInvalidName) {
+		if _, err := v.Add(valueItem(name, []byte("x"))); !errors.Is(err, vault.ErrInvalidName) {
 			t.Fatalf("Put(%q) = %v", name, err)
 		}
 		if !sameSnapshot(before, snapshot(t, dir)) {
 			t.Fatal("rejected name changed files")
 		}
 	}
-	if err := v.Put(strings.Repeat("é", 127), []byte("x")); err != nil {
+	if err := putValue(v, strings.Repeat("é", 127), []byte("x")); err != nil {
 		t.Fatalf("255-byte name rejected: %v", err)
 	}
 	afterValid := snapshot(t, dir)
-	if err := v.Put("keep", []byte("2")); !errors.Is(err, vault.ErrNameExists) {
+	if _, err := v.Add(valueItem("keep", []byte("2"))); !errors.Is(err, vault.ErrNameExists) {
 		t.Fatalf("duplicate Put = %v", err)
 	}
 	if !sameSnapshot(afterValid, snapshot(t, dir)) {
@@ -147,12 +239,12 @@ func TestInvalidNamesAreRejectedAndLeaveTheVaultUnchanged(t *testing.T) {
 
 func TestUpdateKeepsFileNameAndChangesBytes(t *testing.T) {
 	v, dir, _ := newVault(t)
-	if err := v.Put("api", []byte("old")); err != nil {
+	if err := putValue(v, "api", []byte("old")); err != nil {
 		t.Fatal(err)
 	}
 	files := secretFiles(t, dir)
 	oldBytes, _ := os.ReadFile(files[0])
-	if err := v.Update("api", []byte("new value")); err != nil {
+	if err := replaceValue(v, "api", []byte("new value")); err != nil {
 		t.Fatal(err)
 	}
 	if after := secretFiles(t, dir); !slices.Equal(after, files) {
@@ -162,38 +254,38 @@ func TestUpdateKeepsFileNameAndChangesBytes(t *testing.T) {
 	if bytes.Equal(oldBytes, newBytes) || bytes.Equal(oldBytes[8:32], newBytes[8:32]) {
 		t.Fatal("update must write new nonces and ciphertext")
 	}
-	if got, err := v.Get("api"); err != nil || string(got) != "new value" {
+	if got, err := readValue(v, "api"); err != nil || string(got) != "new value" {
 		t.Fatalf("Get = %q, %v", got, err)
 	}
-	if err := v.Update("missing", []byte("x")); !errors.Is(err, vault.ErrNotFound) {
+	if err := v.Replace("00000000000000000000000000000000", valueItem("missing", []byte("x"))); !errors.Is(err, vault.ErrNotFound) {
 		t.Fatalf("Update missing = %v", err)
 	}
 }
 
 func TestDelete(t *testing.T) {
 	v, dir, _ := newVault(t)
-	_ = v.Put("a", []byte("1"))
-	_ = v.Put("b", []byte("2"))
-	if err := v.Delete("a"); err != nil {
+	_ = putValue(v, "a", []byte("1"))
+	_ = putValue(v, "b", []byte("2"))
+	if err := removeValue(v, "a"); err != nil {
 		t.Fatal(err)
 	}
 	if len(secretFiles(t, dir)) != 1 {
 		t.Fatal("delete must remove exactly one file")
 	}
-	if _, err := v.Get("a"); !errors.Is(err, vault.ErrNotFound) {
+	if _, err := readValue(v, "a"); !errors.Is(err, vault.ErrNotFound) {
 		t.Fatalf("Get deleted = %v", err)
 	}
-	if err := v.Delete("a"); !errors.Is(err, vault.ErrNotFound) {
+	if err := removeValue(v, "a"); !errors.Is(err, vault.ErrNotFound) {
 		t.Fatalf("Delete twice = %v", err)
 	}
-	if got, err := v.Get("b"); err != nil || string(got) != "2" {
+	if got, err := readValue(v, "b"); err != nil || string(got) != "2" {
 		t.Fatalf("other secret = %q, %v", got, err)
 	}
 }
 
 func TestFilesRevealNothingReadable(t *testing.T) {
 	v, dir, _ := newVault(t)
-	if err := v.Put("super visible name", []byte("super visible value")); err != nil {
+	if err := putValue(v, "super visible name", []byte("super visible value")); err != nil {
 		t.Fatal(err)
 	}
 	for path, content := range snapshot(t, dir) {
@@ -213,24 +305,24 @@ func TestFilesRevealNothingReadable(t *testing.T) {
 
 func TestListDoesNotNeedValues(t *testing.T) {
 	v, dir, _ := newVault(t)
-	_ = v.Put("a", []byte("1"))
+	_ = putValue(v, "a", []byte("1"))
 	file := secretFiles(t, dir)[0]
 	data, _ := os.ReadFile(file)
 	data[len(data)-1] ^= 1
 	if err := os.WriteFile(file, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
+	if _, err := rootTitles(v); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("List with damaged value = %v", err)
 	}
-	if _, err := v.Get("a"); !errors.Is(err, vault.ErrIntegrity) {
+	if _, err := readValue(v, "a"); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("Get with damaged value = %v", err)
 	}
 }
 
 func TestTamperingIsDetected(t *testing.T) {
 	v, dir, _ := newVault(t)
-	_ = v.Put("a", []byte("1"))
+	_ = putValue(v, "a", []byte("1"))
 	file := secretFiles(t, dir)[0]
 	original, _ := os.ReadFile(file)
 	for _, offset := range []int{8, 40, 304, 340, len(original) - 1} {
@@ -239,29 +331,29 @@ func TestTamperingIsDetected(t *testing.T) {
 		if err := os.WriteFile(file, data, 0600); err != nil {
 			t.Fatal(err)
 		}
-		_, listErr := v.List()
-		_, getErr := v.Get("a")
+		_, listErr := rootTitles(v)
+		_, getErr := readValue(v, "a")
 		if listErr == nil && getErr == nil {
 			t.Fatalf("flipping byte %d went unnoticed", offset)
 		}
 	}
 	for _, data := range [][]byte{original[:len(original)-1], append(bytes.Clone(original), 0), original[:10], {}} {
 		_ = os.WriteFile(file, data, 0600)
-		if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
+		if _, err := rootTitles(v); !errors.Is(err, vault.ErrIntegrity) {
 			t.Fatalf("size %d: List = %v", len(data), err)
 		}
 	}
 	data := bytes.Clone(original)
 	data[7] = 9 // Neither documented secret-file version.
 	_ = os.WriteFile(file, data, 0600)
-	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
+	if _, err := rootTitles(v); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("unknown version: %v", err)
 	}
 }
 
 func TestFileIsBoundToItsNameScopeAndRole(t *testing.T) {
 	v, dir, _ := newVault(t)
-	_ = v.Put("a", []byte("1"))
+	_ = putValue(v, "a", []byte("1"))
 	file := secretFiles(t, dir)[0]
 	data, _ := os.ReadFile(file)
 
@@ -269,7 +361,7 @@ func TestFileIsBoundToItsNameScopeAndRole(t *testing.T) {
 	if err := os.Rename(file, renamed); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
+	if _, err := rootTitles(v); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("renamed file = %v", err)
 	}
 	_ = os.Remove(renamed)
@@ -283,7 +375,7 @@ func TestFileIsBoundToItsNameScopeAndRole(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(otherDir, "secrets", filepath.Base(file)), data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.List(); !errors.Is(err, vault.ErrIntegrity) {
+	if _, err := rootTitles(other); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("file from another scope = %v", err)
 	}
 
@@ -292,7 +384,7 @@ func TestFileIsBoundToItsNameScopeAndRole(t *testing.T) {
 	swapped := bytes.Clone(data)
 	copy(swapped[8:32], data[304:328])
 	_ = os.WriteFile(file, swapped, 0600)
-	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
+	if _, err := rootTitles(v); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("swapped nonce = %v", err)
 	}
 }
@@ -352,8 +444,8 @@ func TestCreateNeverOverwrites(t *testing.T) {
 
 func TestTemporaryFilesAreIgnoredAndNoneAreLeft(t *testing.T) {
 	v, dir, _ := newVault(t)
-	_ = v.Put("a", []byte("1"))
-	_ = v.Update("a", []byte("2"))
+	_ = putValue(v, "a", []byte("1"))
+	_ = replaceValue(v, "a", []byte("2"))
 	for _, path := range secretFiles(t, dir) {
 		if strings.HasSuffix(path, ".tmp") {
 			t.Fatalf("temporary file left: %s", path)
@@ -363,7 +455,7 @@ func TestTemporaryFilesAreIgnoredAndNoneAreLeft(t *testing.T) {
 	if err := os.WriteFile(stray, []byte("junk"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if names, err := v.List(); err != nil || len(names) != 1 {
+	if names, err := rootTitles(v); err != nil || len(names) != 1 {
 		t.Fatalf("List with stray temp = %v, %v", names, err)
 	}
 }
@@ -371,10 +463,10 @@ func TestTemporaryFilesAreIgnoredAndNoneAreLeft(t *testing.T) {
 func TestClosedVaultRefusesWork(t *testing.T) {
 	v, _, _ := newVault(t)
 	v.Close()
-	if _, err := v.List(); !errors.Is(err, vault.ErrClosed) {
+	if _, err := rootTitles(v); !errors.Is(err, vault.ErrClosed) {
 		t.Fatalf("List after Close = %v", err)
 	}
-	if err := v.Put("a", nil); !errors.Is(err, vault.ErrClosed) {
+	if err := putValue(v, "a", nil); !errors.Is(err, vault.ErrClosed) {
 		t.Fatalf("Put after Close = %v", err)
 	}
 }
@@ -389,7 +481,7 @@ func TestSpecConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer legacy.Close()
-	if got, err := legacy.Get("name"); err != nil || string(got) != "value" {
+	if got, err := readValue(legacy, "name"); err != nil || string(got) != "value" {
 		t.Fatalf("legacy Get: %q %v", got, err)
 	}
 
