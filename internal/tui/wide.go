@@ -551,7 +551,7 @@ func (m Model) wideView(modal bool) string {
 			generation = m.vlt.Generation()
 		}
 		w := right - 4 // The pane's inner width.
-		integrity := fmt.Sprintf("%s %d", t.wideVerified, generation)
+		integrity := fmt.Sprintf("%s %s · Gen %d", IconGlyph(m.icons, "verified"), t.wideVerified, generation)
 		if lipgloss.Width(t.wideIntegrity)+1+lipgloss.Width(integrity) > w {
 			integrity = fmt.Sprintf("✓ gen %d", generation)
 		}
@@ -616,7 +616,7 @@ func (m Model) wideView(modal bool) string {
 		revealButton := reveal.Render(IconGlyph(m.icons, "reveal") + " [Enter] " + action)
 		copyChip := copyButton.Render(" " + IconGlyph(m.icons, "copy") + " [C] " + t.wideCopy + " ")
 		sideBySide := lipgloss.Width(revealButton)+2+lipgloss.Width(copyChip) <= w
-		edit, add := "[E] "+t.wideEdit, "[A] "+t.wideAddField
+		edit, add := IconGlyph(m.icons, "edit")+" [E] "+t.wideEdit, IconGlyph(m.icons, "add")+" [A] "+t.wideAddField
 		// Add field sits beside Edit, under Copy when the buttons above are side by side.
 		addColumn := lipgloss.Width(edit) + 2
 		if sideBySide {

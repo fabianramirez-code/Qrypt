@@ -927,7 +927,7 @@ func TestWideInspectorFitsItsValuesAtTheThreshold(t *testing.T) {
 				t.Fatalf("%q missing or cut:\n%s", want, view)
 			}
 		}
-		generation := regexp.MustCompile(`(?:generation|generación|gen) (\d+)`)
+		generation := regexp.MustCompile(`(?:Gen|gen) (\d+)`)
 		before := generation.FindStringSubmatch(view)
 		// The whole values are asserted above; a long space name may still be cut in its own pane.
 		if before == nil {
