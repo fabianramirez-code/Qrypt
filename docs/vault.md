@@ -76,7 +76,11 @@ A scope has a name chosen by the user, such as `Work`. A name can say a lot, so 
 
 ## 4. Secret file
 
-A secret file holds one secret: its name and its value, each sealed on its own.
+A secret file holds one item. There are two versions of its layout. Qrypt writes **version 2**, an item with a title, a folder and several fields. It still reads **version 1**, one name and one value, which is described first because version 2 builds on it.
+
+### Version 1
+
+A version 1 file holds one secret: its name and its value, each sealed on its own.
 
 | Offset | Size          | Field                                                                           |
 | ------ | ------------- | ------------------------------------------------------------------------------- |
@@ -113,6 +117,50 @@ Both nonces are generated again, at random, every time a secret is written, incl
 - Qrypt rejects a file that is too small or too large, has a different magic, an unknown version, or a value segment size that does not match the file's size or is not valid.
 - Qrypt decrypts only the segment it needs. Listing decrypts names only. Showing one secret decrypts that file's value only.
 - If decryption fails, Qrypt cannot tell a damaged file from one of another scope, and reports both as the same error.
+
+### Version 2
+
+A version 2 file holds one **item**: a title, the folder it is in, and a list of fields. It has the same two sealed segments, keys, nonces and rules as version 1; only what the segments hold changes.
+
+| Offset | Size          | Field                                                                              |
+| ------ | ------------- | ---------------------------------------------------------------------------------- |
+| 0      | 7             | Magic: the ASCII bytes `QRYPTSE`                                                   |
+| 7      | 1             | Version: `0x02`                                                                    |
+| 8      | 24            | Head nonce (random)                                                                |
+| 32     | 784           | Sealed head: 768 bytes (the padded title and the padded path) and a 16-byte tag    |
+| 816    | 24            | Body nonce (random)                                                                |
+| 840    | 4             | Body segment size: the length of the sealed body, as a big-endian 32-bit integer   |
+| 844    | 272 to 65,808 | Sealed body: the padded fields and a 16-byte tag                                   |
+
+**Head.** It is what a listing decrypts. Its 768 bytes are:
+
+- bytes 0 to 255: the title, padded exactly as a version 1 name (one length byte, the title, zero bytes). A title follows the name rules: valid UTF-8, 1 to 255 bytes, no control characters;
+- bytes 256 to 767: the path, the folders that lead to the item from the top of its scope. One byte with the number of folders, then for each folder one length byte and its name, then zero bytes. A folder name follows the name rules. An item at the top of its scope has zero folders. The encoded path is at most 511 bytes.
+
+Every head has the same size, so a file shows neither how deep the item is nor how long any name is.
+
+**Folders are not files.** A folder exists because at least one item has it in its path. There is no file that describes a folder, so there is nothing more to hide, to sign or to lose. Two consequences follow: an empty folder cannot be stored, and renaming or moving a folder rewrites the head of every item under it, one item at a time. If that is interrupted, some items are in the old folder and some in the new one; nothing is lost, and the move can be finished.
+
+**Body.** It is decrypted only when the item is opened. Like a version 1 value, it is a four-byte big-endian length, the encoded fields, and zero bytes up to the next multiple of 256 bytes. The encoded fields are at most 65,788 bytes, which makes the largest body exactly as large as the largest version 1 value segment, and lets any version 1 value fit when its item is rewritten:
+
+- one byte with the number of fields, from 0 to 64;
+- for each field: one byte with its kind, one length byte and its label, a four-byte big-endian length and its value.
+
+| Kind   | Meaning                                                                  |
+| ------ | ------------------------------------------------------------------------ |
+| `0x01` | Hidden, one line: a password or a key. Shown only when the user asks.    |
+| `0x02` | Visible, one line: a user name or an address. Still encrypted on disk.   |
+| `0x03` | Note: hidden text of several lines, such as a certificate.               |
+
+A label follows the name rules and is unique within its item. A one-line value has no line break. The kind changes how the interface shows a field, never how it is protected: every field is encrypted the same way.
+
+**Encryption.** As in version 1: the head with the name key and the body with the value key, XChaCha20-Poly1305, each with its own random nonce, and the same associated data, with segment tag `0x01` for the head and `0x02` for the body. The associated data includes the version byte, so a segment of one version cannot be read as the other.
+
+**Uniqueness.** A title is unique within its folder: two items of the same scope with the same path cannot have the same title, compared byte for byte. A folder and an item may have the same name.
+
+**Reading version 1.** A version 1 file is an item at the top of its scope, with its name as the title and one field labeled `value`: hidden if the value is one line, a note if it has a line break. Qrypt never writes version 1. A version 1 file stays as it is until the user changes that item, and is then written as version 2.
+
+**What a version 2 file reveals** is what a version 1 file reveals: that an item exists, and the size of all its fields together to the nearest 256 bytes. It does not reveal the number of fields, their kinds, the title, or the folder.
 
 ## 5. Storage
 

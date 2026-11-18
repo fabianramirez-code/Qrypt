@@ -252,7 +252,7 @@ func TestTamperingIsDetected(t *testing.T) {
 		}
 	}
 	data := bytes.Clone(original)
-	data[7] = 2
+	data[7] = 9 // Neither documented secret-file version.
 	_ = os.WriteFile(file, data, 0600)
 	if _, err := v.List(); !errors.Is(err, vault.ErrIntegrity) {
 		t.Fatalf("unknown version: %v", err)
@@ -382,9 +382,15 @@ func TestClosedVaultRefusesWork(t *testing.T) {
 // TestSpecConformance rebuilds both file kinds from docs/vault.md without
 // sharing any layout or derivation code with the package.
 func TestSpecConformance(t *testing.T) {
-	v, dir, id := newVault(t)
-	if err := v.Put("name", []byte("value")); err != nil {
+	_, dir, id := newVault(t)
+	writeLegacyFixture(t, dir, id, "name", []byte("value"))
+	legacy, err := vault.Open(dir, id)
+	if err != nil {
 		t.Fatal(err)
+	}
+	defer legacy.Close()
+	if got, err := legacy.Get("name"); err != nil || string(got) != "value" {
+		t.Fatalf("legacy Get: %q %v", got, err)
 	}
 
 	scope, _ := os.ReadFile(filepath.Join(dir, "scope"))

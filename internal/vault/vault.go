@@ -336,15 +336,22 @@ func (v *Vault) encode(fileID []byte, name string, value []byte) ([]byte, error)
 
 // checkSecretFile validates the layout of a secret file before any decryption.
 func checkSecretFile(file []byte) error {
-	if len(file) < valueOffset+minValueSealed || len(file) > maxSecretFile ||
-		!bytes.Equal(file[:magicSize], []byte(secretMagic)) {
+	if len(file) < headerSize || !bytes.Equal(file[:magicSize], []byte(secretMagic)) {
 		return ErrInvalidFormat
 	}
-	if file[magicSize] != formatVersion {
+	version := file[magicSize]
+	if version != formatVersion && version != itemVersion {
 		return ErrUnsupportedVersion
 	}
-	size := binary.BigEndian.Uint32(file[valueSizeOffset:valueOffset])
-	if int(size) != len(file)-valueOffset || size < minValueSealed || (size-tagSize)%valueBlock != 0 {
+	offset, sizeOffset := valueOffset, valueSizeOffset
+	if version == itemVersion {
+		offset, sizeOffset = bodyOffset, bodyNonceEnd
+	}
+	if len(file) < offset+minValueSealed || len(file) > offset+maxValueSealed {
+		return ErrInvalidFormat
+	}
+	size := binary.BigEndian.Uint32(file[sizeOffset:offset])
+	if int(size) != len(file)-offset || size < minValueSealed || (size-tagSize)%valueBlock != 0 {
 		return ErrInvalidFormat
 	}
 	return nil
@@ -353,6 +360,10 @@ func checkSecretFile(file []byte) error {
 func (v *Vault) decodeName(fileID, file []byte) (string, error) {
 	if err := checkSecretFile(file); err != nil {
 		return "", err
+	}
+	if file[magicSize] == itemVersion {
+		e, err := v.itemHead(fileID, file)
+		return e.Title, err
 	}
 	plain, err := open(v.nameKey, file[nameNonceOffset:nameSegmentOffset],
 		file[nameSegmentOffset:valueNonceOffset], v.aad(fileID, segmentName))
@@ -374,6 +385,25 @@ func (v *Vault) decodeName(fileID, file []byte) (string, error) {
 func (v *Vault) decodeValue(fileID, file []byte) ([]byte, error) {
 	if err := checkSecretFile(file); err != nil {
 		return nil, err
+	}
+	if file[magicSize] == itemVersion {
+		plain, err := v.itemBody(fileID, file)
+		if err != nil {
+			return nil, err
+		}
+		defer clear(plain)
+		fields, err := decodeFields(plain)
+		if err != nil {
+			return nil, err
+		}
+		var result []byte
+		if len(fields) > 0 {
+			result = fields[0].Value
+		}
+		for i := 1; i < len(fields); i++ {
+			clear(fields[i].Value)
+		}
+		return result, nil
 	}
 	plain, err := open(v.valueKey, file[valueNonceOffset:valueSizeOffset],
 		file[valueOffset:], v.aad(fileID, segmentValue))
@@ -424,7 +454,7 @@ func (v *Vault) scan() ([]entry, error) {
 		if !ok || f.IsDir() {
 			continue
 		}
-		file, err := readLimited(v.secretPath(id), maxSecretFile)
+		file, err := readLimited(v.secretPath(id), maxItemFile)
 		if err != nil {
 			return nil, err
 		}
@@ -476,87 +506,91 @@ func checkSecret(name string, value []byte) error {
 	return nil
 }
 
-// Put adds a new secret. It refuses a name already in use.
+// Put adds a root item with one value field.
 func (v *Vault) Put(name string, value []byte) error {
 	if err := checkSecret(name, value); err != nil {
 		return err
 	}
-	switch _, err := v.find(name); {
-	case err == nil:
-		return ErrNameExists
-	case !errors.Is(err, ErrNotFound):
-		return err
+	kind := FieldHidden
+	if bytes.ContainsAny(value, "\r\n") {
+		kind = FieldNote
 	}
-	id := make([]byte, fileIDSize)
-	if _, err := io.ReadFull(rand.Reader, id); err != nil {
-		return err
-	}
-	file, err := v.encode(id, name, value)
-	if err != nil {
-		return err
-	}
-	m := v.nextManifest()
-	m.Files[hex.EncodeToString(id)] = sha256.Sum256(file)
-	return v.change(m, func() error { return writeNew(v.secretPath(id), file) })
+	_, err := v.Add(Item{Title: name, Fields: []Field{{Kind: kind, Label: "value", Value: value}}})
+	return err
 }
 
-// Update replaces the value of an existing secret, keeping its file name.
+// Update replaces the value of an existing root item, keeping its id.
 func (v *Vault) Update(name string, value []byte) error {
 	if err := checkSecret(name, value); err != nil {
 		return err
 	}
-	id, err := v.find(name)
+	id, err := v.rootID(name)
 	if err != nil {
 		return err
 	}
-	file, err := v.encode(id, name, value)
-	if err != nil {
-		return err
+	kind := FieldHidden
+	if bytes.ContainsAny(value, "\r\n") {
+		kind = FieldNote
 	}
-	m := v.nextManifest()
-	m.Files[hex.EncodeToString(id)] = sha256.Sum256(file)
-	return v.change(m, func() error { return writeReplacing(v.secretPath(id), file) })
+	return v.Replace(id, Item{Title: name, Fields: []Field{{Kind: kind, Label: "value", Value: value}}})
 }
 
-// Get returns the value of a secret, decrypting only that file's value.
+// Get returns the value field of a root item.
 func (v *Vault) Get(name string) ([]byte, error) {
-	id, err := v.find(name)
+	id, err := v.rootID(name)
 	if err != nil {
 		return nil, err
 	}
-	file, err := readLimited(v.secretPath(id), maxSecretFile)
+	item, err := v.Read(id)
 	if err != nil {
 		return nil, err
 	}
-	if err := v.verifyFile(id, file); err != nil {
-		return nil, err
+	var value []byte
+	for _, field := range item.Fields {
+		if field.Label == "value" {
+			value = field.Value
+		} else {
+			clear(field.Value)
+		}
 	}
-	return v.decodeValue(id, file)
+	return value, nil
+}
+func (v *Vault) rootID(name string) (string, error) {
+	entries, err := v.Entries()
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		if len(e.Path) == 0 && e.Title == name {
+			return e.ID, nil
+		}
+	}
+	return "", ErrNotFound
 }
 
-// List returns every secret name in byte order, decrypting names only.
+// List returns root item titles in byte order.
 func (v *Vault) List() ([]string, error) {
-	entries, err := v.scan()
+	entries, err := v.Entries()
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.name
+	var names []string
+	for _, e := range entries {
+		if len(e.Path) == 0 {
+			names = append(names, e.Title)
+		}
 	}
 	sort.Strings(names)
 	return names, nil
 }
 
-// Delete removes the file of a secret.
+// Delete removes a root item.
 func (v *Vault) Delete(name string) error {
-	id, err := v.find(name)
+	id, err := v.rootID(name)
 	if err != nil {
 		return err
 	}
-	m := v.nextManifest()
-	delete(m.Files, hex.EncodeToString(id))
-	return v.change(m, func() error { return os.Remove(v.secretPath(id)) })
+	return v.Remove(id)
 }
 
 func readLimited(path string, max int) ([]byte, error) {
