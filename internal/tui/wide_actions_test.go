@@ -47,8 +47,8 @@ func actionTexts(lang Language) (space, item, folder, field string) {
 
 func TestActionRowsAndInspectorButtonText(t *testing.T) {
 	want := map[Language][4]string{
-		English: {"+ [A] New space", "+ [A] New item", "+ [F] New folder", "[A] Add another entry"},
-		Spanish: {"+ [A] Nuevo espacio", "+ [A] Nuevo elemento", "+ [F] Nueva carpeta", "[A] Añadir otro dato"},
+		English: {"+ [A] New space", "+ [A] New account", "+ [F] New folder", "[A] Add another secret"},
+		Spanish: {"+ [A] Nuevo espacio", "+ [A] Nueva cuenta", "+ [F] Nueva carpeta", "[A] Añadir otro secreto"},
 	}
 	for _, lang := range []Language{English, Spanish} {
 		for _, size := range actionSizes {
@@ -84,9 +84,9 @@ func TestActionRowsFollowTheLastEntryIndentedLikeThePreview(t *testing.T) {
 	m = enter(t, m)
 	lines := strings.Split(plain(m), "\n")
 	for i, line := range lines {
-		if strings.Contains(line, "account") && !strings.Contains(line, "ELEMENTO") {
+		if strings.Contains(line, "account") && !strings.Contains(line, "CUENTA") {
 			// Separator, one cell of padding, then two cells of indent: the plus aligns with the entry icons.
-			if !strings.Contains(lines[i+1], "   + [A] Nuevo elemento") {
+			if !strings.Contains(lines[i+1], "   + [A] Nueva cuenta") {
 				t.Fatalf("first row does not follow the entry or is not indented by two cells: %q %q", line, lines[i+1])
 			}
 			if !strings.Contains(lines[i+2], "   + [F] Nueva carpeta") {
@@ -278,7 +278,7 @@ func TestEmptyFolderKeepsItsNoticeBeforeTheRows(t *testing.T) {
 	lines := strings.Split(plain(m), "\n")
 	for i, line := range lines {
 		if strings.Contains(line, english.folderTemporary[:20]) {
-			if !strings.Contains(lines[i+1], "+ [A] New item") || !strings.Contains(lines[i+2], "+ [F] New folder") {
+			if !strings.Contains(lines[i+1], "+ [A] New account") || !strings.Contains(lines[i+2], "+ [F] New folder") {
 				t.Fatalf("rows do not follow the notice:\n%s", plain(m))
 			}
 			return
@@ -398,11 +398,11 @@ func TestActionRowColorsFocusedUnfocusedAndPlain(t *testing.T) {
 		if !strings.Contains(segment(m, "+ [A] New space"), info) {
 			t.Fatalf("%s: focused key has no key color", theme)
 		}
-		if strings.Contains(framed(m), "+ [A] New item") || strings.Contains(framed(m), "+ [F] New folder") {
+		if strings.Contains(framed(m), "+ [A] New account") || strings.Contains(framed(m), "+ [F] New folder") {
 			t.Fatalf("%s: create inside space advertised on space row", theme)
 		}
 		m = enter(t, m)
-		if strings.Contains(segment(m, "+ [A] New space"), info) || !strings.Contains(segment(m, "+ [A] New item"), info) || !strings.Contains(segment(m, "+ [F] New folder"), info) {
+		if strings.Contains(segment(m, "+ [A] New space"), info) || !strings.Contains(segment(m, "+ [A] New account"), info) || !strings.Contains(segment(m, "+ [F] New folder"), info) {
 			t.Fatalf("%s: focus did not move the key color", theme)
 		}
 	}
@@ -446,7 +446,7 @@ func TestNarrowModeHasNoActionRowsAndSpecificWording(t *testing.T) {
 				wideFit(t, m, size[0], size[1])
 			}
 			m.screen = spacesList
-			want := map[Language][2]string{English: {"A: space", "A: entry"}, Spanish: {"A espacio", "A dato"}}[lang]
+			want := map[Language][2]string{English: {"A: space", "A: secret"}, Spanish: {"A espacio", "A secreto"}}[lang]
 			if !strings.Contains(framed(m), want[0]) {
 				t.Fatalf("spaces hint: %s", framed(m))
 			}

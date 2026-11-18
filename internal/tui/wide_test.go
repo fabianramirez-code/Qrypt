@@ -53,7 +53,7 @@ func TestWideFolderTreeAndFieldInspector(t *testing.T) {
 	m.refreshSpaces()
 	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = enter(t, m)
-	if !strings.Contains(framed(m), "outer (1)") || !strings.Contains(framed(m), "[2] ITEM") {
+	if !strings.Contains(framed(m), "outer (1)") || !strings.Contains(framed(m), "[2] ACCOUNT") {
 		t.Fatal(framed(m))
 	}
 	m = enter(t, m)
@@ -201,7 +201,7 @@ func TestWideUnboxedColumnsAndRoles(t *testing.T) {
 			t.Fatalf("pane has rounded corner %q", corner)
 		}
 	}
-	for _, want := range []string{"[1] SPACES", "[2] ITEM", "└─", "▌", "─", "│", IconGlyph(m.icons, "spaceOpen"), IconGlyph(m.icons, "item"), "(1)"} {
+	for _, want := range []string{"[1] SPACES", "[2] ACCOUNT", "└─", "▌", "─", "│", IconGlyph(m.icons, "spaceOpen"), IconGlyph(m.icons, "item"), "(1)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("missing %q", want)
 		}
@@ -228,13 +228,13 @@ func TestWideInspectorStatusAndClock(t *testing.T) {
 			t.Fatal("wrong algorithm")
 		}
 		if lang == English {
-			for _, want := range []string{"[1] SPACES", "[2] ITEM", "No mirror"} {
+			for _, want := range []string{"[1] SPACES", "[2] ACCOUNT", "No mirror"} {
 				if !strings.Contains(view, want) {
 					t.Errorf("missing %q", want)
 				}
 			}
 		} else {
-			for _, want := range []string{"[1] ESPACIOS", "[2] ELEMENTO", "Sin espejo"} {
+			for _, want := range []string{"[1] ESPACIOS", "[2] CUENTA", "Sin espejo"} {
 				if !strings.Contains(view, want) {
 					t.Errorf("missing %q", want)
 				}
@@ -462,7 +462,7 @@ func TestWideTickCacheAndIdle(t *testing.T) {
 
 func TestWideActionsPreviewAndNarrowPreservation(t *testing.T) {
 	m := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 100, Height: 20})
-	if strings.Contains(framed(m), "account") || !strings.Contains(framed(m), "Personal (1)") {
+	if strings.Contains(framed(m), IconGlyph(m.icons, "item")+" account") || !strings.Contains(framed(m), "Personal (1)") {
 		t.Fatal("a closed space must show its count and not its contents")
 	}
 	for m.spaceTitle() != "Work" {
@@ -573,7 +573,7 @@ func TestWideHeaderFooterPreviewAndForms(t *testing.T) {
 	for _, height := range []int{20, 30} {
 		x := send(t, m, tea.WindowSizeMsg{Width: 100, Height: height})
 		view := framed(x)
-		if !strings.Contains(view, "Personal") || !strings.Contains(view, "1 items") {
+		if !strings.Contains(view, "Personal") || !strings.Contains(view, "1 accounts") {
 			t.Fatalf("header/footer: %s", view)
 		}
 		if height == 20 && !strings.Contains(view, "◆ Qrypt") {
@@ -654,7 +654,7 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 		t.Fatal("add not opened")
 	}
 	view := framed(m)
-	for _, title := range []string{"[1] SPACES", "Personal", "[2] ITEM", english.addTitle} {
+	for _, title := range []string{"[1] SPACES", "Personal", "[2] ACCOUNT", english.addTitle} {
 		if !strings.Contains(view, title) {
 			t.Fatalf("missing %q from modal and panes", title)
 		}
@@ -713,7 +713,7 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 24}, {Width: 60, Height: 20}} {
 		x := send(t, m, size)
 		x = key(t, x, 'a')
-		if strings.Contains(framed(x), "[1] SPACES") || strings.Contains(framed(x), "[2] ITEM") {
+		if strings.Contains(framed(x), "[1] SPACES") || strings.Contains(framed(x), "[2] ACCOUNT") {
 			t.Fatalf("narrow modal got panes at %dx%d", size.Width, size.Height)
 		}
 	}
@@ -927,7 +927,7 @@ func TestWideInspectorFitsItsValuesAtTheThreshold(t *testing.T) {
 				t.Fatalf("%q missing or cut:\n%s", want, view)
 			}
 		}
-		generation := regexp.MustCompile(`(?:Gen|gen) (\d+)`)
+		generation := regexp.MustCompile(`v(\d+)`)
 		before := generation.FindStringSubmatch(view)
 		// The whole values are asserted above; a long space name may still be cut in its own pane.
 		if before == nil {

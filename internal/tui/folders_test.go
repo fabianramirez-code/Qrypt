@@ -238,14 +238,14 @@ func TestNewScreensLockAndFit(t *testing.T) {
 			m.themeName = theme
 			m.refreshStyles()
 			m = enter(t, m)
-			m = addVaultItem(t, m, "name", "secret")
+			m = addVaultItem(t, m, "name", "hidden-payload")
 			for _, icons := range []string{"unicode", "emoji", "nerd"} {
 				m.icons = icons
 				for _, screen := range []screen{vaultList, vaultItem, vaultAddName, folderName, vaultRename, fieldLabel, fieldKind, vaultAddValue, fieldNote, vaultEdit, vaultDelete, fieldDelete} {
 					x := m
 					x.screen = screen
 					wideFit(t, x, 60, 20)
-					if strings.Contains(plain(x), "secret") {
+					if strings.Contains(plain(x), "hidden-payload") {
 						t.Fatalf("%v leaked", screen)
 					}
 				}

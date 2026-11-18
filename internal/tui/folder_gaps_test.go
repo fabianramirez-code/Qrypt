@@ -43,7 +43,7 @@ func TestFolderFieldMirrorAfterEachChange(t *testing.T) {
 			m = key(t, m, 'r')
 			m = typeText(t, m, "renamed-account")
 			m = enter(t, m)
-			check("rename item")
+			check("rename account")
 			m = key(t, m, 'd')
 			m = key(t, m, 'y')
 			check("delete field")
@@ -183,7 +183,7 @@ func TestWideFolderFieldActionsPersistOnDisk(t *testing.T) {
 	item = expected[selectedID]
 	item.Title = "renamed"
 	expected[selectedID] = item
-	check("rename item from inspector", before, true)
+	check("rename account from inspector", before, true)
 	m = key(t, m, tea.KeyEsc)
 	before = spaceSnapshot(t, root)
 	m = key(t, m, 'f')
@@ -271,7 +271,7 @@ func TestWideInspectorHeadingFitsTwoPanes(t *testing.T) {
 				t.Fatalf("heading columns: %q", line)
 			}
 			heading := strings.TrimSpace(parts[1])
-			if !utf8.ValidString(heading) || lipgloss.Width(parts[1]) != 76 || lipgloss.Width(heading) > 74 || !strings.HasPrefix(heading, "[2] ITEM // Personal / ") {
+			if !utf8.ValidString(heading) || lipgloss.Width(parts[1]) != 76 || lipgloss.Width(heading) > 74 || !strings.HasPrefix(heading, "[2] ACCOUNT // Personal / ") {
 				t.Fatalf("invalid or overflowing inspector heading %q", heading)
 			}
 			if tc.cut && !strings.Contains(heading, "…") && !strings.Contains(heading, "sample") {

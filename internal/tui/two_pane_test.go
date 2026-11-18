@@ -61,7 +61,7 @@ func TestTwoPaneTreeRowsNavigationDoesNotWrite(t *testing.T) {
 	m.refreshSpaces()
 	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	before := spaceSnapshot(t, vaultDir(m.path))
-	for _, want := range []string{"outer (1)", "inner (1)", "[2] ITEM // Personal / outer / inner / entry"} {
+	for _, want := range []string{"outer (1)", "inner (1)", "[2] ACCOUNT // Personal / outer / inner / entry"} {
 		m = key(t, m, tea.KeyRight)
 		if !strings.Contains(framed(m), want) || strings.Contains(framed(m), "secret-never-on-tree") || !reflect.DeepEqual(before, spaceSnapshot(t, vaultDir(m.path))) {
 			t.Fatalf("selection %q changed disk or preview: %s", want, framed(m))

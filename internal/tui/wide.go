@@ -551,16 +551,16 @@ func (m Model) wideView(modal bool) string {
 			generation = m.vlt.Generation()
 		}
 		w := right - 4 // The pane's inner width.
-		integrity := fmt.Sprintf("%s %s · Gen %d", IconGlyph(m.icons, "verified"), t.wideVerified, generation)
+		integrity := fmt.Sprintf("%s %s · v%d", IconGlyph(m.icons, "verified"), t.wideVerified, generation)
 		if lipgloss.Width(t.wideIntegrity)+1+lipgloss.Width(integrity) > w {
-			integrity = fmt.Sprintf("✓ gen %d", generation)
+			integrity = fmt.Sprintf("✓ v%d", generation)
 		}
 		fields := [][2]string{{t.wideSpace, m.spaceTitle()}, {t.wideEncryption, "XChaCha20-Poly1305"}, {t.wideKey, "ML-KEM-768 + X25519"}, {t.wideSignature, "Ed25519 + ML-DSA-65"}, {t.wideIntegrity, integrity}}
 		for _, field := range fields {
 			// Label on the left, value against the right edge; a value that cannot fit is cut, never the label.
 			value := wideTrim(field[1], w-1-lipgloss.Width(field[0]))
 			gap := max(1, w-lipgloss.Width(field[0])-lipgloss.Width(value))
-			detail = append(detail, m.styles.dim.Render(field[0])+strings.Repeat(" ", gap)+value)
+			detail = append(detail, m.hintStyle().Render(field[0])+strings.Repeat(" ", gap)+value)
 		}
 		if m.screen == vaultItem {
 			visibleFields := max(1, rows-12)

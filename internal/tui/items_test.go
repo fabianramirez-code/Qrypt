@@ -45,7 +45,7 @@ func addVaultItem(t *testing.T, m Model, name, value string) Model {
 	} else {
 		m = key(t, m, 'h')
 	}
-	if !strings.Contains(plain(m), "Value") && !strings.Contains(plain(m), "Valor") {
+	if !strings.Contains(plain(m), "Secret (hidden)") && !strings.Contains(plain(m), "Secreto (oculto)") {
 		t.Fatalf("not in value field: %q", plain(m))
 	}
 	m = send(t, m, tea.PasteMsg{Content: value})
@@ -163,7 +163,7 @@ func TestVaultAddShowEditAndDelete(t *testing.T) {
 	m = key(t, m, 'd')
 	m = key(t, m, 'n')
 	sameVaultFiles(t, dir, before)
-	if !strings.Contains(plain(m), "account") || strings.Contains(plain(m), "Delete this item?") {
+	if !strings.Contains(plain(m), "account") || strings.Contains(plain(m), "Delete this account?") {
 		t.Fatal("delete cancellation failed")
 	}
 	m = key(t, m, 'd')
@@ -184,9 +184,9 @@ func TestVaultRejectedInputAndPaste(t *testing.T) {
 			dir := filepath.Join(filepath.Dir(path), "vault")
 			m = addVaultItem(t, m, "existing", "first-value")
 			baseline := vaultFiles(t, dir)
-			invalid, duplicate, oversized, lineBreak := "That name is not valid. Use 1 to 255 characters, with no control characters.", "An item with that name already exists.", "That item is too large. The limit is 65,788 bytes.", "Values are one line. Remove the line break."
+			invalid, duplicate, oversized, lineBreak := "That name is not valid. Use 1 to 255 characters, with no control characters.", "An account with that name already exists.", "That account is too large. The limit is 65,788 bytes.", "Values are one line. Remove the line break."
 			if language == Spanish {
-				invalid, duplicate, oversized, lineBreak = "Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.", "Ya existe un elemento con ese nombre.", "Ese elemento es demasiado grande. El límite es 65.788 bytes.", "Los valores son de una línea. Quita el salto de línea."
+				invalid, duplicate, oversized, lineBreak = "Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.", "Ya existe una cuenta con ese nombre.", "Esa cuenta es demasiado grande. El límite es 65.788 bytes.", "Los valores son de una línea. Quita el salto de línea."
 			}
 			for _, tc := range []struct{ name, message string }{{"", invalid}, {"bad\tname", invalid}, {strings.Repeat("x", 256), invalid}, {"existing", duplicate}} {
 				m = key(t, m, 'a')

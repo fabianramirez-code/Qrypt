@@ -68,8 +68,8 @@ func TestSpacesRejectedNamesAndDelete(t *testing.T) {
 		language                     Language
 		duplicate, invalid, nonempty string
 	}{
-		{English, "A space with that name already exists.", "That name is not valid. Use 1 to 255 characters, with no control characters.", "This space is not empty. Delete its items first."},
-		{Spanish, "Ya existe un espacio con ese nombre.", "Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.", "Este espacio no está vacío. Borra primero sus elementos."},
+		{English, "A space with that name already exists.", "That name is not valid. Use 1 to 255 characters, with no control characters.", "This space is not empty. Delete its accounts first."},
+		{Spanish, "Ya existe un espacio con ese nombre.", "Ese nombre no es válido. Usa de 1 a 255 caracteres, sin caracteres de control.", "Este espacio no está vacío. Borra primero sus cuentas."},
 	} {
 		t.Run(tc.duplicate, func(t *testing.T) {
 			m := spacesSession(t, tc.language)
