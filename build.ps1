@@ -47,6 +47,32 @@ function Install-LocalGo([string]$Root) {
     }
 }
 
+# The symbols-only Nerd Font, for the optional icon set. Pinned by version and SHA-256:
+# a different archive is refused, never used.
+$fontVersion = 'v3.5.1'
+$fontSha256 = 'fdca3682534f6f65e1ccb2345b0362ccf67d9b8eca7c8025330946e93e2473bc'
+$fontFile = 'SymbolsNerdFontMono-Regular.ttf'
+
+function Get-SymbolsFont([string]$Directory) {
+    $download = [System.IO.Path]::GetTempFileName()
+    try {
+        $uri = 'https://github.com/ryanoasis/nerd-fonts/releases/download/' + $script:fontVersion + '/NerdFontsSymbolsOnly.zip'
+        Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $download
+        if ((Get-Sha256 $download) -ne $script:fontSha256) { throw 'Symbols font archive SHA-256 mismatch.' }
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($download)
+        try {
+            foreach ($name in @($script:fontFile, 'LICENSE')) {
+                $entry = $archive.GetEntry($name)
+                if ($null -eq $entry) { throw ('Symbols font archive has no ' + $name) }
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $Directory $name), $true)
+            }
+        } finally { $archive.Dispose() }
+    } finally {
+        [System.IO.File]::Delete($download)
+    }
+}
+
 function Invoke-Go([string[]]$GoArguments) {
     & $script:goExe @GoArguments
     if ($LASTEXITCODE -ne 0) { throw ('go ' + ($GoArguments -join ' ') + ' failed (exit ' + $LASTEXITCODE + ').') }
@@ -133,7 +159,7 @@ $stage = Join-Path $dist $folder
 if ([System.IO.Directory]::Exists($stage)) {
     $existing = @([System.IO.Directory]::GetFileSystemEntries($stage))
     foreach ($item in $existing) {
-        if ([System.IO.Path]::GetFileName($item) -notin @('qrypt.exe', 'LICENSE', 'THIRD_PARTY_LICENSES.txt', 'README.txt')) {
+        if ([System.IO.Path]::GetFileName($item) -notin @('qrypt.exe', 'LICENSE', 'THIRD_PARTY_LICENSES.txt', 'README.txt', $fontFile)) {
             throw 'Unexpected file in release staging directory.'
         }
     }
@@ -167,6 +193,11 @@ if ($metadataText -notmatch '(?m)^\s*build\s+-trimpath=true\s*$' -or
 }
 
 [System.IO.File]::Copy((Join-Path $root 'LICENSE'), (Join-Path $stage 'LICENSE'), $true)
+$fontTemp = Join-Path ([System.IO.Path]::GetTempPath()) ('qrypt-font-' + [System.Guid]::NewGuid().ToString('N'))
+[System.IO.Directory]::CreateDirectory($fontTemp) | Out-Null
+try {
+Get-SymbolsFont $fontTemp
+[System.IO.File]::Copy((Join-Path $fontTemp $fontFile), (Join-Path $stage $fontFile), $true)
 $licenses = Join-Path $stage 'THIRD_PARTY_LICENSES.txt'
 $output = [System.IO.File]::Create($licenses)
 try {
@@ -190,15 +221,25 @@ try {
         if ($null -eq $licenseFile) { throw ('Missing license for ' + $module) }
         Add-License $output ($module + ' ' + $moduleVersion) $licenseFile
     }
-    Add-Text $output "===== BIP39 English word list =====`nSource: https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt`nLicense: MIT (https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)`nThe BIP-0039 document states: `"This BIP falls under the MIT License.`"`n"
+    Add-Text $output "===== BIP39 English word list =====`nSource: https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt`nLicense: MIT (https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)`nThe BIP-0039 document states: `"This BIP falls under the MIT License.`"`n`n"
+    Add-License $output ('Symbols Nerd Font Mono ' + $fontVersion + ' (' + $fontFile + ', https://github.com/ryanoasis/nerd-fonts)') (Join-Path $fontTemp 'LICENSE')
 } finally { $output.Dispose() }
+} finally { [System.IO.Directory]::Delete($fontTemp, $true) }
 
 $readme = @"
 Qrypt is an early-stage post-quantum terminal secrets manager.
-It has not been audited and cannot store secrets yet. Do not use it for real secrets.
+It has not been audited. Do not use it for real secrets.
 Start by double-clicking qrypt.exe, or run it from Windows Terminal, PowerShell or cmd.
 Windows may show "Windows protected your PC" because the program is not signed.
 To continue, choose "More info", then "Run anyway".
+To look at the interface without creating anything, run: qrypt.exe --preview
+Icons: the first screen chooses the icon set with the key I. The default needs no font.
+The "nerd" set needs a Nerd Font in your terminal. One is included:
+  1. Double-click $fontFile and choose Install.
+  2. In Windows Terminal: Settings, your profile, Appearance, Font face. Keep your
+     font and add the new one after a comma, for example:
+     Cascadia Mono, Symbols Nerd Font Mono
+  3. Restart the terminal. If the icons show as boxes, choose another set with I.
 Identity file: %AppData%\qrypt\identity
 Project: https://github.com/fabianramirez-code/Qrypt
 Version: $Version
