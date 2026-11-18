@@ -613,7 +613,8 @@ func TestWideAllThemesLanguagesAndLongValue(t *testing.T) {
 				for _, state := range []screen{spacesList, vaultList, vaultItem} {
 					m.screen = state
 					wideFit(t, m, 100, 20)
-					hint := map[screen]string{spacesList: lang.text().wideSpacesHint, vaultList: lang.text().wideListHint, vaultItem: lang.text().wideItemHint}[state]
+					// At 100 columns the bar drops hints from the end; the create keys and help stay.
+					hint := strings.Join(strings.Split(map[screen]string{spacesList: lang.text().wideSpacesHint, vaultList: lang.text().wideListHint, vaultItem: lang.text().wideItemHint}[state], "  ")[:map[screen]int{spacesList: 2, vaultList: 3, vaultItem: 2}[state]], "  ")
 					if !strings.Contains(framed(m), hint) {
 						t.Fatalf("missing focused hint %q", hint)
 					}

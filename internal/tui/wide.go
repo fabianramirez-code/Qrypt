@@ -368,6 +368,10 @@ func (m Model) wideView(modal bool) string {
 			spaces = append(spaces, bar+label+strings.Repeat(" ", gap)+m.styles.muted.Render(count))
 		}
 	}
+	// Hints to create, shown only while A would add a space and only in free rows.
+	if m.selectedProblem() == nil && len(spaces) < spaceRows {
+		spaces = append(spaces, m.actionRow("A", t.wideNewSpace, m.screen == spacesList, left))
+	}
 	if spaceRows < rows {
 		for len(spaces) < spaceRows {
 			spaces = append(spaces, "")
@@ -417,6 +421,14 @@ func (m Model) wideView(modal bool) string {
 	}
 	if len(listRows) == 0 && len(m.folderPath) > 0 && m.screen != spacesList {
 		items = append(items, m.styles.muted.Render(wideTrim(t.folderTemporary, center-3)))
+	}
+	// A and F act on the open space; nothing is offered while no space is open.
+	if m.vlt != nil && m.selectedProblem() == nil {
+		for _, hint := range [][2]string{{"A", t.wideNewItem}, {"F", t.wideNewFolder}} {
+			if len(items) < rows {
+				items = append(items, m.actionRow(hint[0], hint[1], m.screen == vaultList, center))
+			}
+		}
 	}
 	detail := []string{}
 	if m.screen != spacesList && len(listRows) > 0 && !listRows[selected].folder {
@@ -489,13 +501,36 @@ func (m Model) wideView(modal bool) string {
 		}
 		revealButton := reveal.Render(IconGlyph(m.icons, "reveal") + " [Enter] " + action)
 		copyChip := copyButton.Render(" " + IconGlyph(m.icons, "copy") + " [C] " + t.wideCopy + " ")
-		if lipgloss.Width(revealButton)+2+lipgloss.Width(copyChip) <= w {
+		sideBySide := lipgloss.Width(revealButton)+2+lipgloss.Width(copyChip) <= w
+		edit, add := "[E] "+t.wideEdit, "[A] "+t.wideAddField
+		// Add field sits beside Edit, under Copy when the buttons above are side by side.
+		addColumn := lipgloss.Width(edit) + 2
+		if sideBySide {
+			addColumn = max(addColumn, lipgloss.Width(revealButton)+2)
+		}
+		addBeside := addColumn+lipgloss.Width(add) <= w
+		buttonRows := 2 // One row for Reveal and Copy, one for Edit.
+		if !sideBySide {
+			buttonRows++
+		}
+		if !addBeside {
+			buttonRows++
+			// Decoration goes first when the extra row has no room: the blank row above the buttons.
+			if len(detail)+buttonRows > rows && detail[len(detail)-1] == "" {
+				detail = detail[:len(detail)-1]
+			}
+		}
+		if sideBySide {
 			detail = append(detail, revealButton+"  "+copyChip)
 		} else {
 			// Side by side when they fit; one under the other in a narrow inspector.
 			detail = append(detail, revealButton, copyChip)
 		}
-		detail = append(detail, m.styles.muted.Render("[E] "+t.wideEdit))
+		if addBeside {
+			detail = append(detail, m.styles.muted.Render(edit+strings.Repeat(" ", addColumn-lipgloss.Width(edit))+add))
+		} else {
+			detail = append(detail, m.styles.muted.Render(edit), m.styles.muted.Render(add))
+		}
 	}
 	pad := func(lines []string) string {
 		for len(lines) < rows {
@@ -529,18 +564,22 @@ func (m Model) wideView(modal bool) string {
 	if modal {
 		panes = lipgloss.NewStyle().Faint(true).Render(panes)
 	}
-	hints := t.wideSpacesHint
-	if m.screen == vaultList {
-		hints = t.wideListHint
+	hints := ""
+	if !modal {
+		full, mandatory := t.wideSpacesHint, 2
+		switch m.screen {
+		case vaultList:
+			full, mandatory = t.wideListHint, 3
+		case vaultItem:
+			full, mandatory = t.wideItemHint, 2
+		}
+		// Whole hints only: drop from the end of the priority order until the bar fits beside the counter.
+		list := strings.Split(full, "  ")
+		for len(list) > mandatory && lipgloss.Width(strings.Join(list, "  "))+2+lipgloss.Width(t.wideCount(len(listRows))) > m.width {
+			list = list[:len(list)-1]
+		}
+		hints = strings.Join(list, "  ")
 	}
-	if m.screen == vaultItem {
-		hints = t.wideItemHint
-	}
-	if modal {
-		hints = ""
-	}
-	hints = strings.ReplaceAll(hints, "\n", "  ")
-	hints = wideTrim(hints, m.width)
 	// Paint only bracketed keys; labels remain in the hint role.
 	var hintParts []string
 	for _, part := range strings.Split(hints, "  ") {
@@ -585,4 +624,26 @@ func (m Model) wideView(modal bool) string {
 		parts = append(parts, banner)
 	}
 	return strings.Join(parts, "\n")
+}
+
+// hintStyle is the role of the dim labels; the plain look has no hue, so it dims instead.
+func (m Model) hintStyle() lipgloss.Style {
+	if m.plain {
+		return m.styles.dim
+	}
+	return m.styles.muted
+}
+
+// actionRow is a decoration that shows a creating key at the end of a list.
+// It is never selectable. The key is painted like the bottom bar's keys only
+// in the focused pane; elsewhere the whole row is muted.
+func (m Model) actionRow(key, label string, focused bool, width int) string {
+	text := "  + [" + key + "] " + label
+	if lipgloss.Width(text) > width-2 {
+		return ""
+	}
+	if !focused {
+		return m.hintStyle().Render(text)
+	}
+	return "  " + m.hintStyle().Render("+ ") + m.styles.raised.Render(m.styles.info.Render("["+key+"]")) + m.hintStyle().Render(" "+label)
 }

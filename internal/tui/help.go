@@ -51,7 +51,7 @@ func (m Model) helpKeys(t texts) string {
 		return t.exitHint
 	case spacesList:
 		if m.width >= 100 {
-			return t.wideSpacesHint
+			return m.packHints(t.wideSpacesHint)
 		}
 		return t.spacesHint
 	case spacesAdd, spacesRename:
@@ -71,12 +71,12 @@ func (m Model) helpKeys(t texts) string {
 		return t.mirrorStopHint
 	case vaultList:
 		if m.width >= 100 {
-			return t.wideListHint + "\n" + t.folderHint
+			return m.packHints(t.wideListHint) + "\n" + t.folderHint
 		}
 		return t.folderHint
 	case vaultItem:
 		if m.width >= 100 {
-			return t.wideItemHint + "\n" + t.fieldsHint
+			return m.packHints(t.wideItemHint) + "\n" + t.fieldsHint
 		}
 		return t.fieldsHint
 	case vaultAddName, folderName, vaultRename, fieldLabel:
@@ -94,6 +94,24 @@ func (m Model) helpKeys(t texts) string {
 		return t.deleteHint
 	}
 	return ""
+}
+
+// packHints fills help lines with whole hints, so a key never loses its label across a line break.
+// Unlike the bottom bar, help lists every hint, however narrow the window.
+func (m Model) packHints(full string) string {
+	var lines []string
+	line := ""
+	for _, hint := range strings.Split(full, "  ") {
+		if line != "" && lipgloss.Width(line)+2+lipgloss.Width(hint) > m.innerWidth() {
+			lines = append(lines, line)
+			line = ""
+		}
+		if line != "" {
+			line += "  "
+		}
+		line += hint
+	}
+	return strings.Join(append(lines, line), "\n")
 }
 
 func (m Model) helpWaiting() string {

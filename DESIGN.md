@@ -104,6 +104,8 @@ When the window is too short, remove in this order and never remove content:
 3. Bottom key bar.
 4. Title line.
 
+In wide mode the action rows at the end of each list (section 5) are decoration too: they are omitted, last row first, when a pane has no room after its content, and the bottom key bar drops whole pairs from the end of its priority order when the line is too narrow. Neither ever displaces content or cuts a pair with an ellipsis.
+
 ### 4.3 Spacing
 
 - One-column padding inside panels; one blank row between a heading and its content.
@@ -121,7 +123,8 @@ When the window is too short, remove in this order and never remove content:
 | Tree | Folders at any depth; folder icon, name, `(n)` count; indentation of two columns per level. |
 | Inspector | Field list for the selected item: hidden (masked), visible, note. Reveal is explicit. |
 | Modal | Drawn over the panes with the compositor; Raised body, Accent border; Esc closes. The help overlay uses this compositor in wide mode. |
-| Key bar | Bottom line: key and action pairs in the chosen language only (both languages before the choice). |
+| Action row | Wide mode: dim `+ [key] Label` row after the last entry of a list, to create. A hint, never selectable; shown only when its key would work in that pane, omitted when there is no room, never displacing content. Key in the key-bar style in the focused pane, whole row Muted elsewhere. |
+| Key bar | Bottom line: key and action pairs in the chosen language only (both languages before the choice). In wide mode the pairs are listed in priority order, create keys and `[?] help` first; they are one line, never cut with an ellipsis, and whole pairs are dropped from the end until the line fits beside the item counter. |
 | Status bar | Wide mode only: space, item count, mirror and integrity state, lock countdown; a warning if memory locking was refused. |
 | Problem screen | Integrity failure. Accepting needs the typed word `ACCEPT` (`ACEPTAR` in Spanish); never a single key. |
 | Fields for secrets | Typed, not pasted (except vault fields where a user must paste a token). Masked while typing. |
