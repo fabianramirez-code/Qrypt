@@ -23,7 +23,8 @@ func unlockFixture(t *testing.T, language Language) (Model, string, string, []by
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, pass, err := id.Seal()
+	data, passBytes, err := id.Seal()
+	pass := string(passBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +126,7 @@ func TestUnlockSuccessAndExit(t *testing.T) {
 	}
 	m = finishCheck(t, m, cmd)
 	requireUnlock(t, m, "Espacios", "Personal (0)", "Esc bloquear")
-	if strings.Contains(plain(m), "*") || strings.Contains(plain(m), pass) || m.input != "" || m.id != nil {
+	if strings.Contains(plain(m), "*") || strings.Contains(plain(m), pass) || m.input.String() != "" || m.id != nil {
 		t.Fatal("secret retained")
 	}
 	after, err := os.ReadFile(path)

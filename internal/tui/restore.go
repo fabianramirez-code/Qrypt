@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 
@@ -29,34 +30,36 @@ func (m *Model) beginRestore(origin screen) {
 func (m Model) restoreWordKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch key.Code {
 	case tea.KeyEsc:
-		m.input = ""
+		m.input.Wipe()
 		m.message = ""
 		m.visible = false
 		if m.index == 0 {
 			m.screen = restoreIntro
 		} else {
 			m.index--
-			m.restoreWords[m.index] = ""
+			clear(m.restoreWords[m.index])
 			m.restoreWords = m.restoreWords[:m.index]
 		}
 	case tea.KeyTab:
 		m.visible = !m.visible
 	case tea.KeyEnter:
-		word := strings.ToLower(strings.TrimSpace(m.input))
+		word := strings.ToLower(strings.TrimSpace(m.input.String()))
 		if !identity.InWordList(word) {
 			m.message = m.language.text().invalidWord
 			return m, nil
 		}
-		m.restoreWords = append(m.restoreWords, word)
+		m.restoreWords = append(m.restoreWords, []byte(word))
 		m.index++
-		m.input = ""
+		m.input.Wipe()
 		m.message = ""
 		m.visible = false
 		if m.index == 24 {
-			phrase := strings.Join(m.restoreWords, " ")
+			phrase := bytes.Join(m.restoreWords, []byte(" "))
+			m.wipeRestoreWords()
 			m.screen = rebuilding
 			return m, func() tea.Msg {
 				id, err := identity.FromRecoveryPhrase(phrase)
+				clear(phrase)
 				if err != nil {
 					return rebuiltMsg{err: err}
 				}

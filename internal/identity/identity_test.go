@@ -155,10 +155,10 @@ func TestRecovery(t *testing.T) {
 	for _, v := range vectors {
 		t.Run(v.phrase[:strings.IndexByte(v.phrase, ' ')], func(t *testing.T) {
 			id := mustID(t, bytes.Repeat([]byte{v.value}, 32))
-			if got := id.RecoveryPhrase(); got != v.phrase {
+			if got := string(id.RecoveryPhrase()); got != v.phrase {
 				t.Fatalf("phrase mismatch: %q", got)
 			}
-			back, e := identity.FromRecoveryPhrase(v.phrase)
+			back, e := identity.FromRecoveryPhrase([]byte(v.phrase))
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -171,9 +171,9 @@ func TestRecovery(t *testing.T) {
 		t.Fatal(e)
 	}
 	same(t, id.PublicKeys(), back.PublicKeys())
-	words := strings.Fields(id.RecoveryPhrase())
+	words := strings.Fields(string(id.RecoveryPhrase()))
 	mixed := " \t" + strings.ToUpper(strings.Join(words[:12], "  \n")) + "\n\t" + strings.Join(words[12:], "\t") + " \n"
-	back, e = identity.FromRecoveryPhrase(mixed)
+	back, e = identity.FromRecoveryPhrase([]byte(mixed))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -181,9 +181,9 @@ func TestRecovery(t *testing.T) {
 	cases := []struct {
 		phrase string
 		want   error
-	}{{"word", identity.ErrWordCount}, {strings.Replace(id.RecoveryPhrase(), words[3], "notaword", 1), identity.ErrUnknownWord}, {strings.Join(append(words[:23], "abandon"), " "), identity.ErrChecksum}}
+	}{{"word", identity.ErrWordCount}, {strings.Replace(string(id.RecoveryPhrase()), words[3], "notaword", 1), identity.ErrUnknownWord}, {strings.Join(append(words[:23], "abandon"), " "), identity.ErrChecksum}}
 	for _, tc := range cases {
-		_, e := identity.FromRecoveryPhrase(tc.phrase)
+		_, e := identity.FromRecoveryPhrase([]byte(tc.phrase))
 		if !errors.Is(e, tc.want) {
 			t.Fatalf("expected %v, got %v", tc.want, e)
 		}
@@ -207,14 +207,14 @@ func TestSealOpen(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if pass == otherPass {
+	if bytes.Equal(pass, otherPass) {
 		t.Fatal("reused passphrase")
 	}
 	list := make(map[string]bool)
 	for _, word := range strings.Fields(string(embeddedWords)) {
 		list[word] = true
 	}
-	for _, phrase := range []string{pass, otherPass} {
+	for _, phrase := range []string{string(pass), string(otherPass)} {
 		parts := strings.Split(phrase, " ")
 		if len(parts) != 7 || phrase != strings.ToLower(phrase) {
 			t.Fatal("noncanonical passphrase")
@@ -233,12 +233,12 @@ func TestSealOpen(t *testing.T) {
 			t.Fatalf("reused random field: %v", span)
 		}
 	}
-	opened, e := identity.Open(a, []byte(pass))
+	opened, e := identity.Open(a, pass)
 	if e != nil {
 		t.Fatal(e)
 	}
 	same(t, id.PublicKeys(), opened.PublicKeys())
-	mixed := []byte(" \t" + strings.ToUpper(strings.Join(strings.Fields(pass), "  \n")) + "\t \n")
+	mixed := []byte(" \t" + strings.ToUpper(strings.Join(strings.Fields(string(pass)), "  \n")) + "\t \n")
 	opened, e = identity.Open(a, mixed)
 	if e != nil {
 		t.Fatal(e)
@@ -276,7 +276,7 @@ func TestSealOpen(t *testing.T) {
 	for _, offset := range []int{8, 24, 48} {
 		bad := bytes.Clone(a)
 		bad[offset] ^= 1
-		if _, e := identity.Open(bad, []byte(pass)); !errors.Is(e, identity.ErrDecryption) {
+		if _, e := identity.Open(bad, pass); !errors.Is(e, identity.ErrDecryption) {
 			t.Fatalf("tamper %d: %v", offset, e)
 		}
 	}
@@ -484,7 +484,7 @@ func TestLoadRoundTrip(t *testing.T) {
 	if e = identity.Save(path, data); e != nil {
 		t.Fatal(e)
 	}
-	got, e := identity.Load(path, []byte(pass))
+	got, e := identity.Load(path, pass)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -494,7 +494,7 @@ func TestLoadRoundTrip(t *testing.T) {
 		if e := os.WriteFile(p, make([]byte, n), 0600); e != nil {
 			t.Fatal(e)
 		}
-		if _, e := identity.Load(p, []byte(pass)); !errors.Is(e, identity.ErrInvalidFormat) {
+		if _, e := identity.Load(p, pass); !errors.Is(e, identity.ErrInvalidFormat) {
 			t.Fatalf("length %d: %v", n, e)
 		}
 	}

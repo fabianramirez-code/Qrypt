@@ -26,7 +26,8 @@ func (m Model) selectedProblem() *vault.Problem {
 }
 
 func (m *Model) openProblem() {
-	m.input, m.message = "", ""
+	m.input.Wipe()
+	m.message = ""
 	m.names = nil
 	m.screen = problemScreen
 }
@@ -34,7 +35,8 @@ func (m *Model) openProblem() {
 func (m Model) problemKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	p := m.selectedProblem()
 	if v.Code == tea.KeyEsc {
-		m.input, m.message = "", ""
+		m.input.Wipe()
+		m.message = ""
 		m.screen = spacesList
 		return m, nil
 	}
@@ -45,7 +47,7 @@ func (m Model) problemKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.editInput(v)
 		return m, nil
 	}
-	if m.input != m.language.text().problemWord {
+	if m.input.String() != m.language.text().problemWord {
 		m.message = m.language.text().problemWrong
 		return m, nil
 	}
@@ -66,7 +68,8 @@ func (m Model) problemKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.spaceRows = nil
 	m.spaceCursor = 0
 	m.vlt = nil
-	m.input, m.message = "", ""
+	m.input.Wipe()
+	m.message = ""
 	m.screen = spacesList
 	m.refreshSpaces()
 	for i, row := range m.spaceRows {
@@ -104,6 +107,6 @@ func (m Model) problemView(t texts) string {
 	if p.Kind == vault.ProblemFiles || p.Kind == vault.ProblemSignature {
 		lines = append(lines, t.problemMissing(uint64(p.Missing)), t.problemUnexpected(uint64(p.Unexpected)), t.problemChanged(uint64(p.Changed)), t.problemUndecryptable(uint64(p.Undecryptable)))
 	}
-	lines = append(lines, wrapLine(t.problemAccept), t.problemPrompt, wrapWidth(m.input, m.innerWidth()), wrapLine(m.message), m.styles.hint.Render(t.problemHint))
+	lines = append(lines, wrapLine(t.problemAccept), t.problemPrompt, wrapWidth(m.input.String(), m.innerWidth()), wrapLine(m.message), m.styles.hint.Render(t.problemHint))
 	return strings.Join(lines, "\n")
 }

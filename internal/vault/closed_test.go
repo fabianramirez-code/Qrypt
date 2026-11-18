@@ -45,7 +45,7 @@ func TestClosedVaultAndIdentity(t *testing.T) {
 	if got := id.PublicKeys(); len(got.KEM)+len(got.Ed25519)+len(got.MLDSA65) != 0 {
 		t.Error("closed identity returned public keys")
 	}
-	if id.RecoveryPhrase() != "" {
+	if len(id.RecoveryPhrase()) != 0 {
 		t.Error("closed identity returned recovery phrase")
 	}
 	if _, _, e := id.Seal(); !errors.Is(e, identity.ErrClosed) {

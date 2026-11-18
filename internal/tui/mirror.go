@@ -155,7 +155,7 @@ func (m Model) mirrorKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.message = ""
 		case plainKey(v, 'e'):
 			m.screen = mirrorEdit
-			m.input = m.settings.Mirror
+			m.input.Set(m.settings.Mirror)
 			m.message = ""
 		case plainKey(v, 'x'):
 			m.screen = mirrorStop
@@ -188,7 +188,7 @@ func (m Model) mirrorKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case mirrorEdit:
 		if v.Code == tea.KeyEsc {
-			m.input = ""
+			m.input.Wipe()
 			m.message = ""
 			m.screen = mirrorScreen
 			break
@@ -197,7 +197,7 @@ func (m Model) mirrorKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.editInput(v)
 			break
 		}
-		path := m.input
+		path := m.input.String()
 		if path == "" {
 			m.message = t.mirrorNoFolder
 			break
@@ -218,7 +218,7 @@ func (m Model) mirrorKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.message = err.Error()
 			break
 		}
-		m.input = ""
+		m.input.Wipe()
 		m.message = ""
 		m.screen = mirrorScreen
 		m.mirrorUpdate()
@@ -244,7 +244,7 @@ func (m Model) mirrorKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) mirrorView(t texts) string {
 	lines := []string{m.styles.title.Render(t.mirrorTitle)}
 	if m.screen == mirrorEdit {
-		lines = append(lines, t.mirrorPathPrompt, wrapWidth(m.input, m.innerWidth()), wrapLine(m.message), m.styles.hint.Render(t.mirrorPathHint))
+		lines = append(lines, t.mirrorPathPrompt, wrapWidth(m.input.String(), m.innerWidth()), wrapLine(m.message), m.styles.hint.Render(t.mirrorPathHint))
 		return strings.Join(lines, "\n")
 	}
 	folder := m.settings.Mirror

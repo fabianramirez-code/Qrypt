@@ -126,14 +126,16 @@ func (m *Model) openColorEditor() {
 	m.themeName = "custom"
 	m.themeIndex = len(theme.Names())
 	m.refreshStyles()
-	m.input, m.message, m.colorIndex, m.screen = "", "", 0, colorEditor
+	m.input.Wipe()
+	m.message, m.colorIndex, m.screen = "", 0, colorEditor
 }
 
 func (m *Model) colorKey(v tea.KeyPressMsg) {
 	role := roles[m.colorIndex]
 	switch v.Code {
 	case tea.KeyEsc:
-		m.input, m.message, m.screen = "", "", languageScreen
+		m.input.Wipe()
+		m.message, m.screen = "", languageScreen
 		if sameColors(m.settings.Colors, m.editorColors) {
 			m.settings = m.beforeEdit
 			m.themeName = m.editorOrigin
@@ -154,17 +156,19 @@ func (m *Model) colorKey(v tea.KeyPressMsg) {
 		} else {
 			m.colorIndex = min(6, m.colorIndex+1)
 		}
-		m.input, m.message = "", ""
+		m.input.Wipe()
+		m.message = ""
 	case tea.KeyEnter:
-		if err := theme.ValidateRole(m.editorPalette, role, m.input); err != nil {
+		if err := theme.ValidateRole(m.editorPalette, role, m.input.String()); err != nil {
 			if m.language == Spanish {
 				m.message = "Color rechazado: hexadecimal inválido o contraste inferior a 3:1."
 			} else {
 				m.message = "Color rejected: invalid hex or contrast below 3:1."
 			}
 		} else {
-			m.settings.Colors[role] = m.input
-			m.input, m.message = "", ""
+			m.settings.Colors[role] = m.input.String()
+			m.input.Wipe()
+			m.message = ""
 			m.refreshStyles()
 		}
 	default:
@@ -228,7 +232,7 @@ func (m Model) colorView() string {
 		}
 		lines = append(lines, row)
 	}
-	lines = append(lines, "#rrggbb: "+wrapLine(m.input), m.message,
+	lines = append(lines, "#rrggbb: "+wrapLine(m.input.String()), m.message,
 		"↑/↓: role   Enter: apply   Ctrl+R: reset role",
 		"Ctrl+A: reset all   Esc: save / back")
 	return strings.Join(lines, "\n")

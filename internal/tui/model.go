@@ -70,7 +70,7 @@ const (
 type sealedMsg struct {
 	id     *identity.Identity
 	sealed []byte
-	pass   string
+	pass   []byte
 	err    error
 }
 type openedMsg struct{ err error }
@@ -80,7 +80,7 @@ type savedMsg struct {
 }
 type rebuiltMsg struct {
 	sealed []byte
-	pass   string
+	pass   []byte
 	err    error
 }
 type clipboardTickMsg struct{ token uint64 }
@@ -147,16 +147,16 @@ type Model struct {
 	status          int
 	id              *identity.Identity
 	sealed          []byte
-	pass            string
-	words           []string
-	input           string
+	pass            secretText
+	phrase          secretText
+	input           secretText
 	message         string
 	visible         bool
 	positions       [3]int
 	index           int
 	restoring       bool
 	restoreOrigin   screen
-	restoreWords    []string
+	restoreWords    [][]byte
 	backup          string
 	vlt             *vault.Vault
 	scopes          []*vault.Vault
@@ -195,7 +195,7 @@ type Model struct {
 	logoToken       uint64
 	helpOpen        bool
 	helpPage        int
-	copyValue       string
+	copyValue       []byte
 	copyActive      bool
 	copyToken       uint64
 	copyUntil       time.Time
@@ -284,22 +284,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.id != v.id {
 			m.id.Close()
 		}
-		m.id, m.sealed, m.pass = v.id, v.sealed, v.pass
-		m.words = strings.Fields(v.id.RecoveryPhrase())
+		m.id, m.sealed = v.id, v.sealed
+		m.pass.Set(string(v.pass))
+		clear(v.pass)
+		phrase := v.id.RecoveryPhrase()
+		m.phrase.Set(string(phrase))
+		clear(phrase)
 		m.screen = passphrase
 	case rebuiltMsg:
 		if m.screen != rebuilding {
 			return m, nil
 		}
-		clear(m.restoreWords)
-		m.restoreWords = nil
+		m.wipeRestoreWords()
 		m.index = 0
-		m.input = ""
+		m.input.Wipe()
 		if v.err != nil {
 			m.screen = restoreWord
 			m.message = m.language.text().invalidPhrase
 		} else {
-			m.sealed, m.pass = v.sealed, v.pass
+			m.sealed = v.sealed
+			m.pass.Set(string(v.pass))
+			clear(v.pass)
 			m.screen = passphrase
 			m.message = ""
 		}
@@ -320,7 +325,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.screen = recovery
 		}
-		m.input = ""
+		m.input.Wipe()
 	case unlockedMsg:
 		if m.screen != checkingUnlock {
 			v.id.Close()
@@ -328,7 +333,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch {
 		case v.err == nil:
-			m.input = ""
+			m.input.Wipe()
 			m.message = ""
 			m.openVault(v.id)
 			if m.scopeID != nil {
@@ -338,7 +343,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = unlock
 			m.message = unlockError(v.err, m.language.text())
 		default:
-			m.input = ""
+			m.input.Wipe()
 			m.screen = cannotOpen
 			m.message = openFailure(v.err, m.language.text())
 		}
@@ -396,7 +401,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.message = m.language.text().problemPaste
 		} else if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == vaultEdit || m.screen == spacesAdd || m.screen == spacesRename || m.screen == mirrorEdit || m.screen == folderName || m.screen == fieldLabel || m.screen == fieldNote || m.screen == vaultRename {
 			if m.screen == fieldNote {
-				m.input += v.Content
+				m.input.Append(v.Content)
 				m.message = ""
 			} else {
 				m.vaultPaste(v.Content)
@@ -559,7 +564,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if v.Code == tea.KeyEsc {
-				m.input = ""
+				m.input.Wipe()
 				return m, tea.Quit
 			}
 			if v.Code == tea.KeyTab {
@@ -567,7 +572,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if v.Code == tea.KeyEnter {
-				typed := []byte(m.input)
+				typed := m.input.Copy()
 				path := m.path
 				m.message = ""
 				m.screen = checkingUnlock
@@ -615,19 +620,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case passphrase:
 			if v.Code == tea.KeyEnter {
 				m.screen = confirmPassphrase
-				m.input = ""
+				m.input.Wipe()
 				m.message = ""
 			}
 		case confirmPassphrase:
 			if v.Code == tea.KeyEsc {
 				m.screen = passphrase
-				m.input = ""
+				m.input.Wipe()
 				m.message = ""
 				return m, nil
 			}
 			if v.Code == tea.KeyEnter {
-				typed := []byte(m.input)
-				m.input = ""
+				typed := m.input.Copy()
+				m.input.Wipe()
 				m.message = ""
 				m.screen = waitingOpen
 				sealed := m.sealed
@@ -644,25 +649,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.screen = confirmRecovery
 				m.positions = m.pick()
 				m.index = 0
-				m.input = ""
+				m.input.Wipe()
 				m.message = ""
 			}
 		case confirmRecovery:
 			if v.Code == tea.KeyEsc {
 				m.screen = recovery
-				m.input = ""
+				m.input.Wipe()
 				m.message = ""
 				return m, nil
 			}
 			if v.Code == tea.KeyEnter {
 				position := m.positions[m.index]
-				if !strings.EqualFold(strings.TrimSpace(m.input), m.words[position]) {
+				if !strings.EqualFold(strings.TrimSpace(m.input.String()), m.recoveryWord(position)) {
 					m.message = m.language.text().wrongWord(position + 1)
 				} else {
 					m.index++
 					m.message = ""
 				}
-				m.input = ""
+				m.input.Wipe()
 				if m.index == 3 {
 					m.screen = saving
 					path, data := m.path, m.sealed
@@ -678,24 +683,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) editInput(key tea.KeyPressMsg) {
 	if key.Code == '?' && key.Text == "" && key.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
-		m.input += "?"
+		m.input.Append("?")
 		m.message = ""
 		return
 	}
 	if key.Text != "" {
 		m.message = ""
-		m.input += key.Text
+		m.input.Append(key.Text)
 		return
 	}
 	switch key.Code {
 	case tea.KeySpace:
 		m.message = ""
-		m.input += " "
+		m.input.Append(" ")
 	case tea.KeyBackspace, tea.KeyDelete:
-		r := []rune(m.input)
-		if len(r) > 0 {
+		if !m.input.Empty() {
 			m.message = ""
-			m.input = string(r[:len(r)-1])
+			m.input.Backspace()
 		}
 	}
 }
@@ -744,12 +748,10 @@ func (m *Model) clearSecrets() {
 	m.previewID = nil
 	clear(m.sealed)
 	m.sealed = nil
-	m.pass = ""
-	clear(m.words)
-	m.words = nil
-	clear(m.restoreWords)
-	m.restoreWords = nil
-	m.input = ""
+	m.pass.Wipe()
+	m.phrase.Wipe()
+	m.wipeRestoreWords()
+	m.input.Wipe()
 	m.visible = false
 	m.newName = ""
 	m.clearItem()
@@ -892,11 +894,11 @@ func (m Model) viewContent() string {
 	case colorEditor:
 		return m.colorView()
 	case unlock:
-		field := m.input
+		field := m.input.String()
 		if !m.visible {
 			field = strings.Repeat("*", len([]rune(field)))
 		}
-		return title.Render(t.unlockTitle) + "\n" + t.unlockPrompt + "\n" + wrapWidth(field, m.innerWidth()) + "\n" + t.typedWords(len(strings.Fields(m.input))) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.unlockHint) + "\n" + hint.Render(t.unlockRestoreHint)
+		return title.Render(t.unlockTitle) + "\n" + t.unlockPrompt + "\n" + wrapWidth(field, m.innerWidth()) + "\n" + t.typedWords(len(strings.Fields(m.input.String()))) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.unlockHint) + "\n" + hint.Render(t.unlockRestoreHint)
 	case checkingUnlock:
 		return title.Render(t.unlockTitle) + "\n" + t.checking
 	case vaultList:
@@ -926,7 +928,7 @@ func (m Model) viewContent() string {
 		}
 		return title.Render(t.restoreTitle) + "\n\n" + body + "\n\n" + hint.Render(t.restoreIntroHint)
 	case restoreWord:
-		field := m.input
+		field := m.input.String()
 		if !m.visible {
 			field = strings.Repeat("*", len([]rune(field)))
 		}
@@ -936,13 +938,13 @@ func (m Model) viewContent() string {
 	case passphrase:
 		return m.passphraseView()
 	case confirmPassphrase:
-		return title.Render(t.confirmPassTitle) + "\n" + t.confirmPassPrompt + "\n" + wrapWidth(m.input, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
+		return title.Render(t.confirmPassTitle) + "\n" + t.confirmPassPrompt + "\n" + wrapWidth(m.input.String(), m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
 	case waitingOpen:
 		return title.Render(t.confirmPassTitle) + "\n" + t.checking
 	case recovery:
 		return m.recoveryView()
 	case confirmRecovery:
-		return title.Render(t.confirmRecoveryTitle) + "\n" + t.wordProgress(m.index+1) + "\n" + t.wordPrompt(m.positions[m.index]+1) + "\n" + wrapWidth(m.input, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
+		return title.Render(t.confirmRecoveryTitle) + "\n" + t.wordProgress(m.index+1) + "\n" + t.wordPrompt(m.positions[m.index]+1) + "\n" + wrapWidth(m.input.String(), m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.checkHint)
 	case saving:
 		return title.Render(t.savingTitle) + "\n" + t.savingBody
 	case restored:
@@ -995,7 +997,7 @@ func wrapWidth(text string, maxWidth int) string {
 func (m Model) passphraseView() string {
 	title, hint, secret := m.styles.title, m.styles.hint, lipgloss.NewStyle().Bold(true)
 	var lines []string
-	for i, word := range strings.Fields(m.pass) {
+	for i, word := range strings.Fields(m.pass.String()) {
 		lines = append(lines, fmt.Sprintf("%d. %s", i+1, word))
 	}
 	t := m.language.text()
@@ -1008,9 +1010,27 @@ func (m Model) passphraseView() string {
 func (m Model) recoveryView() string {
 	title, hint, secret := m.styles.title, m.styles.hint, lipgloss.NewStyle().Bold(true)
 	var lines []string
+	words := strings.Fields(m.phrase.String())
 	for i := 0; i < 8; i++ {
-		lines = append(lines, fmt.Sprintf("%-17s %-17s %s", fmt.Sprintf("%d. %s", i+1, m.words[i]), fmt.Sprintf("%d. %s", i+9, m.words[i+8]), fmt.Sprintf("%d. %s", i+17, m.words[i+16])))
+		lines = append(lines, fmt.Sprintf("%-17s %-17s %s", fmt.Sprintf("%d. %s", i+1, words[i]), fmt.Sprintf("%d. %s", i+9, words[i+8]), fmt.Sprintf("%d. %s", i+17, words[i+16])))
 	}
 	t := m.language.text()
 	return title.Render(t.recoveryTitle) + "\n" + t.recoveryIntro + "\n" + secret.Render(strings.Join(lines, "\n")) + "\n" + t.recoveryOutro + "\n" + hint.Render(t.secretHint)
+}
+
+// wipeRestoreWords overwrites every typed recovery word and forgets them.
+func (m *Model) wipeRestoreWords() {
+	for _, word := range m.restoreWords {
+		clear(word)
+	}
+	m.restoreWords = nil
+}
+
+// recoveryWord returns word i of the generated recovery phrase, or "" when absent.
+func (m Model) recoveryWord(i int) string {
+	words := strings.Fields(m.phrase.String())
+	if i < 0 || i >= len(words) {
+		return ""
+	}
+	return words[i]
 }

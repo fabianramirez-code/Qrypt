@@ -55,10 +55,10 @@ func TestRestoreEscThenUnlock(t *testing.T) {
 	m = key(t, m, tea.KeyTab)
 	m = send(t, m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	m = key(t, m, tea.KeyEsc)
-	if m.screen != unlock || m.restoring || m.input != "" || m.visible || m.message != "" || m.index != 0 || len(m.restoreWords) != 0 || m.backup != "" || !strings.Contains(plain(m), "Words typed: 0 of 7") {
+	if m.screen != unlock || m.restoring || m.input.String() != "" || m.visible || m.message != "" || m.index != 0 || len(m.restoreWords) != 0 || m.backup != "" || !strings.Contains(plain(m), "Words typed: 0 of 7") {
 		t.Fatalf("Unlock not reset: %q", plain(m))
 	}
-	m = typeText(t, m, pass)
+	m = typeText(t, m, string(pass))
 	m = enter(t, m)
 	if m.screen != spacesList || m.ExitStatus() != 0 {
 		t.Fatalf("unlock failed: %q", plain(m))
@@ -86,12 +86,12 @@ func TestRestoreEscDiscardsPartialWords(t *testing.T) {
 	}
 	m = key(t, m, tea.KeyEsc)
 	m = key(t, m, tea.KeyEsc)
-	if m.screen != welcome || m.restoring || m.index != 0 || len(m.restoreWords) != 0 || m.input != "" || m.visible || m.message != "" || m.backup != "" {
+	if m.screen != welcome || m.restoring || m.index != 0 || len(m.restoreWords) != 0 || m.input.String() != "" || m.visible || m.message != "" || m.backup != "" {
 		t.Fatal("partial restore survived Esc")
 	}
 	m = key(t, m, 'R')
 	m = enter(t, m)
-	if m.screen != restoreWord || m.index != 0 || m.input != "" || len(m.restoreWords) != 0 || !strings.Contains(plain(m), "Word 1 of 24") {
+	if m.screen != restoreWord || m.index != 0 || m.input.String() != "" || len(m.restoreWords) != 0 || !strings.Contains(plain(m), "Word 1 of 24") {
 		t.Fatal(plain(m))
 	}
 }

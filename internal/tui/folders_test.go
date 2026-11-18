@@ -168,7 +168,7 @@ func TestFolderRefusalsPreserveBytes(t *testing.T) {
 		m = key(t, m, 'a')
 		m = typeText(t, m, "same")
 		m = enter(t, m)
-		if m.message != lang.text().nameExists || m.input != "same" || !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
+		if m.message != lang.text().nameExists || m.input.String() != "same" || !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
 			t.Fatal(plain(m))
 		}
 		m = key(t, m, tea.KeyEsc)
@@ -176,13 +176,13 @@ func TestFolderRefusalsPreserveBytes(t *testing.T) {
 		m = key(t, m, 'a')
 		m = typeText(t, m, "value")
 		m = enter(t, m)
-		if m.message != lang.text().labelExists || m.input != "value" || !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
+		if m.message != lang.text().labelExists || m.input.String() != "value" || !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
 			t.Fatal(plain(m))
 		}
 		m = key(t, m, tea.KeyEsc)
 		m = key(t, m, 'e')
 		m = send(t, m, tea.PasteMsg{Content: "line\nbreak"})
-		if m.message != lang.text().lineBreak || m.input != "" || !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
+		if m.message != lang.text().lineBreak || m.input.String() != "" || !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
 			t.Fatal(plain(m))
 		}
 		m = key(t, m, tea.KeyEsc)

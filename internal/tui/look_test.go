@@ -102,8 +102,8 @@ func TestFramedScreensFitMinimumWindowInEveryTheme(t *testing.T) {
 			m.language = language
 			m.themeName = name
 			m.refreshStyles()
-			m.words = words
-			m.pass = strings.Join(words[:7], " ")
+			m.phrase.Set(strings.Join(words, " "))
+			m.pass.Set(strings.Join(words[:7], " "))
 			m.positions = [3]int{2, 11, 23}
 			m = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 20})
 			for state := languageScreen; state <= cannotOpen; state++ {

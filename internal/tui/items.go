@@ -107,14 +107,15 @@ func (m *Model) clearCopied() tea.Cmd {
 		return nil
 	}
 	value, fallback := m.copyValue, m.copyFallback
-	m.copyValue = ""
+	m.copyValue = nil
 	m.copyActive = false
 	m.copyFallback = false
 	m.copyToken++
 	if fallback {
 		return tea.SetClipboard("")
 	}
-	_ = m.clearFn(value)
+	_ = m.clearFn(string(value))
+	clear(value)
 	return nil
 }
 
@@ -126,7 +127,7 @@ func (m *Model) copyValueOf(value []byte) tea.Cmd {
 		m.message = err.Error()
 		return nil
 	}
-	m.copyValue, m.copyFallback, m.copyActive = text, fallback, true
+	m.copyValue, m.copyFallback, m.copyActive = []byte(text), fallback, true
 	m.copyToken++
 	token := m.copyToken
 	m.message = m.language.text().copied
@@ -143,7 +144,8 @@ func plainKey(v tea.KeyPressMsg, letter rune) bool {
 
 func (m *Model) leaveItem() {
 	m.clearItem()
-	m.input, m.message = "", ""
+	m.input.Wipe()
+	m.message = ""
 	m.screen = vaultList
 }
 
@@ -184,7 +186,7 @@ func (m *Model) vaultPaste(text string) {
 		return
 	}
 	m.message = ""
-	m.input += text
+	m.input.Append(text)
 }
 
 func hide(text string, revealed bool) string {

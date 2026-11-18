@@ -79,7 +79,7 @@ func TestSpacesRejectedNamesAndDelete(t *testing.T) {
 				m = key(t, m, 'a')
 				m = send(t, m, tea.PasteMsg{Content: test.name})
 				m = enter(t, m)
-				if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), test.message) || m.input != test.name {
+				if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), test.message) || m.input.String() != test.name {
 					t.Fatalf("rejection %q: %s", test.name, plain(m))
 				}
 				if !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
@@ -89,7 +89,7 @@ func TestSpacesRejectedNamesAndDelete(t *testing.T) {
 			}
 			m = key(t, m, 'a')
 			m = send(t, m, tea.PasteMsg{Content: "line\nbreak"})
-			if m.input != "" || !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), tc.language.text().lineBreak) {
+			if m.input.String() != "" || !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), tc.language.text().lineBreak) {
 				t.Fatal(plain(m))
 			}
 			m = key(t, m, tea.KeyEsc)
@@ -114,14 +114,14 @@ func TestSpacesRejectedNamesAndDelete(t *testing.T) {
 			before = spaceSnapshot(t, root)
 			m = send(t, m, tea.PasteMsg{Content: "bad\tname"})
 			m = enter(t, m)
-			if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), tc.invalid) || m.input != "bad\tname" || !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
+			if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), tc.invalid) || m.input.String() != "bad\tname" || !reflect.DeepEqual(before, spaceSnapshot(t, root)) {
 				t.Fatal("invalid rename changed data", plain(m))
 			}
 			m = key(t, m, tea.KeyEsc)
 			m = key(t, m, 'r')
 			m = send(t, m, tea.PasteMsg{Content: "Personal"})
 			m = enter(t, m)
-			if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), tc.duplicate) || m.input != "Personal" {
+			if !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), tc.duplicate) || m.input.String() != "Personal" {
 				t.Fatal(plain(m))
 			}
 			m = key(t, m, tea.KeyEsc)

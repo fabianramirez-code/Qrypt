@@ -44,7 +44,7 @@ func TestIconSelectionPersistenceAndTyping(t *testing.T) {
 	next = enter(t, next)
 	next.screen = confirmPassphrase
 	next = typeText(t, next, "I")
-	if next.input != "I" {
+	if next.input.String() != "I" {
 		t.Fatalf("text field ate I: %q", next.input)
 	}
 }
@@ -191,8 +191,8 @@ func TestBuiltInScreensFitMinimumWindow(t *testing.T) {
 				m := send(t, New(filepath.Join(t.TempDir(), "identity"), language), tea.WindowSizeMsg{Width: 60, Height: 20})
 				m.themeName = name
 				m.refreshStyles()
-				m.words = strings.Fields(strings.Repeat("abandon ", 24))
-				m.pass = strings.TrimSpace(strings.Repeat("abandon ", 7))
+				m.phrase.Set(strings.Repeat("abandon ", 24))
+				m.pass.Set(strings.TrimSpace(strings.Repeat("abandon ", 7)))
 				for state := languageScreen; state <= colorEditor; state++ {
 					m.screen = state
 					view := m.View().Content

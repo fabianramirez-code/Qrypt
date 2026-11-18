@@ -542,7 +542,7 @@ func TestWideActionsPreviewAndNarrowPreservation(t *testing.T) {
 	}
 	m = key(t, m, tea.KeyLeft)
 	m = key(t, m, tea.KeyEsc)
-	if m.copyActive || m.copyValue != "" {
+	if m.copyActive || len(m.copyValue) != 0 {
 		t.Fatal("lock retained clipboard notice")
 	}
 

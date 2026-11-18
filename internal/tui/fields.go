@@ -136,7 +136,7 @@ func (m Model) fieldsView(t texts) string {
 }
 func (m Model) formView(t texts) string {
 	title, prompt, hint := t.addTitle, t.namePrompt, t.addNameHint
-	content := m.input
+	content := m.input.String()
 	switch m.screen {
 	case folderName:
 		title, prompt = t.folderAddTitle, t.namePrompt
@@ -154,18 +154,18 @@ func (m Model) formView(t texts) string {
 		if m.formKind == vault.FieldVisible {
 			prompt = t.visiblePrompt
 		}
-		content = hide(m.input, m.visible || m.formKind == vault.FieldVisible)
+		content = hide(m.input.String(), m.visible || m.formKind == vault.FieldVisible)
 		hint = t.valueHint
 	case vaultEdit:
 		title, prompt = t.editTitle, t.valuePrompt
 		if m.formKind == vault.FieldVisible {
 			prompt = t.visiblePrompt
 		}
-		content = hide(m.input, m.visible || m.formKind == vault.FieldVisible)
+		content = hide(m.input.String(), m.visible || m.formKind == vault.FieldVisible)
 		hint = t.valueHint
 	case fieldNote:
 		title, prompt, hint = t.noteTitle, t.notePrompt, t.noteHint
-		content = wideTrim(strings.ReplaceAll(m.input, "\n", "\n"), m.innerWidth())
+		content = wideTrim(strings.ReplaceAll(m.input.String(), "\n", "\n"), m.innerWidth())
 	case vaultDelete:
 		return m.styles.title.Render(t.deleteTitle) + "\n" + wrapLine(m.selectedRow().name) + "\n" + t.deleteQuestion + "\n" + m.styles.hint.Render(t.deleteHint)
 	case fieldDelete:
@@ -204,12 +204,13 @@ func (m *Model) beginField(action screen) {
 	m.formAction = action
 	m.formLabel = ""
 	m.formKind = 0
-	m.input, m.message = "", ""
+	m.input.Wipe()
+	m.message = ""
 	m.visible = false
 	m.screen = fieldLabel
 }
 func (m *Model) finishValue() {
-	field := vault.Field{Kind: m.formKind, Label: m.formLabel, Value: []byte(m.input)}
+	field := vault.Field{Kind: m.formKind, Label: m.formLabel, Value: m.input.Copy()}
 	var item vault.Item
 	if m.formAction == vaultAddName {
 		item = vault.Item{Path: slices.Clone(m.folderPath), Title: m.newName, Fields: []vault.Field{field}}
@@ -225,7 +226,8 @@ func (m *Model) finishValue() {
 	if !m.saveItem(item) {
 		return
 	}
-	m.input, m.formLabel, m.newName = "", "", ""
+	m.input.Wipe()
+	m.formLabel, m.newName = "", ""
 	m.visible = false
 	if m.formAction == vaultAddName {
 		m.screen = vaultList
@@ -263,7 +265,8 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case plainKey(v, 'c') && len(m.itemData.Fields) > 0:
 			return m, m.copyValueOf(m.itemData.Fields[m.fieldCursor].Value)
 		case plainKey(v, 'e') && len(m.itemData.Fields) > 0:
-			m.input, m.message = "", ""
+			m.input.Wipe()
+			m.message = ""
 			m.visible = false
 			m.formKind = m.itemData.Fields[m.fieldCursor].Kind
 			m.formLabel = m.itemData.Fields[m.fieldCursor].Label
@@ -276,7 +279,8 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case plainKey(v, 'a'):
 			m.beginField(vaultItem)
 		case plainKey(v, 'r'):
-			m.input, m.message = "", ""
+			m.input.Wipe()
+			m.message = ""
 			m.screen = vaultRename
 		case plainKey(v, 'd') && len(m.itemData.Fields) > 0:
 			m.screen = fieldDelete
@@ -295,7 +299,7 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			case fieldLabel:
 				if m.formAction == vaultAddName {
 					m.screen = vaultAddName
-					m.input = m.newName
+					m.input.Set(m.newName)
 				} else {
 					m.screen = vaultItem
 				}
@@ -307,19 +311,19 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.editInput(v)
 			break
 		}
-		if err := vault.ValidateName(m.input); err != nil {
+		if err := vault.ValidateName(m.input.String()); err != nil {
 			m.writeError(err)
 			break
 		}
 		switch m.screen {
 		case folderName:
-			name := m.input
+			name := m.input.String()
 			m.screen = vaultList
 			m.enterFolder(name)
 		case vaultAddName:
 			duplicate := false
 			for _, e := range m.entries {
-				if samePath(e.Path, m.folderPath) && e.Title == m.input {
+				if samePath(e.Path, m.folderPath) && e.Title == m.input.String() {
 					duplicate = true
 					break
 				}
@@ -328,10 +332,10 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.message = t.nameExists
 				break
 			}
-			m.newName = m.input
+			m.newName = m.input.String()
 			m.beginField(vaultAddName)
 		case vaultRename:
-			name := m.input
+			name := m.input.String()
 			if m.itemID != "" {
 				item := m.itemData
 				item.Title = name
@@ -350,22 +354,22 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.mirrorUpdate()
 				m.screen = vaultList
 			}
-			m.input = ""
+			m.input.Wipe()
 		case fieldLabel:
 			for _, f := range m.itemData.Fields {
-				if m.formAction != vaultAddName && f.Label == m.input {
+				if m.formAction != vaultAddName && f.Label == m.input.String() {
 					m.message = t.labelExists
 					return m, nil
 				}
 			}
-			m.formLabel = m.input
-			m.input = ""
+			m.formLabel = m.input.String()
+			m.input.Wipe()
 			m.screen = fieldKind
 		}
 	case fieldKind:
 		if v.Code == tea.KeyEsc {
 			m.screen = fieldLabel
-			m.input = m.formLabel
+			m.input.Set(m.formLabel)
 			break
 		}
 		var kind vault.FieldKind
@@ -379,7 +383,7 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		if kind != 0 {
 			m.formKind = kind
-			m.input = ""
+			m.input.Wipe()
 			m.visible = false
 			if kind == vault.FieldNote {
 				m.screen = fieldNote
@@ -395,14 +399,15 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			} else {
 				m.screen = fieldKind
 			}
-			m.input, m.message = "", ""
+			m.input.Wipe()
+			m.message = ""
 			m.visible = false
 		case v.Code == tea.KeyTab && m.screen != fieldNote:
 			m.visible = !m.visible
 		case m.screen == fieldNote && v.Code == 's' && v.Mod&tea.ModCtrl != 0:
 			m.finishValue()
 		case m.screen == fieldNote && v.Code == tea.KeyEnter:
-			m.input += "\n"
+			m.input.Append("\n")
 		case m.screen != fieldNote && v.Code == tea.KeyEnter:
 			m.finishValue()
 		default:
@@ -451,4 +456,4 @@ func (m Model) fieldsKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
-func vaultListScreen(m *Model) { m.screen = vaultList; m.input = ""; m.refresh() }
+func vaultListScreen(m *Model) { m.screen = vaultList; m.input.Wipe(); m.refresh() }

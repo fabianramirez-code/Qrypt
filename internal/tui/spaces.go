@@ -116,15 +116,15 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.screen = vaultList
 			m.refresh()
 		case plainKey(v, 'm'):
-			m.input = ""
+			m.input.Wipe()
 			m.message = ""
 			m.screen = mirrorScreen
 		case plainKey(v, 'a') && m.selectedProblem() == nil:
-			m.input = ""
+			m.input.Wipe()
 			m.message = ""
 			m.screen = spacesAdd
 		case plainKey(v, 'r') && m.vlt != nil:
-			m.input = ""
+			m.input.Wipe()
 			m.message = ""
 			m.screen = spacesRename
 		case plainKey(v, 'd') && m.vlt != nil:
@@ -133,7 +133,7 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case spacesAdd, spacesRename:
 		if v.Code == tea.KeyEsc {
-			m.input = ""
+			m.input.Wipe()
 			m.message = ""
 			m.screen = spacesList
 			break
@@ -145,13 +145,13 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var err error
 		if m.screen == spacesAdd {
 			var newScope *vault.Vault
-			newScope, err = vault.NewScope(vaultDir(m.path), stateFile(m.path), m.scopeID, m.input)
+			newScope, err = vault.NewScope(vaultDir(m.path), stateFile(m.path), m.scopeID, m.input.String())
 			if err == nil {
 				m.scopes = append(m.scopes, newScope)
 				err = m.sortSpaces(newScope)
 			}
 		} else {
-			err = vault.RenameScope(vaultDir(m.path), stateFile(m.path), m.scopeID, m.vlt, m.input)
+			err = vault.RenameScope(vaultDir(m.path), stateFile(m.path), m.scopeID, m.vlt, m.input.String())
 			if err == nil {
 				err = m.sortSpaces(m.vlt)
 			}
@@ -160,7 +160,7 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.spaceError(err)
 			break
 		}
-		m.input = ""
+		m.input.Wipe()
 		m.message = ""
 		m.screen = spacesList
 		m.refreshSpaces()
@@ -209,13 +209,13 @@ func (m Model) spacesView(t texts) string {
 	title, hint := m.styles.title, m.styles.hint
 	switch m.screen {
 	case spacesAdd:
-		return title.Render(t.spaceAddTitle) + "\n" + t.namePrompt + "\n" + wrapWidth(m.input, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.spaceNameHint)
+		return title.Render(t.spaceAddTitle) + "\n" + t.namePrompt + "\n" + wrapWidth(m.input.String(), m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.spaceNameHint)
 	case spacesRename:
 		name := ""
 		if m.vlt != nil {
 			name, _ = m.vlt.Name()
 		}
-		return title.Render(t.spaceRenameTitle) + "\n" + wrapLine(name) + "\n" + t.namePrompt + "\n" + wrapWidth(m.input, m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.spaceNameHint)
+		return title.Render(t.spaceRenameTitle) + "\n" + wrapLine(name) + "\n" + t.namePrompt + "\n" + wrapWidth(m.input.String(), m.innerWidth()) + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.spaceNameHint)
 	case spacesDelete:
 		name := ""
 		if m.vlt != nil {

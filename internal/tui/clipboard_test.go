@@ -145,7 +145,7 @@ func TestVaultLockIdleAndActivity(t *testing.T) {
 		}
 		next, cmd := m.Update(keyMsg)
 		m = next.(Model)
-		if cmd == nil || m.ExitStatus() != 0 || m.vlt != nil || len(cleared) != 1 || cleared[0] != "secret" || m.copyValue != "" {
+		if cmd == nil || m.ExitStatus() != 0 || m.vlt != nil || len(cleared) != 1 || cleared[0] != "secret" || len(m.copyValue) != 0 {
 			t.Fatalf("lock: status=%d vault=%v clear=%q copy=%q", m.ExitStatus(), m.vlt, cleared, m.copyValue)
 		}
 	}
@@ -167,7 +167,7 @@ func TestVaultLockIdleAndActivity(t *testing.T) {
 	now = now.Add(3 * time.Minute)
 	next, cmd := m.Update(idleTickMsg{})
 	m = next.(Model)
-	if cmd == nil || m.ExitStatus() != 0 || m.vlt != nil || len(cleared) != 1 || cleared[0] != "secret" || m.copyValue != "" {
+	if cmd == nil || m.ExitStatus() != 0 || m.vlt != nil || len(cleared) != 1 || cleared[0] != "secret" || len(m.copyValue) != 0 {
 		t.Fatalf("idle lock: status=%d vault=%v clear=%q copy=%q", m.ExitStatus(), m.vlt, cleared, m.copyValue)
 	}
 }

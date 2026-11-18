@@ -15,7 +15,7 @@ import (
 	"github.com/fabianramirez-code/qrypt/internal/identity"
 )
 
-func restoreFixture(t *testing.T, lang Language, existing bool) (Model, string, []string, string, []byte) {
+func restoreFixture(t *testing.T, lang Language, existing bool) (Model, string, []string, []byte, []byte) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config", "identity")
 	seed := make([]byte, identity.SeedSize)
@@ -26,8 +26,8 @@ func restoreFixture(t *testing.T, lang Language, existing bool) (Model, string, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	words := strings.Fields(id.RecoveryPhrase())
-	var previous string
+	words := strings.Fields(string(id.RecoveryPhrase()))
+	var previous []byte
 	var original []byte
 	if existing {
 		original, previous, err = id.Seal()
@@ -125,7 +125,7 @@ func entries(t *testing.T, path string, want int) {
 }
 func noRestoreSecrets(t *testing.T, m Model) {
 	t.Helper()
-	if m.id != nil || m.pass != "" || len(m.sealed) != 0 || len(m.words) != 0 || len(m.restoreWords) != 0 || m.input != "" {
+	if m.id != nil || !m.pass.Empty() || len(m.sealed) != 0 || !m.phrase.Empty() || len(m.restoreWords) != 0 || m.input.String() != "" {
 		t.Fatal("secret retained")
 	}
 }
@@ -174,10 +174,10 @@ func TestRestoreNewDeviceAndForgottenPassphrase(t *testing.T) {
 				if m.backup == "" || !strings.Contains(strings.ReplaceAll(plain(m), "\n", ""), m.backup) {
 					t.Fatal("backup not displayed")
 				}
-				if _, err := identity.Load(path, []byte(previous)); !errors.Is(err, identity.ErrDecryption) {
+				if _, err := identity.Load(path, previous); !errors.Is(err, identity.ErrDecryption) {
 					t.Fatal(err)
 				}
-				if _, err := identity.Load(m.backup, []byte(previous)); err != nil {
+				if _, err := identity.Load(m.backup, previous); err != nil {
 					t.Fatal(err)
 				}
 				entries(t, path, 2)
@@ -201,7 +201,7 @@ func TestRestoreWordEntryAndNavigation(t *testing.T) {
 			m = restoreStart(t, m, existing)
 			m = typeText(t, m, "qzxv")
 			m = enter(t, m)
-			if !strings.Contains(plain(m), "That is not a valid word. Check the spelling.") || !strings.Contains(plain(m), "Word 1 of 24") || m.input != "qzxv" {
+			if !strings.Contains(plain(m), "That is not a valid word. Check the spelling.") || !strings.Contains(plain(m), "Word 1 of 24") || m.input.String() != "qzxv" {
 				t.Fatal(plain(m))
 			}
 			for range "qzxv" {
@@ -217,15 +217,15 @@ func TestRestoreWordEntryAndNavigation(t *testing.T) {
 				t.Fatal("not hidden")
 			}
 			m = enter(t, m)
-			if m.input != "" || m.visible || !strings.Contains(plain(m), "Word 2 of 24") {
+			if m.input.String() != "" || m.visible || !strings.Contains(plain(m), "Word 2 of 24") {
 				t.Fatal(plain(m))
 			}
 			m = send(t, m, tea.PasteMsg{Content: "qzxv"})
-			if m.input != "" || !strings.Contains(plain(m), "Pasting is not accepted. Type the words from your paper.") {
+			if m.input.String() != "" || !strings.Contains(plain(m), "Pasting is not accepted. Type the words from your paper.") {
 				t.Fatal(plain(m))
 			}
 			m = key(t, m, tea.KeyEsc)
-			if m.input != "" || !strings.Contains(plain(m), "Word 1 of 24") {
+			if m.input.String() != "" || !strings.Contains(plain(m), "Word 1 of 24") {
 				t.Fatal(plain(m))
 			}
 			m = key(t, m, tea.KeyEsc)
@@ -234,7 +234,7 @@ func TestRestoreWordEntryAndNavigation(t *testing.T) {
 			}
 			m = key(t, m, tea.KeyEsc)
 			if existing {
-				if m.screen != unlock || m.input != "" {
+				if m.screen != unlock || m.input.String() != "" {
 					t.Fatal(plain(m))
 				}
 			} else if m.screen != welcome {
@@ -255,12 +255,12 @@ func TestRestoreInvalidChecksum(t *testing.T) {
 		}
 		bad := append([]string(nil), words...)
 		bad[23] = candidate
-		if _, err := identity.FromRecoveryPhrase(strings.Join(bad, " ")); errors.Is(err, identity.ErrChecksum) {
+		if _, err := identity.FromRecoveryPhrase([]byte(strings.Join(bad, " "))); errors.Is(err, identity.ErrChecksum) {
 			words = bad
 			break
 		}
 	}
-	if _, err := identity.FromRecoveryPhrase(strings.Join(words, " ")); !errors.Is(err, identity.ErrChecksum) {
+	if _, err := identity.FromRecoveryPhrase([]byte(strings.Join(words, " "))); !errors.Is(err, identity.ErrChecksum) {
 		t.Fatal("no checksum mismatch")
 	}
 	m, cmd := restoreWords(t, m, words)
@@ -445,7 +445,7 @@ func TestRestoreExactLanguageAndRender(t *testing.T) {
 			show("Unlock empty")
 			m = typeText(t, m, "qzxv")
 			m = send(t, m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
-			if m.input != "" || !strings.Contains(plain(m), text.restoreBackup) || !strings.Contains(plain(m), text.restoreIntro) || !strings.Contains(plain(m), text.restoreIntroHint) {
+			if m.input.String() != "" || !strings.Contains(plain(m), text.restoreBackup) || !strings.Contains(plain(m), text.restoreIntro) || !strings.Contains(plain(m), text.restoreIntroHint) {
 				t.Fatal(plain(m))
 			}
 			show("Restore introduction")

@@ -143,13 +143,16 @@ func (m Model) folderKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case v.Code == tea.KeyEnter && row.id != "":
 		m.enterEntry(row)
 	case plainKey(v, 'a'):
-		m.input, m.newName, m.message = "", "", ""
+		m.input.Wipe()
+		m.newName, m.message = "", ""
 		m.screen = vaultAddName
 	case plainKey(v, 'f'):
-		m.input, m.message = "", ""
+		m.input.Wipe()
+		m.message = ""
 		m.screen = folderName
 	case plainKey(v, 'r') && (row.folder || row.id != ""):
-		m.input, m.message = "", ""
+		m.input.Wipe()
+		m.message = ""
 		m.screen = vaultRename
 	case plainKey(v, 'd') && row.folder:
 		m.message = m.language.text().folderDeleteRefused

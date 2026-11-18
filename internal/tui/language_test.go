@@ -48,8 +48,8 @@ func TestMinimumWidthAllScreens(t *testing.T) {
 	for _, language := range []Language{English, Spanish} {
 		m, _, words := fixture(t)
 		m.language = language
-		m.words = words
-		m.pass = strings.Join(words[:7], " ")
+		m.phrase.Set(strings.Join(words, " "))
+		m.pass.Set(strings.Join(words[:7], " "))
 		m.positions = [3]int{2, 11, 23}
 		m = send(t, m, tea.WindowSizeMsg{Width: 60, Height: 20})
 		for state := languageScreen; state <= cannotOpen; state++ {
@@ -115,7 +115,7 @@ func TestSpanishFlow(t *testing.T) {
 	requireView(t, m, "Listo", "Tu identidad está lista.", "Archivo de identidad:", "Guarda bien los dos papeles.")
 	t.Logf("Done:\n%s", strings.ReplaceAll(plain(m), wrapLine("Archivo de identidad: "+path), "Archivo de identidad: <path>"))
 	loaded, err := identity.Load(path, []byte(strings.Join(pass, " ")))
-	if err != nil || loaded.RecoveryPhrase() != strings.Join(words, " ") {
+	if err != nil || string(loaded.RecoveryPhrase()) != strings.Join(words, " ") {
 		t.Fatalf("saved identity: %v", err)
 	}
 }

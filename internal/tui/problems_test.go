@@ -99,7 +99,7 @@ func TestProblemIsolationAcceptAndRejections(t *testing.T) {
 				}
 			}
 			m = send(t, m, tea.PasteMsg{Content: "ACCEPT"})
-			if m.input != "" || !strings.Contains(plain(m), lang.text().problemPaste) {
+			if m.input.String() != "" || !strings.Contains(plain(m), lang.text().problemPaste) {
 				t.Fatal(plain(m))
 			}
 			m = key(t, m, tea.KeyEsc)
@@ -231,7 +231,7 @@ func TestProblemKindsOnDisk(t *testing.T) {
 				before := spaceSnapshot(t, vaultDir(path))
 				m = typeText(t, m, "ACCEPT")
 				m = enter(t, m)
-				if m.screen != problemScreen || m.input != "" || !reflect.DeepEqual(before, spaceSnapshot(t, vaultDir(path))) {
+				if m.screen != problemScreen || m.input.String() != "" || !reflect.DeepEqual(before, spaceSnapshot(t, vaultDir(path))) {
 					t.Fatal("unreadable changed")
 				}
 			}

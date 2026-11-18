@@ -66,7 +66,7 @@ func fixture(t *testing.T) (Model, string, []string) {
 	m = send(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	m.generate = func() (*identity.Identity, error) { return id, nil }
 	m.pick = func() [3]int { return [3]int{2, 11, 23} }
-	words := strings.Fields(id.RecoveryPhrase())
+	words := strings.Fields(string(id.RecoveryPhrase()))
 	m = send(t, m, tea.WindowSizeMsg{Width: 80, Height: 24})
 	return m, path, words
 }
@@ -266,7 +266,7 @@ func TestFullFlow(t *testing.T) {
 		t.Fatal(plain(m))
 	}
 	loaded, err := identity.Load(path, []byte(pass))
-	if err != nil || loaded.RecoveryPhrase() != strings.Join(words, " ") {
+	if err != nil || string(loaded.RecoveryPhrase()) != strings.Join(words, " ") {
 		t.Fatal(err)
 	}
 	m = enter(t, m)
@@ -303,7 +303,7 @@ func TestSavingIgnoresKeysUntilResult(t *testing.T) {
 		t.Fatal("save result did not show Done")
 	}
 	loaded, err := identity.Load(path, []byte(pass))
-	if err != nil || loaded.RecoveryPhrase() != strings.Join(words, " ") {
+	if err != nil || string(loaded.RecoveryPhrase()) != strings.Join(words, " ") {
 		t.Fatalf("saved identity does not open: %v", err)
 	}
 	next, cmd = m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
@@ -548,7 +548,7 @@ func TestCtrlCExitStatuses(t *testing.T) {
 	}
 	check("done", m, 0)
 	loaded, err := identity.Load(path, []byte(pass))
-	if err != nil || loaded.RecoveryPhrase() != strings.Join(words, " ") {
+	if err != nil || string(loaded.RecoveryPhrase()) != strings.Join(words, " ") {
 		t.Fatalf("saved identity does not open: %v", err)
 	}
 	check("unlock", enter(t, New(path, English)), 1)
@@ -636,8 +636,8 @@ func TestPasteRecovery(t *testing.T) {
 
 func TestPasteOtherScreens(t *testing.T) {
 	m, _, words := fixture(t)
-	m.words = words
-	m.pass = "abandon abandon abandon abandon abandon abandon abandon"
+	m.phrase.Set(strings.Join(words, " "))
+	m.pass.Set("abandon abandon abandon abandon abandon abandon abandon")
 	for _, screen := range []screen{welcome, waitingSeal, passphrase, waitingOpen, recovery, saving, done, notSaved, vaultList, cannotOpen} {
 		m.screen = screen
 		before := m.View().Content

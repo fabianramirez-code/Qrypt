@@ -194,13 +194,13 @@ func TestSaveReplacingRoundTrip(t *testing.T) {
 	if err != nil || backup != path+suffix {
 		t.Fatalf("backup %q, error %v", backup, err)
 	}
-	if _, err := Load(path, []byte(newPass)); err != nil {
+	if _, err := Load(path, newPass); err != nil {
 		t.Fatalf("load new: %v", err)
 	}
-	if _, err := Load(path, []byte(oldPass)); !errors.Is(err, ErrDecryption) {
+	if _, err := Load(path, oldPass); !errors.Is(err, ErrDecryption) {
 		t.Fatalf("old passphrase: %v", err)
 	}
-	if _, err := Load(backup, []byte(oldPass)); err != nil {
+	if _, err := Load(backup, oldPass); err != nil {
 		t.Fatalf("load backup: %v", err)
 	}
 }
@@ -212,7 +212,7 @@ func TestPassphraseGeneratorDistribution(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, word := range strings.Fields(phrase) {
+		for _, word := range strings.Fields(string(phrase)) {
 			seen[word] = true
 		}
 	}

@@ -223,10 +223,11 @@ func (id *Identity) PublicKeys() PublicKeys {
 	}
 }
 
-// RecoveryPhrase returns the full secret as 24 BIP39 words; show it only to the user.
-func (id *Identity) RecoveryPhrase() string {
+// RecoveryPhrase returns the full secret as 24 BIP39 words; show it only to the
+// user. The caller owns the returned bytes and should clear them after use.
+func (id *Identity) RecoveryPhrase() []byte {
 	if id.seedBytes() == nil {
-		return ""
+		return nil
 	}
 	checksum := sha256.Sum256(id.seedBytes())
 	defer clear(checksum[:])
@@ -239,21 +240,27 @@ func (id *Identity) RecoveryPhrase() string {
 	// significant bit first, and takes 11 bits per word. Each group of 11 bits
 	// is the index of a word in the list. FromRecoveryPhrase is the exact
 	// inverse of this loop: change both together.
-	phraseWords := make([]string, recoveryWordCount)
-	for i := range phraseWords {
+	phrase := make([]byte, 0, recoveryWordCount*9)
+	for i := 0; i < recoveryWordCount; i++ {
 		index := 0
 		for bit := 0; bit < bitsPerWord; bit++ {
 			position := i*bitsPerWord + bit
 			index = (index << 1) | int((bits[position/bitsPerByte]>>(bitsPerByte-1-uint(position%bitsPerByte)))&1)
 		}
-		phraseWords[i] = words[index]
+		if i != 0 {
+			phrase = append(phrase, ' ')
+		}
+		phrase = append(phrase, words[index]...)
 	}
-	return strings.Join(phraseWords, " ")
+	return phrase
 }
 
-// FromRecoveryPhrase recovers an identity from 24 BIP39 words, ignoring case and extra whitespace.
-func FromRecoveryPhrase(phrase string) (*Identity, error) {
-	phraseWords := strings.Fields(strings.ToLower(phrase))
+// FromRecoveryPhrase recovers an identity from 24 BIP39 words, ignoring case and
+// extra whitespace. It does not keep or clear phrase; the caller owns it.
+func FromRecoveryPhrase(phrase []byte) (*Identity, error) {
+	lower := bytes.ToLower(phrase)
+	defer clear(lower)
+	phraseWords := bytes.Fields(lower)
 	if len(phraseWords) != recoveryWordCount {
 		return nil, ErrWordCount
 	}
@@ -262,7 +269,7 @@ func FromRecoveryPhrase(phrase string) (*Identity, error) {
 	bits := make([]byte, SeedSize+checksumSize)
 	defer clear(bits)
 	for i, word := range phraseWords {
-		index, found := wordIndex[word]
+		index, found := wordIndex[string(word)]
 		if !found {
 			return nil, ErrUnknownWord
 		}
@@ -288,14 +295,14 @@ func passphraseAEAD(passphrase, salt []byte) (cipher.AEAD, error) {
 
 // generatePassphrase draws independent 11-bit indices from crypto/rand.
 // Every index is equally likely because the BIP39 list has exactly 2^11 words.
-func generatePassphrase() (string, error) {
+func generatePassphrase() ([]byte, error) {
 	phrase := make([]byte, 0, passphraseWordCount*9)
-	defer clear(phrase)
 	var random [2]byte
 	defer clear(random[:])
 	for i := 0; i < passphraseWordCount; i++ {
 		if _, err := rand.Read(random[:]); err != nil {
-			return "", err
+			clear(phrase)
+			return nil, err
 		}
 		if i != 0 {
 			phrase = append(phrase, ' ')
@@ -303,7 +310,7 @@ func generatePassphrase() (string, error) {
 		index := (int(random[0])<<8 | int(random[1])) & (wordListSize - 1)
 		phrase = append(phrase, words[index]...)
 	}
-	return string(phrase), nil
+	return phrase, nil
 }
 
 // normalizePassphrase validates and canonicalizes typed words without retaining
@@ -327,26 +334,29 @@ func normalizePassphrase(passphrase []byte) ([]byte, error) {
 
 // Seal encrypts the seed into a 96-byte version-1 identity file with fresh salt and nonce.
 // It generates a new seven-word passphrase on every call; the returned passphrase
-// is secret and must only be shown to the user.
-func (id *Identity) Seal() (sealed []byte, passphrase string, err error) {
+// is secret, must only be shown to the user, and should be cleared after use.
+func (id *Identity) Seal() (sealed []byte, passphrase []byte, err error) {
 	if id.seedBytes() == nil {
-		return nil, "", ErrClosed
+		return nil, nil, ErrClosed
 	}
 	passphrase, err = generatePassphrase()
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
-	canonical := []byte(passphrase)
-	defer clear(canonical)
+	canonical := passphrase
+	fail := func(err error) ([]byte, []byte, error) {
+		clear(passphrase)
+		return nil, nil, err
+	}
 	file := make([]byte, fileSize)
 	copy(file, magic)
 	file[versionOffset] = version
 	if _, err := rand.Read(file[saltOffset:ciphertextOffset]); err != nil {
-		return nil, "", err
+		return fail(err)
 	}
 	aead, err := passphraseAEAD(canonical, file[saltOffset:nonceOffset])
 	if err != nil {
-		return nil, "", err
+		return fail(err)
 	}
 	aead.Seal(file[ciphertextOffset:ciphertextOffset], file[nonceOffset:ciphertextOffset], id.seedBytes(), file[:nonceOffset])
 	return file, passphrase, nil
