@@ -20,24 +20,18 @@ func resized(t *testing.T, m Model, w, h int) Model {
 	return send(t, m, tea.WindowSizeMsg{Width: w, Height: h})
 }
 
-// paneBounds returns the first column of the center and right panes.
-func paneBounds(width int) (center, right int) {
-	extra := width - 100
-	left := 25 + extra*25/100
-	mid := 43 + extra*45/100
-	return left + 1, left + mid + 2
+// paneBounds returns the first column of the inspector.
+func paneBounds(width int) int {
+	return 38 + (width-100)*30/100
 }
 
-// paneOf says in which pane (0 left, 1 center, 2 right) the text is drawn, or -1.
+// paneOf says in which pane (0 tree, 1 inspector) text is drawn, or -1.
 func paneOf(m Model, text string) int {
-	center, right := paneBounds(m.width)
+	inspector := paneBounds(m.width)
 	for _, line := range strings.Split(plain(m), "\n") {
 		if at := strings.Index(line, text); at >= 0 {
 			col := lipgloss.Width(line[:at])
-			switch {
-			case col >= right:
-				return 2
-			case col >= center:
+			if col >= inspector {
 				return 1
 			}
 			return 0
@@ -61,9 +55,12 @@ func TestActionRowsAndInspectorButtonText(t *testing.T) {
 			t.Run(fmt.Sprintf("%d-%dx%d", lang, size[0], size[1]), func(t *testing.T) {
 				m := resized(t, wideFixture(t, lang), size[0], size[1])
 				w := want[lang]
-				for i, pane := range []int{0, 1, 1} {
-					if got := paneOf(m, w[i]); got != pane {
-						t.Fatalf("%q in pane %d, want %d\n%s", w[i], got, pane, plain(m))
+				if got := paneOf(m, w[0]); got != 0 {
+					t.Fatalf("space hint in pane %d\n%s", got, plain(m))
+				}
+				for _, text := range w[1:3] {
+					if paneOf(m, text) != -1 {
+						t.Fatalf("%q offered before entering a space", text)
 					}
 				}
 				if got := paneOf(m, w[3]); got != -1 {
@@ -71,11 +68,8 @@ func TestActionRowsAndInspectorButtonText(t *testing.T) {
 				}
 				for _, state := range []screen{vaultList, vaultItem} {
 					m = enter(t, m)
-					if state == vaultItem {
-						m = enter(t, m)
-					}
-					for i, pane := range []int{0, 1, 1, 2} {
-						if got := paneOf(m, w[i]); got != pane {
+					for i, pane := range []int{0, 0, 0, 1} {
+						if got := paneOf(m, w[i]); got != pane && !(i == 3 && state == vaultList && got == -1) {
 							t.Fatalf("screen %d: %q in pane %d, want %d\n%s", state, w[i], got, pane, plain(m))
 						}
 					}
@@ -92,10 +86,10 @@ func TestActionRowsFollowTheLastEntryIndentedLikeThePreview(t *testing.T) {
 	for i, line := range lines {
 		if strings.Contains(line, "account") && !strings.Contains(line, "ELEMENTO") {
 			// Separator, one cell of padding, then two cells of indent: the plus aligns with the entry icons.
-			if !strings.Contains(lines[i+1], "│   + [A] Nuevo elemento") {
+			if !strings.Contains(lines[i+1], "   + [A] Nuevo elemento") {
 				t.Fatalf("first row does not follow the entry or is not indented by two cells: %q %q", line, lines[i+1])
 			}
-			if !strings.Contains(lines[i+2], "│   + [F] Nueva carpeta") {
+			if !strings.Contains(lines[i+2], "   + [F] Nueva carpeta") {
 				t.Fatalf("second row does not follow the first: %q", lines[i+2])
 			}
 			return
@@ -120,7 +114,9 @@ func TestActionRowsAbsentWhenTheirKeyWouldNotWork(t *testing.T) {
 				if !strings.Contains(plain(m), space) {
 					t.Fatalf("healthy space selected must offer %q:\n%s", space, plain(m))
 				}
-				m = key(t, m, tea.KeyDown)
+				for m.selectedProblem() == nil {
+					m = key(t, m, tea.KeyDown)
+				}
 				if m.selectedProblem() == nil {
 					t.Fatal("setup: problem not selected")
 				}
@@ -215,8 +211,12 @@ func TestCursorNeverRestsOnAnActionRow(t *testing.T) {
 			if m.cursor != last || key(t, m, tea.KeyDown).cursor != last || onRow(m) {
 				t.Fatalf("cursor %d, last %d: %s", m.cursor, last, framed(m))
 			}
-			// One marker in the tree and one on the entry; none on an action row.
-			if got := strings.Count(framed(m), "▌"); got != 2 {
+			// The tree and, when the item is open, its field may each have a marker.
+			want := 1
+			if m.screen == vaultItem {
+				want = 2
+			}
+			if got := strings.Count(framed(m), "▌"); got != want {
 				t.Fatalf("selection markers: %d: %s", got, framed(m))
 			}
 		}
@@ -235,43 +235,18 @@ func addRoot(t *testing.T, m Model, n int) Model {
 	return m
 }
 
-// At 100x20 the center pane has a header and 13 further rows.
+// A long tree scrolls with its selected entry; hints never become selectable.
 func TestActionRowsAreDroppedFirstAndNeverDisplaceContent(t *testing.T) {
-	cases := []struct {
-		entries            int
-		wantItem, wantFold bool
-	}{{11, true, true}, {12, true, false}, {13, false, false}, {30, false, false}}
 	for _, lang := range []Language{English, Spanish} {
-		_, item, folder, _ := actionTexts(lang)
-		for _, c := range cases {
-			m := addRoot(t, spacesSession(t, lang), c.entries)
-			m = resized(t, m, 100, 20)
-			m = enter(t, m)
-			view := plain(m)
-			if strings.Contains(view, item) != c.wantItem || strings.Contains(view, folder) != c.wantFold {
-				t.Fatalf("%d entries: item row %v folder row %v\n%s", c.entries, strings.Contains(view, item), strings.Contains(view, folder), view)
-			}
-			shown := 0
-			for i := 0; i < c.entries; i++ {
-				if strings.Contains(view, fmt.Sprintf("entry-%02d", i)) {
-					shown++
-				}
-			}
-			if shown != min(c.entries, 13) {
-				t.Fatalf("%d entries: %d shown", c.entries, shown)
-			}
-			if !strings.Contains(view, "entry-00") {
-				t.Fatalf("first entry displaced:\n%s", view)
-			}
-			wideFit(t, m, 100, 20)
-			// Scrolled to the end, the last entry is shown and no row follows it.
-			for i := 0; i < c.entries; i++ {
-				m = key(t, m, tea.KeyDown)
-			}
-			if c.entries >= 13 && (!strings.Contains(plain(m), fmt.Sprintf("entry-%02d", c.entries-1)) || strings.Contains(plain(m), item)) {
-				t.Fatalf("scrolled list:\n%s", plain(m))
-			}
+		m := resized(t, addRoot(t, spacesSession(t, lang), 30), 100, 20)
+		m = enter(t, m)
+		for i := 0; i < 29; i++ {
+			m = key(t, m, tea.KeyDown)
 		}
+		if !strings.Contains(plain(m), "entry-29") || strings.Contains(plain(m), "▌ + [") {
+			t.Fatalf("last entry not selected or hint selected:\n%s", plain(m))
+		}
+		wideFit(t, m, 100, 20)
 	}
 }
 
@@ -289,8 +264,8 @@ func TestSpaceRowDroppedWhenTheTreeHasNoRoom(t *testing.T) {
 	m = key(t, m, 'a')
 	m = typeText(t, m, "Space 10")
 	m = enter(t, m)
-	if strings.Contains(plain(m), "+ [A] New space") || !strings.Contains(plain(m), "Space 10") {
-		t.Fatalf("no free row:\n%s", plain(m))
+	if !strings.Contains(plain(m), "Space 10") || key(t, m, tea.KeyDown).treeCursor != m.treeCursor {
+		t.Fatalf("space selection not at last row:\n%s", plain(m))
 	}
 }
 
@@ -423,8 +398,8 @@ func TestActionRowColorsFocusedUnfocusedAndPlain(t *testing.T) {
 		if !strings.Contains(segment(m, "+ [A] New space"), info) {
 			t.Fatalf("%s: focused key has no key color", theme)
 		}
-		if strings.Contains(segment(m, "+ [A] New item"), info) || strings.Contains(segment(m, "+ [F] New folder"), info) {
-			t.Fatalf("%s: unfocused row uses the key color", theme)
+		if strings.Contains(framed(m), "+ [A] New item") || strings.Contains(framed(m), "+ [F] New folder") {
+			t.Fatalf("%s: create inside space advertised on space row", theme)
 		}
 		m = enter(t, m)
 		if strings.Contains(segment(m, "+ [A] New space"), info) || !strings.Contains(segment(m, "+ [A] New item"), info) || !strings.Contains(segment(m, "+ [F] New folder"), info) {

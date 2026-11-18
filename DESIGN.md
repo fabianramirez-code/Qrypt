@@ -23,7 +23,7 @@ Only two themes exist: **green** (default) and **carbon** (implemented). Both ar
 | Role | Use |
 | --- | --- |
 | Background | Window background |
-| Surface | Solid first-screen box in every theme; carbon also uses it for panels and panes |
+| Surface | Solid first-screen box, vault panes and modals in every theme (fall back to Background when absent) |
 | Raised | Selected row, focused field, modal body (carbon only) |
 | Text | Primary content |
 | Dim | Secondary content, hints, alternate list rows |
@@ -35,7 +35,7 @@ Only two themes exist: **green** (default) and **carbon** (implemented). Both ar
 
 ### 2.2 `green` (default, dark)
 
-Gentle Shell green. The first screen has a solid dark Surface (`#101914`); its exterior and other green screens retain the terminal's own background. The light variant uses a solid white Surface. Info, Special and Muted fall back to Accent, Accent and Dim.
+Gentle Shell green. The first screen and vault panes have a solid dark Surface (`#101914`); outside the boxes the terminal background remains visible. The light variant uses a solid white Surface. Info, Special and Muted fall back to Accent, Accent and Dim.
 
 | Role | Hex | Contrast on `#000000` |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Gentle Shell green. The first screen has a solid dark Surface (`#101914`); its e
 
 ### 2.3 `carbon`
 
-Three-pane IDE look with layered surfaces and a brighter accent.
+Two-pane terminal look with layered surfaces and a brighter accent.
 
 | Role | Hex | on Background `#1E1F22` | on Surface `#26282D` |
 | --- | --- | --- | --- |
@@ -93,7 +93,7 @@ A terminal program cannot choose the terminal font. Qrypt can only ask for a goo
 | --- | --- |
 | Smaller than 60x20, or size unknown | Only a request to enlarge the window. Secrets are never shown cut off. |
 | 60x20 up to 99 columns | Narrow flow: one panel, 60 columns wide, growing to at most 64. |
-| 100x20 and larger | Wide mode: three columns (tree, items, inspector), status bar, modals over the panes. |
+| 100x20 and larger | Wide mode: two solid columns (tree, inspector), status bar, solid modals over the panes. |
 
 ### 4.2 Decoration drop order (implemented)
 
@@ -104,7 +104,7 @@ When the window is too short, remove in this order and never remove content:
 3. Bottom key bar.
 4. Title line.
 
-In wide mode the action rows at the end of each list (section 5) are decoration too: they are omitted, last row first, when a pane has no room after its content, and the bottom key bar drops whole pairs from the end of its priority order when the line is too narrow. Neither ever displaces content or cuts a pair with an ellipsis.
+In wide mode the creation hints live inside the tree after the destination folder's last row (and New space at the end). They are not selectable; scrolling follows the selected tree row. The bottom key bar drops whole pairs from the end when the line is too narrow.
 
 ### 4.3 Spacing
 
@@ -120,10 +120,10 @@ In wide mode the action rows at the end of each list (section 5) are decoration 
 | Panel | Bordered, bold centered heading, divider. Focused panel uses an Accent border; others use Border. |
 | Selected row | `>` marker plus Raised background (carbon) or bold (green). Only the focused list highlights; unfocused text remains legible. |
 | Chip | Short label in Info or Special (carbon) or Accent (green). Text always present. |
-| Tree | Folders at any depth; folder icon, name, `(n)` count; indentation of two columns per level. |
+| Tree | Every space; all folders and items of the selected space, with `├─ ` / `└─ ` branches and three-cell nesting; `(n)` counts on spaces and folders. Up/Down select one row without writing to disk. |
 | Inspector | Field list for the selected item: hidden (masked), visible, note. Reveal is explicit. |
-| Modal | Drawn over the panes with the compositor; Raised body, Accent border; Esc closes. The help overlay uses this compositor in wide mode. |
-| Action row | Wide mode: dim `+ [key] Label` row after the last entry of a list, to create. A hint, never selectable; shown only when its key would work in that pane, omitted when there is no room, never displacing content. Key in the key-bar style in the focused pane, whole row Muted elsewhere. |
+| Modal | Solid background on every cell, Accent border, centered over the two faint panes; creation forms show `Create in: <location>` / `Crear en: <location>`; Esc closes. The help overlay uses this compositor in wide mode. |
+| Action row | Wide mode: dim `+ [key] Label` after the last tree row of the creation destination, indented three cells per folder level; New space is the last tree line. Hints are never selectable. |
 | Key bar | Bottom line: key and action pairs in the chosen language only (both languages before the choice). In wide mode the pairs are listed in priority order, create keys and `[?] help` first; they are one line, never cut with an ellipsis, and whole pairs are dropped from the end until the line fits beside the item counter. |
 | Status bar | Wide mode only: space, item count, mirror and integrity state, lock countdown; a warning if memory locking was refused. |
 | Problem screen | Integrity failure. Accepting needs the typed word `ACCEPT` (`ACEPTAR` in Spanish); never a single key. |
@@ -135,8 +135,8 @@ Motion is a signature of Qrypt and is **kept**.
 
 ### 6.1 Logo sweep (implemented)
 
-- The six-row ASCII logo (`internal/tui/logo.txt`) is drawn in a horizontal gradient from Accent to a lighter tint.
-- A soft band of light sweeps across the logo in a loop. One frame is **66 ms** (`logoFrame`), driven by `logoTickMsg`; the phase advances one step per tick (`logoTint` in `frame.go`).
+- The six-row, 43-column block-letter logo (`internal/tui/logo.txt`) is drawn in a horizontal gradient from Accent to a lighter tint.
+- A wide, near-white band of light sweeps across the logo in a loop. One frame is **66 ms** (`logoFrame`), driven by `logoTickMsg`; the phase advances one step per tick (`logoTint` in `frame.go`).
 - The animation is **not key activity**: it never postpones the idle lock.
 - The logo appears only on full-size screens; below that it becomes `◆ Qrypt` and the animation stops.
 

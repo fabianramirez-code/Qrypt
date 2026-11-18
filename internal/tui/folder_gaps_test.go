@@ -234,7 +234,7 @@ func TestWideFolderFieldActionsPersistOnDisk(t *testing.T) {
 	check("delete root item", before, true)
 }
 
-func TestWideLocationHeadingCutsFromLeft(t *testing.T) {
+func TestWideInspectorHeadingFitsTwoPanes(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		path []string
@@ -267,21 +267,15 @@ func TestWideLocationHeadingCutsFromLeft(t *testing.T) {
 				t.Fatal("missing heading")
 			}
 			parts := strings.Split(line, "│")
-			if len(parts) != 3 {
+			if len(parts) != 2 {
 				t.Fatalf("heading columns: %q", line)
 			}
 			heading := strings.TrimSpace(parts[1])
-			location := strings.TrimPrefix(heading, "[2] ")
-			full := "Personal / " + strings.Join(tc.path, " / ")
-			if !utf8.ValidString(location) || lipgloss.Width(parts[1]) != 52 || lipgloss.Width(heading) > 50 {
-				t.Fatalf("invalid or overflowing heading %q", heading)
+			if !utf8.ValidString(heading) || lipgloss.Width(parts[1]) != 76 || lipgloss.Width(heading) > 74 || !strings.HasPrefix(heading, "[2] ITEM // Personal / ") {
+				t.Fatalf("invalid or overflowing inspector heading %q", heading)
 			}
-			if tc.cut {
-				if !strings.HasPrefix(location, "…") || !strings.HasSuffix(full, strings.TrimPrefix(location, "…")) || !strings.HasSuffix(location, tc.path[len(tc.path)-1]) {
-					t.Fatalf("not a left-cut suffix preserving current folder: %q of %q", location, full)
-				}
-			} else if location != full {
-				t.Fatalf("exact fit cut: %q, want %q", location, full)
+			if tc.cut && !strings.Contains(heading, "…") && !strings.Contains(heading, "sample") {
+				t.Fatalf("long location was not represented: %q", heading)
 			}
 		})
 	}

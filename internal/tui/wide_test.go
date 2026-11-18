@@ -53,11 +53,11 @@ func TestWideFolderTreeAndFieldInspector(t *testing.T) {
 	m.refreshSpaces()
 	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = enter(t, m)
-	if !strings.Contains(framed(m), "outer (1)") || !strings.Contains(framed(m), "[2] Personal") {
+	if !strings.Contains(framed(m), "outer (1)") || !strings.Contains(framed(m), "[2] ITEM") {
 		t.Fatal(framed(m))
 	}
 	m = enter(t, m)
-	if !strings.Contains(framed(m), "[2] Personal / outer") || !strings.Contains(framed(m), "inner (1)") {
+	if !strings.Contains(framed(m), "└─") || !strings.Contains(framed(m), "inner (1)") {
 		t.Fatal(framed(m))
 	}
 	m = enter(t, m)
@@ -148,7 +148,9 @@ func TestWideTreeSelectionAndPreviewStructure(t *testing.T) {
 	if strings.Contains(framed(m), "Work: Google Stitch") || !strings.Contains(framed(m), "Work (5)") {
 		t.Fatal(framed(m))
 	}
-	m = key(t, m, tea.KeyDown)
+	for m.spaceTitle() != "Work" {
+		m = key(t, m, tea.KeyDown)
+	}
 	if !strings.Contains(framed(m), "AWS (1)") || !strings.Contains(framed(m), "Google Stitch (2)") {
 		t.Fatal(framed(m))
 	}
@@ -157,11 +159,11 @@ func TestWideTreeSelectionAndPreviewStructure(t *testing.T) {
 		t.Fatal(framed(m))
 	}
 	m = key(t, m, tea.KeyRight)
-	if m.screen != vaultList || !strings.Contains(framed(m), "[2] Work / AWS") || !strings.Contains(framed(m), "prod (1)") {
+	if m.screen != vaultList || !strings.Contains(framed(m), "AWS (1)") || !strings.Contains(framed(m), "prod (1)") {
 		t.Fatal(framed(m))
 	}
 	m = enter(t, m)
-	if !strings.Contains(framed(m), "[2] Work / AWS / prod") || !strings.Contains(framed(m), "sample deployment") {
+	if !strings.Contains(framed(m), "prod (1)") || !strings.Contains(framed(m), "sample deployment") {
 		t.Fatal(framed(m))
 	}
 	m = enter(t, m)
@@ -177,11 +179,11 @@ func TestWideTreeSelectionAndPreviewStructure(t *testing.T) {
 		t.Fatal("note leaked after leaving")
 	}
 	m = send(t, m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
-	if !strings.Contains(framed(m), "[2] Work / AWS") {
+	if !strings.Contains(framed(m), "AWS (1)") || m.screen != vaultList {
 		t.Fatal("folder back missing")
 	}
 	m = key(t, m, tea.KeyEsc)
-	if !strings.Contains(framed(m), "[2] Work") {
+	if !strings.Contains(framed(m), "Work (5)") {
 		t.Fatal("Esc did not ascend")
 	}
 }
@@ -196,7 +198,7 @@ func TestWideUnboxedColumnsAndRoles(t *testing.T) {
 			t.Fatalf("pane has rounded corner %q", corner)
 		}
 	}
-	for _, want := range []string{"[1] SPACES", "NAME", "[3] ITEM", "▌", "─", "│", IconGlyph(m.icons, "spaceOpen"), IconGlyph(m.icons, "item"), "(1)"} {
+	for _, want := range []string{"[1] SPACES", "[2] ITEM", "└─", "▌", "─", "│", IconGlyph(m.icons, "spaceOpen"), IconGlyph(m.icons, "item"), "(1)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("missing %q", want)
 		}
@@ -214,7 +216,7 @@ func TestWideInspectorStatusAndClock(t *testing.T) {
 		m.now = func() time.Time { return now }
 		m.lastKey = now
 		view := framed(m)
-		for _, want := range []string{">_ QRYPT // Personal", "● PQC: ML-KEM-768 + X25519", "[2] Personal", IconGlyph(m.icons, "spaceClosed"), IconGlyph(m.icons, "spaceOpen"), "5:00"} {
+		for _, want := range []string{">_ QRYPT // Personal", "● PQC: ML-KEM-768 + X25519", "[2] ", IconGlyph(m.icons, "spaceClosed"), IconGlyph(m.icons, "spaceOpen"), "5:00"} {
 			if !strings.Contains(view, want) {
 				t.Errorf("missing %q: %s", want, view)
 			}
@@ -223,13 +225,13 @@ func TestWideInspectorStatusAndClock(t *testing.T) {
 			t.Fatal("wrong algorithm")
 		}
 		if lang == English {
-			for _, want := range []string{"[1] SPACES", "[3] ITEM", "NAME", "No mirror"} {
+			for _, want := range []string{"[1] SPACES", "[2] ITEM", "No mirror"} {
 				if !strings.Contains(view, want) {
 					t.Errorf("missing %q", want)
 				}
 			}
 		} else {
-			for _, want := range []string{"[1] ESPACIOS", "[3] ELEMENTO", "NOMBRE", "Sin espejo"} {
+			for _, want := range []string{"[1] ESPACIOS", "[2] ELEMENTO", "Sin espejo"} {
 				if !strings.Contains(view, want) {
 					t.Errorf("missing %q", want)
 				}
@@ -307,12 +309,11 @@ func TestWideThresholdPanesAndFocus(t *testing.T) {
 				t.Fatalf("no unboxed panes: %s", view)
 			}
 			borders := strings.Split(rule, "┼")
-			if len(borders) != 3 {
-				t.Fatalf("expected three panes: %q", rule)
+			if len(borders) != 2 {
+				t.Fatalf("expected two panes: %q", rule)
 			}
-			wantLeft := 25 + (size.Width-100)*25/100
-			wantCenter := 43 + (size.Width-100)*45/100
-			for i, want := range []int{wantLeft, wantCenter, size.Width - wantLeft - wantCenter - 2} {
+			wantLeft := 37 + (size.Width-100)*30/100
+			for i, want := range []int{wantLeft, size.Width - wantLeft - 1} {
 				if lipgloss.Width(borders[i]) != want {
 					t.Fatalf("pane %d width %d, want %d", i, lipgloss.Width(borders[i]), want)
 				}
@@ -326,9 +327,9 @@ func TestWideThresholdPanesAndFocus(t *testing.T) {
 			if strings.Contains(view, "private-token") {
 				t.Fatal("hidden value leaked")
 			}
-			focus := map[screen]int{spacesList: 0, vaultList: 1, vaultItem: 2}[state]
+			focus := map[screen]int{spacesList: 0, vaultList: 0, vaultItem: 1}[state]
 			// The focused pane is the one whose heading rule carries the accent.
-			for i, w := range []int{wantLeft, wantCenter, size.Width - wantLeft - wantCenter - 2} {
+			for i, w := range []int{wantLeft, size.Width - wantLeft - 1} {
 				style := x.styles.dim
 				if i == focus {
 					style = x.styles.accent
@@ -378,10 +379,9 @@ func TestWideNavigationRevealAndResize(t *testing.T) {
 	}
 	m = enter(t, m)
 	m = key(t, m, tea.KeyTab)
-	if m.screen != spacesList || m.vlt == nil || m.itemValue != nil || m.visible || strings.Contains(framed(m), "private-token") {
-		t.Fatal("Tab wrap retained value")
+	if m.screen != vaultList || m.vlt == nil || m.itemValue != nil || m.visible || strings.Contains(framed(m), "private-token") {
+		t.Fatal("Tab return retained value")
 	}
-	m = key(t, m, tea.KeyRight)
 	m = key(t, m, tea.KeyRight)
 	m = key(t, m, tea.KeyLeft)
 	if m.screen != vaultList || m.itemValue != nil {
@@ -418,7 +418,9 @@ func TestWideEmptyNavigationAndSelectionResize(t *testing.T) {
 	}
 
 	x := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 120, Height: 30})
-	x = key(t, x, tea.KeyDown)
+	for x.spaceTitle() != "Work" {
+		x = key(t, x, tea.KeyDown)
+	}
 	x = key(t, x, tea.KeyRight)
 	x = key(t, x, tea.KeyRight)
 	x = send(t, x, tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -457,7 +459,9 @@ func TestWideActionsPreviewAndNarrowPreservation(t *testing.T) {
 	if !strings.Contains(framed(m), "account") || !strings.Contains(framed(m), "Personal (1)") {
 		t.Fatal("spaces preview not cached")
 	}
-	m = key(t, m, tea.KeyDown)
+	for m.spaceTitle() != "Work" {
+		m = key(t, m, tea.KeyDown)
+	}
 	if !strings.Contains(framed(m), "work-only") || !strings.Contains(framed(m), "Work (1)") {
 		t.Fatal("space switch not refreshed")
 	}
@@ -644,7 +648,7 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 		t.Fatal("add not opened")
 	}
 	view := framed(m)
-	for _, title := range []string{"[1] SPACES", "Personal", "[3] ITEM", english.addTitle} {
+	for _, title := range []string{"[1] SPACES", "Personal", "[2] ITEM", english.addTitle} {
 		if !strings.Contains(view, title) {
 			t.Fatalf("missing %q from modal and panes", title)
 		}
@@ -703,7 +707,7 @@ func TestWideModalAddCompositionAndNarrow(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 24}, {Width: 60, Height: 20}} {
 		x := send(t, m, size)
 		x = key(t, x, 'a')
-		if strings.Contains(framed(x), "[1] SPACES") || strings.Contains(framed(x), "[3] ITEM") {
+		if strings.Contains(framed(x), "[1] SPACES") || strings.Contains(framed(x), "[2] ITEM") {
 			t.Fatalf("narrow modal got panes at %dx%d", size.Width, size.Height)
 		}
 	}
@@ -721,7 +725,7 @@ func TestWideModalScreensThemesAndSecurity(t *testing.T) {
 					x := m
 					x.screen = state
 					wideFit(t, x, size.Width, size.Height)
-					if !strings.Contains(framed(x), "[1] "+strings.ToUpper(lang.text().spacesTitle)) || !strings.Contains(framed(x), "[3] "+strings.ToUpper(lang.text().itemTitle)) {
+					if !strings.Contains(framed(x), "[1] "+strings.ToUpper(lang.text().spacesTitle)) || !strings.Contains(framed(x), "[2] "+strings.ToUpper(lang.text().itemTitle)) {
 						t.Fatalf("%s %d %dx%d did not overlay panes", theme, state, size.Width, size.Height)
 					}
 					if strings.Contains(framed(x), "private-token") {
@@ -854,7 +858,9 @@ func TestWideModalRealProblemFallback(t *testing.T) {
 		}
 	})
 	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
-	m = key(t, m, tea.KeyDown)
+	for m.selectedProblem() == nil {
+		m = key(t, m, tea.KeyDown)
+	}
 	m = enter(t, m)
 	if m.screen != problemScreen || !strings.Contains(framed(m), english.problemTitle) || !strings.Contains(framed(m), "[1] SPACES") {
 		t.Fatal("real problem not over panes")

@@ -55,7 +55,7 @@ var english = texts{
 	// The wide hints are in priority order: the bar drops whole hints from the end until it fits.
 	wideSpacesHint: "[A] new space  [?] help  [R] rename  [D] delete  [M] mirror  [Tab/→] open  [Esc] lock  [↑↓] move",
 	wideListHint:   "[A] new item  [F] new folder  [?] help  [R] rename  [D] delete  [C] copy  [Tab/→] open  [⇧Tab/←] back  [↑↓] move",
-	wideItemHint:   "[A] new entry  [?] help  [E] edit  [D] delete entry  [R] rename item  [C] copy  [Enter] show/hide  [⇧Tab/←] back  [Tab] spaces",
+	wideItemHint:   "[A] new entry  [?] help  [E] edit  [D] delete entry  [R] rename item  [C] copy  [Enter] show/hide  [⇧Tab/←] back  [Tab] tree",
 	wideNewSpace:   "New space", wideNewItem: "New item", wideNewFolder: "New folder", wideAddField: "Add another entry",
 	wideMirrorReady: "Mirror up to date", wideMirrorFailed: "Mirror not updated", wideLock: "Lock", wideName: "NAME", wideSpace: "Space", wideEncryption: "Cipher", wideKey: "Key exchange", wideSignature: "Signed", wideIntegrity: "Integrity", wideVerified: "verified, generation", wideValue: "Secret", wideReveal: "Reveal", wideHide: "Hide", wideCopy: "Copy", wideEdit: "Edit",
 	welcomeTitle: "Creating an identity", welcomeBody: "Qrypt will give you two secrets.\n\nPassphrase (7 words)\n  You type it every time you open Qrypt on this device.\n\nRecovery phrase (24 words)\n  It rebuilds your identity if you lose this device\n  or forget the passphrase.\n\nWrite both on paper. They are shown only now,\nand nobody can reset them.", welcomeHint: "Enter: create   R: restore   Esc: quit", welcomeRestore: "Have a recovery phrase already? Press R to restore.",
@@ -100,7 +100,7 @@ var spanish = texts{
 	previewBanner: "VISTA PREVIA: datos temporales, no se guarda nada", wideCount: func(n int) string { return fmt.Sprintf("%d elementos", n) },
 	wideSpacesHint: "[A] nuevo espacio  [?] ayuda  [R] renombrar  [D] borrar  [M] espejo  [Tab/→] abrir  [Esc] bloquear  [↑↓] mover",
 	wideListHint:   "[A] nuevo elemento  [F] nueva carpeta  [?] ayuda  [R] renombrar  [D] borrar  [C] copiar  [Tab/→] abrir  [⇧Tab/←] volver  [↑↓] mover",
-	wideItemHint:   "[A] nuevo dato  [?] ayuda  [E] editar  [D] borrar dato  [R] renombrar elemento  [C] copiar  [Enter] mostrar/ocultar  [⇧Tab/←] volver  [Tab] espacios",
+	wideItemHint:   "[A] nuevo dato  [?] ayuda  [E] editar  [D] borrar dato  [R] renombrar elemento  [C] copiar  [Enter] mostrar/ocultar  [⇧Tab/←] volver  [Tab] árbol",
 	wideNewSpace:   "Nuevo espacio", wideNewItem: "Nuevo elemento", wideNewFolder: "Nueva carpeta", wideAddField: "Añadir otro dato",
 	wideMirrorReady: "Espejo al día", wideMirrorFailed: "Espejo sin actualizar", wideLock: "Bloqueo", wideName: "NOMBRE", wideSpace: "Espacio", wideEncryption: "Cifrado", wideKey: "Intercambio de claves", wideSignature: "Firma", wideIntegrity: "Integridad", wideVerified: "verificado, generación", wideValue: "Secreto", wideReveal: "Mostrar", wideHide: "Ocultar", wideCopy: "Copiar", wideEdit: "Editar",
 	welcomeTitle: "Crear una identidad", welcomeBody: "Qrypt te dará dos secretos.\n\nFrase de contraseña (7 palabras)\n  La escribes cada vez que abres Qrypt en este equipo.\n\nFrase de recuperación (24 palabras)\n  Reconstruye tu identidad si pierdes este equipo\n  u olvidas la frase de contraseña.\n\nAnota las dos en papel. Solo se muestran ahora,\ny nadie puede restablecerlas.\n\nLas palabras están en inglés. Cópialas tal cual.", welcomeHint: "Enter: crear   R: restaurar   Esc: salir", welcomeRestore: "¿Ya tienes frase de recuperación? Pulsa R para restaurar.",

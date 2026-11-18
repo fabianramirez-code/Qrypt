@@ -12,7 +12,7 @@ import (
 	"github.com/fabianramirez-code/qrypt/internal/vault"
 )
 
-// wideColumn paints a fixed-cell column without a surrounding box.
+// wideColumn paints a fixed-cell opaque column without a surrounding box.
 // The focused column is the one whose heading and rule carry the accent.
 func (m Model) wideColumn(heading string, lines []string, width, height int, focused bool) string {
 	var result []string
@@ -32,35 +32,48 @@ func (m Model) wideColumn(heading string, lines []string, width, height int, foc
 		result = append(result, " "+line+strings.Repeat(" ", max(0, width-1-lipgloss.Width(line))))
 	}
 	column := strings.Join(result, "\n")
-	if m.themeName == "carbon" {
-		column = lipgloss.NewStyle().Background(lipgloss.Color(hexColor(m.styles.palette.Surface))).Render(column)
+	if !m.plain {
+		bg := m.styles.palette.Surface
+		if bg.A == 0 {
+			bg = m.styles.palette.Background
+		}
+		column = solidBackground(column, bg)
 	}
 	return column
 }
 
 type treeRow struct {
-	space int
-	path  []string
-	name  string
-	count int
-	depth int
+	space  int
+	path   []string
+	name   string
+	id     string
+	count  int
+	depth  int
+	branch string
 }
 
 // refreshTree uses the already decrypted listing; painting and animation never read the vault.
 func (m *Model) refreshTree() {
 	rows := make([]treeRow, 0, len(m.spaceRows))
 	for i, space := range m.spaceRows {
+		spaceStart := len(rows)
 		rows = append(rows, treeRow{space: i, name: space.name, count: space.count})
 		if i != m.spaceCursor || space.problem >= 0 {
 			continue
 		}
-		// The open branch follows the current location. Siblings stay closed.
-		var walk func([]string, int)
-		walk = func(parent []string, depth int) {
+		// Walk every folder and its direct items; only the current space is expanded.
+		var walk func([]string, string, int)
+		walk = func(parent []string, indent string, depth int) {
 			counts := map[string]int{}
+			var items []vault.Entry
 			for _, entry := range m.entries {
-				if hasPath(entry.Path, parent) && len(entry.Path) > len(parent) {
+				if !hasPath(entry.Path, parent) {
+					continue
+				}
+				if len(entry.Path) > len(parent) {
 					counts[entry.Path[len(parent)]]++
+				} else {
+					items = append(items, entry)
 				}
 			}
 			names := make([]string, 0, len(counts))
@@ -68,15 +81,48 @@ func (m *Model) refreshTree() {
 				names = append(names, name)
 			}
 			slices.Sort(names)
-			for _, name := range names {
+			slices.SortFunc(items, func(a, b vault.Entry) int { return strings.Compare(a.Title, b.Title) })
+			for j, name := range names {
 				path := append(slices.Clone(parent), name)
-				rows = append(rows, treeRow{space: i, path: path, name: name, count: counts[name], depth: depth})
-				if hasPath(m.folderPath, path) {
-					walk(path, depth+1)
+				last := j == len(names)-1 && len(items) == 0
+				branch, continuation := "├─ ", "│  "
+				if last {
+					branch, continuation = "└─ ", "   "
 				}
+				rows = append(rows, treeRow{space: i, path: path, name: name, count: counts[name], depth: depth, branch: indent + branch})
+				walk(path, indent+continuation, depth+1)
+			}
+			for j, item := range items {
+				branch := "├─ "
+				if j == len(items)-1 {
+					branch = "└─ "
+				}
+				rows = append(rows, treeRow{space: i, path: slices.Clone(parent), name: item.Title, id: item.ID, depth: depth, branch: indent + branch})
 			}
 		}
-		walk(nil, 1)
+		walk(nil, "", 1)
+		// A folder exists only while it holds an item; show the one being created too.
+		if i == m.spaceCursor && m.vlt != nil {
+			known := 0
+			at := len(rows)
+			for known < len(m.folderPath) {
+				last := -1
+				for j := spaceStart; j < len(rows); j++ {
+					if rows[j].depth > 0 && hasPath(rows[j].path, m.folderPath[:known+1]) {
+						last = j
+					}
+				}
+				if last < 0 {
+					break
+				}
+				known, at = known+1, last+1
+			}
+			var extra []treeRow
+			for depth := known + 1; depth <= len(m.folderPath); depth++ {
+				extra = append(extra, treeRow{space: i, path: slices.Clone(m.folderPath[:depth]), name: m.folderPath[depth-1], depth: depth, branch: strings.Repeat("   ", depth-1) + "└─ "})
+			}
+			rows = slices.Insert(rows, at, extra...)
+		}
 	}
 	m.treeRows = rows
 	// Keep the selection on the location after navigation, but preserve a manually
@@ -86,70 +132,100 @@ func (m *Model) refreshTree() {
 	}
 }
 
+// treeFollow derives the tree cursor from the navigation state, which stays the
+// single source of truth for every validated vault action.
 func (m *Model) treeFollow() {
 	m.refreshTree()
-	for i, row := range m.treeRows {
-		if row.space == m.spaceCursor && samePath(row.path, m.folderPath) {
-			m.treeCursor = i
-			return
-		}
-	}
+	m.treeCursor = m.treeIndex()
 }
 
-// wide applies only to the three vault navigation screens; modals use their own renderer.
+func (m Model) treeIndex() int {
+	spaceRow := 0
+	for i, row := range m.treeRows {
+		if row.depth == 0 && row.space == m.spaceCursor {
+			spaceRow = i
+			break
+		}
+	}
+	if m.screen != vaultList && m.screen != vaultItem {
+		return spaceRow
+	}
+	path, id := m.folderPath, ""
+	if m.screen == vaultItem {
+		id = m.itemID
+	} else if row := m.selectedRow(); row.folder {
+		path = append(slices.Clone(m.folderPath), row.name)
+	} else {
+		id = row.id
+	}
+	for i, row := range m.treeRows {
+		if row.space == m.spaceCursor && row.depth > 0 && row.id == id && samePath(row.path, path) {
+			return i
+		}
+	}
+	return spaceRow
+}
+
+// wide applies only to the vault navigation screens; modals use their own renderer.
 func (m Model) wide() bool {
 	return m.width >= 100 && m.height >= 20 && (m.screen == spacesList || m.screen == vaultList || m.screen == vaultItem)
 }
 
-// wideKey translates focus navigation to the existing screen handlers.
+// wideKey translates tree selection into the existing validated vault handlers.
 func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.screen == spacesList {
-		if v.Code == tea.KeyUp || v.Code == tea.KeyDown {
-			m.refreshTree()
+	if m.screen == vaultItem {
+		if v.Code == tea.KeyLeft || v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0 {
+			m.leaveItem()
+			m.treeFollow()
+			return m, nil
+		}
+		if v.Code == tea.KeyRight {
+			return m, nil
+		}
+	}
+	if m.screen == spacesList || m.screen == vaultList {
+		m.treeFollow()
+		forward := v.Code == tea.KeyTab && v.Mod&tea.ModShift == 0 || v.Code == tea.KeyRight || v.Code == tea.KeyEnter
+		switch {
+		case v.Code == tea.KeyUp || v.Code == tea.KeyDown:
 			step := 1
 			if v.Code == tea.KeyUp {
 				step = -1
 			}
-			m.treeCursor = max(0, min(len(m.treeRows)-1, m.treeCursor+step))
-			row := m.treeRows[m.treeCursor]
-			if row.space != m.spaceCursor {
-				m.spaceCursor = row.space
-				m.selectSpace()
-				m.folderPath = nil
-				m.cursor = 0
-				if m.vlt != nil {
-					m.refresh()
-				}
-			}
-			return m, nil
-		}
-		if (v.Code == tea.KeyEnter || v.Code == tea.KeyRight || v.Code == tea.KeyTab && v.Mod&tea.ModShift == 0) && m.selectedProblem() == nil && len(m.treeRows) > 0 {
-			row := m.treeRows[m.treeCursor]
-			m.spaceCursor = row.space
-			m.selectSpace()
-			if m.vlt != nil {
-				m.folderPath = slices.Clone(row.path)
-				m.cursor = 0
-				m.screen = vaultList
+			return m.selectTreeRow(max(0, min(len(m.treeRows)-1, m.treeCursor+step))), nil
+		case v.Code == tea.KeyLeft || v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0:
+			// One level up: the folder just left stays selected in its parent.
+			if m.screen == vaultList && len(m.folderPath) > 0 {
+				name := m.folderPath[len(m.folderPath)-1]
+				m.folderPath = slices.Clone(m.folderPath[:len(m.folderPath)-1])
 				m.refresh()
-				m.treeFollow()
+				for i, row := range m.folderRows {
+					if row.folder && row.name == name {
+						m.cursor = i
+					}
+				}
+			} else if m.screen == vaultList {
+				m.screen = spacesList
 			}
+			m.message = ""
+			m.treeFollow()
 			return m, nil
+		case forward && m.screen == vaultList:
+			if row := m.selectedRow(); row.folder {
+				m.enterFolder(row.name)
+			} else if row.id != "" {
+				m.enterEntry(row)
+			}
+			m.treeFollow()
+			return m, nil
+		case forward:
+			v = tea.KeyPressMsg{Code: tea.KeyEnter}
+		case m.screen == vaultList && (plainKey(v, 'a') || plainKey(v, 'f')) && m.selectedRow().folder:
+			// New things are created inside the selected folder.
+			m.enterFolder(m.selectedRow().name)
 		}
 	}
-	if m.screen == spacesList && (v.Code == tea.KeyLeft || v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0) {
-		return m, nil
-	}
-	if m.screen == vaultList && (v.Code == tea.KeyLeft || v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0) {
-		if len(m.folderPath) > 0 {
-			m.leaveFolder()
-			m.treeFollow()
-		} else {
-			m.screen = spacesList
-			m.treeFollow()
-		}
-		return m, nil
-	}
+
 	if m.screen == vaultItem && plainKey(v, 'e') {
 		delete(m.revealed, m.fieldCursor)
 	}
@@ -164,16 +240,9 @@ func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case m.screen == vaultItem && v.Code == tea.KeyTab && v.Mod&tea.ModShift == 0:
 			m.leaveItem()
-			m.screen = spacesList
 			m.treeFollow()
 			return m, nil
-		case v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0, v.Code == tea.KeyLeft:
-			if m.screen == spacesList {
-				return m, nil
-			}
-			v = tea.KeyPressMsg{Code: tea.KeyEsc}
-		case v.Code == tea.KeyTab, v.Code == tea.KeyRight:
-			v = tea.KeyPressMsg{Code: tea.KeyEnter}
+
 		case m.screen == vaultItem && v.Code == tea.KeyEnter:
 			v = tea.KeyPressMsg{Code: tea.KeyTab}
 		}
@@ -198,6 +267,40 @@ func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 	}
+}
+
+// selectTreeRow moves the navigation state onto one tree row.
+func (m Model) selectTreeRow(target int) Model {
+	if target < 0 || target >= len(m.treeRows) {
+		return m
+	}
+	row := m.treeRows[target]
+	m.message = ""
+	if row.space != m.spaceCursor {
+		m.spaceCursor = row.space
+		m.selectSpace()
+	}
+	m.folderPath, m.cursor = nil, 0
+	if row.depth == 0 || m.vlt == nil {
+		m.screen = spacesList
+		m.refresh()
+		m.treeFollow()
+		return m
+	}
+	m.screen = vaultList
+	path := row.path
+	if row.id == "" {
+		path = row.path[:len(row.path)-1]
+	}
+	m.folderPath = slices.Clone(path)
+	m.refresh()
+	for i, entry := range m.folderRows {
+		if row.id != "" && entry.id == row.id || row.id == "" && entry.folder && entry.name == row.name {
+			m.cursor = i
+		}
+	}
+	m.treeFollow()
+	return m
 }
 
 // wideTrim cuts names and UI text by display cells, never secret values.
@@ -270,6 +373,19 @@ func (m Model) wideModal() (string, bool) {
 		return "", false
 	}
 	body := parts[1] // Including the screen's existing key hints inside the modal.
+	if m.screen == vaultAddName || m.screen == vaultAddValue || m.screen == folderName || m.screen == fieldLabel && m.formAction == vaultAddName {
+		prefix := "Create in: "
+		if m.language == Spanish {
+			prefix = "Crear en: "
+		}
+		body = prefix + m.location() + "\n" + body
+	} else if m.screen == spacesAdd {
+		prefix := "Create in: Spaces"
+		if m.language == Spanish {
+			prefix = "Crear en: Espacios"
+		}
+		body = prefix + "\n" + body
+	}
 	panel := m.panel(stripANSI(parts[0]), body, m.panelWidth(), true, true)
 	base := m
 	base.screen = m.modalPane()
@@ -305,9 +421,8 @@ func (m Model) composeModal(panel, background string) (string, bool) {
 func (m Model) wideView(modal bool) string {
 	t := m.language.text()
 	extra := m.width - 100
-	left := 25 + extra*25/100
-	center := 43 + extra*45/100
-	right := m.width - left - center - 2
+	left := 37 + extra*30/100
+	right := m.width - left - 1
 	header := m.styles.accent.Render("◆ Qrypt")
 	if m.height >= 30 {
 		header = m.logoView()
@@ -330,17 +445,34 @@ func (m Model) wideView(modal bool) string {
 	if rows >= 5 && len(m.spaceNames) <= rows-2 {
 		spaceRows -= 2
 	}
-	start := max(0, min(m.treeCursor-spaceRows/2, len(m.treeRows)-spaceRows))
-	for i := start; i < len(m.treeRows) && len(spaces) < spaceRows; i++ {
+	m.treeFollow()
+	// New items and folders go inside the selected folder, else the current one.
+	focusedTree := m.screen != vaultItem && !modal
+	creating := m.screen != spacesList && m.vlt != nil && m.selectedProblem() == nil
+	container := slices.Clone(m.folderPath)
+	if row := m.selectedRow(); creating && m.screen == vaultList && row.folder {
+		container = append(container, row.name)
+	}
+	hintAfter := -1
+	for i, tree := range m.treeRows {
+		if creating && tree.space == m.spaceCursor && (tree.depth == 0 || hasPath(tree.path, container)) {
+			hintAfter = i
+		}
+	}
+	var all []string
+	cursorLine := 0
+	for i := range m.treeRows {
 		tree := m.treeRows[i]
 		spaceIndex := tree.space
 		suffix := ""
-		if spaceIndex < len(m.spaceRows) && m.spaceRows[spaceIndex].problem < 0 {
+		if tree.id == "" && spaceIndex < len(m.spaceRows) && m.spaceRows[spaceIndex].problem < 0 {
 			suffix = " (" + strconv.Itoa(tree.count) + ")"
 		}
 		problem := spaceIndex < len(m.spaceRows) && m.spaceRows[spaceIndex].problem >= 0
 		glyph := IconGlyph(m.icons, "spaceClosed")
-		if tree.depth == 0 && spaceIndex == m.spaceCursor || tree.depth > 0 && hasPath(m.folderPath, tree.path) {
+		if tree.id != "" {
+			glyph = IconGlyph(m.icons, "item")
+		} else if tree.depth == 0 && spaceIndex == m.spaceCursor || tree.depth > 0 && tree.id == "" && hasPath(m.folderPath, tree.path) {
 			glyph = IconGlyph(m.icons, "spaceOpen")
 		}
 		name := tree.name
@@ -350,9 +482,10 @@ func (m Model) wideView(modal bool) string {
 		}
 		bar := " "
 		if i == m.treeCursor {
+			cursorLine = len(all)
 			bar = m.styles.accent.Render("▌")
 		}
-		label := strings.Repeat(" ", tree.depth*2) + glyph + " " + name
+		label := tree.branch + glyph + " " + name
 		count := suffix
 		if problem {
 			count = ""
@@ -361,17 +494,33 @@ func (m Model) wideView(modal bool) string {
 		label = wideTrim(label, available)
 		gap := 0 // The count, which starts with a space, stays beside the name: "Name (n)".
 		if problem {
-			spaces = append(spaces, bar+m.styles.error.Render(label)+strings.Repeat(" ", gap)+m.styles.error.Render(count))
+			all = append(all, bar+m.styles.error.Render(label)+strings.Repeat(" ", gap)+m.styles.error.Render(count))
 		} else if i == m.treeCursor {
-			spaces = append(spaces, m.styles.raised.Render(bar+m.styles.text.Bold(true).Render(label+strings.Repeat(" ", gap)+count)))
+			all = append(all, m.styles.raised.Render(bar+m.styles.text.Bold(true).Render(label+strings.Repeat(" ", gap)+count)))
+		} else if spaceIndex == m.spaceCursor && tree.depth == 0 || tree.depth > 0 && tree.id == "" && hasPath(m.folderPath, tree.path) {
+			all = append(all, bar+m.styles.info.Render(label)+m.styles.muted.Render(count))
 		} else {
-			spaces = append(spaces, bar+label+strings.Repeat(" ", gap)+m.styles.muted.Render(count))
+			all = append(all, bar+label+strings.Repeat(" ", gap)+m.styles.muted.Render(count))
+		}
+		if i == hintAfter {
+			indent := strings.Repeat("   ", len(container))
+			if len(m.folderRows) == 0 && len(m.folderPath) > 0 {
+				all = append(all, indent+"  "+m.hintStyle().Render(t.folderTemporary))
+			}
+			for _, hint := range [][2]string{{"A", t.wideNewItem}, {"F", t.wideNewFolder}} {
+				if row := m.actionRow(hint[0], hint[1], focusedTree, left-lipgloss.Width(indent)); row != "" {
+					all = append(all, indent+row)
+				}
+			}
 		}
 	}
-	// Hints to create, shown only while A would add a space and only in free rows.
-	if m.selectedProblem() == nil && len(spaces) < spaceRows {
-		spaces = append(spaces, m.actionRow("A", t.wideNewSpace, m.screen == spacesList, left))
+	if m.selectedProblem() == nil {
+		if row := m.actionRow("A", t.wideNewSpace, focusedTree && m.screen == spacesList, left); row != "" {
+			all = append(all, row)
+		}
 	}
+	start := max(0, min(cursorLine-spaceRows/2, len(all)-spaceRows))
+	spaces = append(spaces, all[start:min(len(all), start+spaceRows)]...)
 	if spaceRows < rows {
 		for len(spaces) < spaceRows {
 			spaces = append(spaces, "")
@@ -390,46 +539,7 @@ func (m Model) wideView(modal bool) string {
 	if m.selectedProblem() != nil {
 		listRows = nil
 	}
-	items := make([]string, 0, rows)
-	count := strconv.Itoa(len(listRows))
-	items = append(items, m.styles.info.Render(t.wideName)+strings.Repeat(" ", max(1, center-3-lipgloss.Width(t.wideName)-len(count)))+m.styles.muted.Render(count))
 	selected := min(m.cursor, max(0, len(listRows)-1))
-	if m.screen == spacesList {
-		selected = 0
-	}
-	first := max(0, min(selected-(rows-1)/2, len(listRows)-(rows-1)))
-	for i := first; i < len(listRows) && len(items) < rows; i++ {
-		bar := " "
-		if i == selected {
-			bar = m.styles.accent.Render("▌")
-		}
-		entry := listRows[i]
-		icon := "item"
-		if entry.folder {
-			icon = "spaceClosed"
-		}
-		name := entry.name
-		if entry.folder {
-			name += fmt.Sprintf(" (%d)", entry.count)
-		}
-		name = wideTrim(name, center-7-lipgloss.Width(IconGlyph(m.icons, icon)))
-		row := bar + " " + IconGlyph(m.icons, icon) + " " + name
-		if i == selected {
-			row = m.styles.raised.Render(bar + m.styles.text.Bold(true).Render(" "+IconGlyph(m.icons, icon)+" "+name))
-		}
-		items = append(items, row)
-	}
-	if len(listRows) == 0 && len(m.folderPath) > 0 && m.screen != spacesList {
-		items = append(items, m.styles.muted.Render(wideTrim(t.folderTemporary, center-3)))
-	}
-	// A and F act on the open space; nothing is offered while no space is open.
-	if m.vlt != nil && m.selectedProblem() == nil {
-		for _, hint := range [][2]string{{"A", t.wideNewItem}, {"F", t.wideNewFolder}} {
-			if len(items) < rows {
-				items = append(items, m.actionRow(hint[0], hint[1], m.screen == vaultList, center))
-			}
-		}
-	}
 	detail := []string{}
 	if m.screen != spacesList && len(listRows) > 0 && !listRows[selected].folder {
 		generation := uint64(0)
@@ -532,18 +642,6 @@ func (m Model) wideView(modal bool) string {
 			detail = append(detail, m.styles.muted.Render(edit), m.styles.muted.Render(add))
 		}
 	}
-	pad := func(lines []string) string {
-		for len(lines) < rows {
-			lines = append(lines, "")
-		}
-		return strings.Join(lines, "\n")
-	}
-	// The column draws "[2] " plus the heading in center-2 cells.
-	centerTitle := wideLeftTrim(m.location(), center-6)
-	if m.selectedProblem() != nil {
-		centerTitle = ""
-	}
-	_ = pad
 	inspectorName := ""
 	if len(listRows) > 0 && m.screen != spacesList && !listRows[selected].folder {
 		inspectorName = listRows[selected].name
@@ -551,15 +649,14 @@ func (m Model) wideView(modal bool) string {
 	if m.screen == vaultItem {
 		inspectorName = m.item
 	}
-	itemHeading := "[3] " + strings.ToUpper(t.itemTitle)
+	itemHeading := "[2] " + strings.ToUpper(t.itemTitle)
 	if inspectorName != "" {
-		itemHeading += " // " + inspectorName
+		itemHeading += " // " + m.location() + " / " + inspectorName
 	}
 	// One line between panes, crossing the rule under the headings.
 	separator := m.styles.border.Render("│" + "\n" + "┼" + strings.Repeat("\n"+"│", max(0, paneHeight-2)))
 	panes := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.wideColumn("[1] "+strings.ToUpper(t.spacesTitle)+"  "+strconv.Itoa(len(m.spaceNames)), spaces, left, paneHeight, m.screen == spacesList), separator,
-		m.wideColumn(strings.TrimSpace("[2] "+centerTitle), items, center, paneHeight, m.screen == vaultList), separator,
+		m.wideColumn("[1] "+strings.ToUpper(t.spacesTitle)+"  "+strconv.Itoa(len(m.spaceNames)), spaces, left, paneHeight, m.screen != vaultItem), separator,
 		m.wideColumn(itemHeading, detail, right, paneHeight, m.screen == vaultItem))
 	if modal {
 		panes = lipgloss.NewStyle().Faint(true).Render(panes)

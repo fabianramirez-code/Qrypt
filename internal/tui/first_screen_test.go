@@ -37,7 +37,7 @@ func TestFirstScreenSingleCenteredBox(t *testing.T) {
 	if left != (100-lipgloss.Width(strings.TrimSpace(rows[top])))/2 {
 		t.Fatalf("box not horizontally centered: %s", rows[top])
 	}
-	for _, label := range []string{"┌──────┐", "LANGUAGE / IDIOMA", "THEME / TEMA", "ICONS / ICONOS", "ANIMATION / ANIMACIÓN", "Enter: select"} {
+	for _, label := range []string{"██████╗", "LANGUAGE / IDIOMA", "THEME / TEMA", "ICONS / ICONOS", "ANIMATION / ANIMACIÓN", "Enter: select"} {
 		found := false
 		for i := top + 1; i < bottom; i++ {
 			if strings.Contains(rows[i], label) {

@@ -77,7 +77,7 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 		}
 		m.screen = welcome
 		wantWelcome := map[string]string{
-			"green": "2d0d44808623e1abfcffb17ab3711f1de671b7bda2605744f4aa4969cfd6c7f6",
+			"green": "0ba2fad1920d40119e012463b9261898c90d2f138548e56aad6dbafb929677c2",
 			"mono":  "60f4d8efc7dc6d287865fa78d9b73a28c94aae8b6f88aecb2ea5912f4f195031",
 		}[name]
 		if got := fmt.Sprintf("%x", sha256.Sum256([]byte(m.View().Content))); got != wantWelcome {

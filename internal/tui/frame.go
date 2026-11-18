@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"image/color"
 	"math"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -45,16 +46,30 @@ func (m Model) panel(title, body string, width int, focused, rule bool) string {
 	}
 	lines = append(lines, border.Render(edges.BottomLeft+strings.Repeat(edges.Bottom, width-2)+edges.BottomRight))
 	panel := strings.Join(lines, "\n")
-	if m.themeName == "carbon" {
-		return lipgloss.NewStyle().Background(lipgloss.Color(hexColor(m.styles.palette.Surface))).Render(panel)
+	if !m.plain {
+		bg := m.styles.palette.Surface
+		if bg.A == 0 {
+			bg = m.styles.palette.Background
+		}
+		return solidBackground(panel, bg)
 	}
 	return panel
+}
+
+// solidBackground reapplies the surface after nested styles reset SGR. A wrapper
+// background alone leaves explicitly styled text and borders transparent.
+func solidBackground(content string, bg color.RGBA) string {
+	paint := "\x1b[48;2;" + strconv.Itoa(int(bg.R)) + ";" + strconv.Itoa(int(bg.G)) + ";" + strconv.Itoa(int(bg.B)) + "m"
+	content = strings.ReplaceAll(content, "\x1b[m", "\x1b[m"+paint)
+	content = strings.ReplaceAll(content, "\x1b[0m", "\x1b[0m"+paint)
+	content = strings.ReplaceAll(content, "\x1b[49m", "\x1b[49m"+paint)
+	return paint + strings.ReplaceAll(content, "\n", "\x1b[49m\n"+paint) + "\x1b[49m"
 }
 
 // logoPeriod is long enough for the band to leave the logo before it re-enters.
 const logoPeriod = 80
 
-// logoTint is the static left-to-right gradient plus a soft band of light that
+// logoTint is the static left-to-right gradient plus a wide, near-white band of light that
 // moves one column per phase, slanted by row.
 func logoTint(accent color.RGBA, col, cols, row, phase int) color.RGBA {
 	ratio := float64(col) / float64(max(cols-1, 1))
@@ -62,8 +77,8 @@ func logoTint(accent color.RGBA, col, cols, row, phase int) color.RGBA {
 	if phase < 0 {
 		centre = -1000 // No moving band; retain the static gradient.
 	}
-	d := (float64(col) - centre) / 4
-	t := min(1, ratio*0.42+0.5*math.Exp(-d*d))
+	d := (float64(col) - centre) / 6
+	t := min(1, ratio*0.3+0.9*math.Exp(-d*d))
 	mix := func(x uint8) uint8 { return uint8(min(255, math.Round(float64(x)*(1-t)+255*t))) }
 	return color.RGBA{R: mix(accent.R), G: mix(accent.G), B: mix(accent.B), A: 255}
 }

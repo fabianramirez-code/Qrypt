@@ -317,7 +317,9 @@ func TestProblemWideAndLock(t *testing.T) {
 		}
 	})
 	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
-	m = key(t, m, tea.KeyDown)
+	for m.selectedProblem() == nil {
+		m = key(t, m, tea.KeyDown)
+	}
 	for _, code := range []rune{tea.KeyRight, tea.KeyTab, tea.KeyEnter} {
 		x := key(t, m, code)
 		if x.screen != problemScreen || strings.Contains(framed(x), "private-name") {
