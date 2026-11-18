@@ -201,6 +201,15 @@ func decodeFields(plain []byte) ([]Field, error) {
 		return nil, ErrInvalidFormat
 	}
 	var fields []Field
+	// A body that authenticates but is malformed must not leave copied values behind.
+	valid := false
+	defer func() {
+		if !valid {
+			for _, field := range fields {
+				clear(field.Value)
+			}
+		}
+	}()
 	off := 1
 	for i := 0; i < int(data[0]); i++ {
 		if off+2 > len(data) {
@@ -227,11 +236,9 @@ func decodeFields(plain []byte) ([]Field, error) {
 		fields = append(fields, Field{Kind: kind, Label: label, Value: value})
 	}
 	if off != len(data) || validateItem(Item{Title: "valid", Fields: fields}) != nil {
-		for _, field := range fields {
-			clear(field.Value)
-		}
 		return nil, ErrInvalidFormat
 	}
+	valid = true
 	return fields, nil
 }
 
@@ -511,6 +518,9 @@ func (v *Vault) MoveFolder(from, to []string) error {
 		} else {
 			occupied[pathKey(path, e.Title)] = true
 		}
+	}
+	if len(moving) == 0 {
+		return ErrNotFound // A folder exists only through its items.
 	}
 	for _, e := range moving {
 		path := append(append([]string{}, to...), e.Path[len(from):]...)

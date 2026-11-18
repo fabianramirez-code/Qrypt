@@ -6,12 +6,12 @@ How Qrypt stores secrets on disk. This document fixes the exact constructions be
 | ------------------- | -------------------------------------------------------------- |
 | Scope key           | 32 random bytes                                                |
 | Scope key wrapping  | HPKE (RFC 9180) with X-Wing, HKDF-SHA-256, ChaCha20-Poly1305   |
-| Secret file         | One file per secret, random 128-bit name, format version 1     |
+| Secret file         | One file per item, random 128-bit name, file version 2 (1 read) |
 | Secret encryption   | XChaCha20-Poly1305, one key and one tag for the name, another for the value |
 | Subkeys             | HKDF-SHA-256 from the scope key, one label per use             |
 | Size hiding         | Names padded to 256 bytes, values padded to a multiple of 256  |
 
-> **Status:** format version 1, design stage. Not audited. Do not store real secrets with Qrypt yet.
+> **Status:** implemented. Secret files are written as version 2 and version 1 is still read. Not audited. Do not store real secrets with Qrypt yet.
 
 Version 1 fixes every algorithm and parameter. Nothing is configurable, and the only setting read from a file is its version. Changing any value below requires a new version.
 
@@ -276,7 +276,7 @@ The record is updated after the manifest. If writing the record fails, the chang
 
 An attacker who copies the vault learns:
 
-- how many scopes there are, how many secrets each holds, and roughly how long each name and value is (values to the nearest 256 bytes; every name looks the same);
+- how many scopes there are, how many secrets each holds, and roughly how large each item is (all its fields together, to the nearest 256 bytes; every title and folder path looks the same);
 - when each file was last changed, from the file system;
 - the scope id and the public-key fingerprint of the member.
 
@@ -287,7 +287,7 @@ They learn nothing about names or values without the scope key, which needs the 
 - **The local record is not protected.** Someone who can write to the user's configuration directory can change or delete the record, and with it hide a rollback. Integrity protects a vault that travels (a mirror, a synchronized folder), not a device that an attacker controls.
 - **A first open cannot detect a rollback.** On a device with no record, Qrypt checks that the scope was signed by the identity, but it cannot know whether it is the latest state.
 - **A whole vault with its record.** Putting back an older vault together with its older record is not detected.
-- **Listing opens every name.** To list secrets or check that a name is free, Qrypt reads every file in the scope and decrypts the 256-byte name segments, not the values. The [threat model](threat-model.md#1-infected-device) already accepts that an infected device can read what the program holds in memory.
+- **Listing opens every name.** To list secrets or check that a name is free, Qrypt reads every file in the scope and decrypts their heads (the title and the folder path), not their fields. The [threat model](threat-model.md#1-infected-device) already accepts that an infected device can read what the program holds in memory.
 - **One damaged file stops its scope** until the user [accepts](#problems-and-accepting) the scope without it. Damage is never hidden and never repaired silently.
 - **One writer at a time.** Two programs adding the same name at the same moment can both succeed. Version 1 does not lock the vault.
 - **Secrets in memory:** see the limit described in the [threat model](threat-model.md#1-infected-device).
