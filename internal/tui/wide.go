@@ -553,11 +553,15 @@ func (m Model) wideView(modal bool) string {
 	}
 	coloredHints := strings.Join(hintParts, "  ")
 	status := m.message
-	if status == "" && !modal {
+	if warning := m.memoryWarning(); warning != "" {
+		status = warning
+	} else if status == "" && !modal {
 		status = t.wideCount(len(listRows))
 	}
 	style := m.styles.hint
-	if m.message != "" {
+	if m.memoryWarning() != "" {
+		style = m.styles.warning
+	} else if m.message != "" {
 		style = m.styles.error
 		if m.message == t.copied || m.mirrorWarning && m.message == m.mirrorResult {
 			style = m.styles.warning

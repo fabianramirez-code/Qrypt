@@ -58,8 +58,16 @@ func SimulateFailureForTest(allocation, locking bool) func() {
 	return func() { allocPages, lockPages = originalAlloc, originalLock }
 }
 
+// MaxSize bounds allocations to one MiB. Larger requests return an empty buffer
+// and record a failure rather than panicking or allocating an unbounded heap slice.
+const MaxSize = 1 << 20
+
 // New creates a buffer of size bytes. Page protection failures never stop the caller.
 func New(size int) *Buffer {
+	if size > MaxSize {
+		record(fmt.Errorf("page allocation: size exceeds %d bytes", MaxSize))
+		return &Buffer{}
+	}
 	if size < 0 {
 		size = 0
 	}

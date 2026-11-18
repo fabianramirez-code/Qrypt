@@ -13,7 +13,7 @@ What the `qrypt` program shows and how it behaves. It has four flows: creating a
 - **Small windows.** If the window is smaller than 60 columns by 20 rows, or its size is not known yet, Qrypt shows only a request to enlarge it. Secrets are never shown cut off.
 - **Two languages.** The interface is in English or in Spanish. See [Language](#language).
 - **Typed, not pasted.** Fields for a passphrase or a recovery word ignore pasted text. Pasting would mean that a secret had been copied to the clipboard. The fields of the [vault screens](#managing-the-vault) are the exception, because a user must be able to paste a token they were given.
-- **Messages never repeat what the user typed.**
+- **Messages never repeat what the user typed.** Bubble Tea delivers each key press as a Go string; typed passphrases, recovery words and edited values currently remain strings in the model pending further memory protection.
 
 ### Help
 
@@ -121,7 +121,7 @@ After unlocking, Qrypt opens the [vault](vault.md#5-storage) next to the identit
 
 ### Spaces
 
-The first screen after unlocking lists the spaces by name, each with the number of items it holds.
+The first screen after unlocking lists the spaces by name, each with the number of items it holds. If memory locking was refused, the unlocked vault keeps working and shows `Memory is not locked: keys could reach the swap file.` / `La memoria no está bloqueada: las claves podrían llegar al archivo de intercambio.` in the wide status bar or as a warning-styled line on narrow Spaces. No warning is shown when locking succeeds.
 
 | Screen           | Shows                                                   | Keys                                                                                                  |
 | ---------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |

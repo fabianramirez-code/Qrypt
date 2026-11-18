@@ -35,7 +35,7 @@ Ordered from most to least likely.
 - Decrypt only the secret the user asks for, never the whole vault.
 - Wipe secrets from memory after use and clear the clipboard.
 
-**Limit:** Phase 1 keeps long-lived identity and scope key bytes in best-effort locked, wiped pages. This reduces exposure to swap and hibernation files and, on Linux, core dumps. Lock or allocation refusal does not block use; Go runtime and cryptographic-library copies and TUI strings are not protected. It does not defend against a live attacker with the same privileges or a debugger.
+**Limit:** Long-lived identity and scope key bytes live in best-effort locked, wiped pages. This reduces exposure to swap and hibernation files and, on Linux, core dumps. Lock or allocation refusal does not block use; the unlocked vault warns when protection is refused. Typed secrets and clipboard-held values still live in TUI strings; Bubble Tea delivers key events as strings, and revealed values require a string while drawn. Go runtime and cryptographic-library copies are not protected. It does not defend against a live attacker with the same privileges or a debugger.
 
 ## 2. Weak passphrase or exposed recovery phrase
 

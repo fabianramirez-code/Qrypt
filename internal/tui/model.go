@@ -15,6 +15,7 @@ import (
 	"github.com/fabianramirez-code/qrypt/internal/clipboard"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
 	"github.com/fabianramirez-code/qrypt/internal/mirror"
+	"github.com/fabianramirez-code/qrypt/internal/secmem"
 	"github.com/fabianramirez-code/qrypt/internal/settings"
 	"github.com/fabianramirez-code/qrypt/internal/tui/theme"
 	"github.com/fabianramirez-code/qrypt/internal/vault"
@@ -199,13 +200,14 @@ type Model struct {
 	copyToken       uint64
 	copyUntil       time.Time
 	copyFallback    bool
+	memoryStatus    func() (bool, string)
 
 	themeBeforeCustom string
 }
 
 // New constructs a session for the explicit identity path without writing to disk.
 func New(path string, preferred Language) Model {
-	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", plain: os.Getenv("NO_COLOR") != "", icons: settings.DefaultIcons, darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now}
+	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", plain: os.Getenv("NO_COLOR") != "", icons: settings.DefaultIcons, darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now, memoryStatus: secmem.Status}
 	loaded, err := settings.Load(m.settingsPath)
 	m.settings = loaded
 	m.motion = loaded.Motion
@@ -858,6 +860,21 @@ func (m Model) View() tea.View {
 	}
 	view.AltScreen = true
 	return view
+}
+
+// memoryWarning is shown only after the vault has been unlocked. The reason is
+// diagnostic state, not part of the user-facing copy.
+func (m Model) memoryWarning() string {
+	if m.scopeID == nil || m.memoryStatus == nil {
+		return ""
+	}
+	if locked, _ := m.memoryStatus(); locked {
+		return ""
+	}
+	if m.language == Spanish {
+		return "La memoria no está bloqueada: las claves podrían llegar al archivo de intercambio."
+	}
+	return "Memory is not locked: keys could reach the swap file."
 }
 
 func (m Model) viewContent() string {

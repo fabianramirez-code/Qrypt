@@ -189,6 +189,22 @@ func (m Model) spacesKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func wrapWords(text string, width int) string {
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(text) {
+		if line != "" && len([]rune(line))+1+len([]rune(word)) > width {
+			lines = append(lines, line)
+			line = ""
+		}
+		if line != "" {
+			line += " "
+		}
+		line += word
+	}
+	return strings.Join(append(lines, line), "\n")
+}
+
 func (m Model) spacesView(t texts) string {
 	title, hint := m.styles.title, m.styles.hint
 	switch m.screen {
@@ -236,5 +252,10 @@ func (m Model) spacesView(t texts) string {
 		}
 		lines = append(lines, row)
 	}
-	return title.Render(t.spacesTitle) + "\n" + strings.Join(lines, "\n") + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.spacesHint)
+	warning := ""
+	if text := m.memoryWarning(); text != "" {
+		// Word wrapping retains the complete warning within the narrow panel.
+		warning = m.styles.warning.Render(wrapWords(text, m.innerWidth())) + "\n"
+	}
+	return title.Render(t.spacesTitle) + "\n" + warning + strings.Join(lines, "\n") + "\n" + wrapLine(m.message) + "\n" + hint.Render(t.spacesHint)
 }

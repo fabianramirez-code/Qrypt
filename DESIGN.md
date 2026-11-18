@@ -122,7 +122,7 @@ When the window is too short, remove in this order and never remove content:
 | Inspector | Field list for the selected item: hidden (masked), visible, note. Reveal is explicit. |
 | Modal | Drawn over the panes with the compositor; Raised body, Accent border; Esc closes. The help overlay uses this compositor in wide mode. |
 | Key bar | Bottom line: key and action pairs in the chosen language only (both languages before the choice). |
-| Status bar | Wide mode only: space, item count, mirror and integrity state, lock countdown. |
+| Status bar | Wide mode only: space, item count, mirror and integrity state, lock countdown; a warning if memory locking was refused. |
 | Problem screen | Integrity failure. Accepting needs the typed word `ACCEPT` (`ACEPTAR` in Spanish); never a single key. |
 | Fields for secrets | Typed, not pasted (except vault fields where a user must paste a token). Masked while typing. |
 
@@ -156,6 +156,7 @@ These rules are part of the design, not extras.
 - Clipboard copy clears after 30 seconds and is excluded from clipboard history (Windows).
 - Idle auto-lock after 5 minutes; lock clears revealed values.
 - Messages never repeat what the user typed.
+- When memory locking is refused, the unlocked vault stays usable and warns in the wide status bar or on narrow Spaces; locked memory shows no warning.
 - Ctrl+C quits at once, except during the identity write (a few milliseconds), so the exit status always matches the disk.
 
 How secrets are protected in memory (keys, decrypted values, the passphrase) is an architecture decision: see [ARCHITECTURE.md](ARCHITECTURE.md), decision D9.
