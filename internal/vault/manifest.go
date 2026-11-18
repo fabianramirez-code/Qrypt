@@ -132,7 +132,11 @@ func (v *Vault) signManifest(m Manifest) ([]byte, error) {
 	}
 	unsigned := data[:len(data)-manifestSignatures]
 	msg := append([]byte(manifestLabel), unsigned...)
-	copy(data[len(unsigned):], ed25519.Sign(v.edSigning, msg))
+	// Go's Ed25519 implementation registers weak pointers for its key cache;
+	// pass it a short-lived heap copy, never an mmap/VirtualAlloc address.
+	signing := append(ed25519.PrivateKey(nil), v.edSigning...)
+	copy(data[len(unsigned):], ed25519.Sign(signing, msg))
+	clear(signing)
 	var seed [mldsa65.SeedSize]byte
 	copy(seed[:], v.mlSeed)
 	defer clear(seed[:])

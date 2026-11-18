@@ -44,7 +44,9 @@ func run(stdin, stdout *os.File, stderr io.Writer, path string) int {
 		fmt.Fprintln(stderr, "Could not run the terminal interface / No se pudo iniciar la interfaz de terminal:", err)
 		return 1
 	}
-	return result.(tui.Model).ExitStatus()
+	model := result.(tui.Model)
+	defer model.Close()
+	return model.ExitStatus()
 }
 
 func runArgs(stdin, stdout *os.File, stderr io.Writer, path string, args []string) int {
@@ -83,6 +85,7 @@ func runPreview(runProgram func(tui.Model, string) (tui.Model, error)) (int, err
 	if err != nil {
 		return 1, err
 	}
+	defer id.Close()
 	data, _, err := id.Seal()
 	if err != nil {
 		return 1, err
@@ -95,5 +98,6 @@ func runPreview(runProgram func(tui.Model, string) (tui.Model, error)) (int, err
 	if err != nil {
 		return 1, err
 	}
+	defer result.Close()
 	return result.ExitStatus(), nil
 }

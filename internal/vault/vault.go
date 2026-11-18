@@ -23,6 +23,7 @@ import (
 	"crypto/ed25519"
 	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 	"github.com/fabianramirez-code/qrypt/internal/identity"
+	"github.com/fabianramirez-code/qrypt/internal/secmem"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -114,6 +115,8 @@ func DefaultDir() (string, error) {
 // Vault is an open vault holding the scope's derived keys in memory. Call Close when done.
 type Vault struct {
 	dir          string
+	keys         *secmem.Buffer
+	scopeKey     []byte
 	scopeID      []byte
 	nameKey      []byte
 	valueKey     []byte
@@ -138,14 +141,33 @@ func newVault(dir string, scopeID, scopeKey []byte, id *identity.Identity) *Vaul
 	ed := id.Ed25519PrivateKey()
 	ml := id.MLDSA65PrivateKey()
 	public := id.PublicKeys()
+	keys := secmem.New(keySize*5 + ed25519.PrivateKeySize)
+	packed := keys.Bytes()
 	v := &Vault{
-		dir:          dir,
-		scopeID:      scopeID,
-		nameKey:      derive(scopeKey, nameLabel),
-		valueKey:     derive(scopeKey, valueLabel),
-		scopeNameKey: derive(scopeKey, scopeNameLabel),
-		edSigning:    ed, mlSeed: ml.Seed(), edPublic: public.Ed25519, mlPublic: public.MLDSA65,
+		dir: dir, keys: keys, scopeID: scopeID,
+		scopeKey:     packed[:keySize],
+		nameKey:      packed[keySize : 2*keySize],
+		valueKey:     packed[2*keySize : 3*keySize],
+		scopeNameKey: packed[3*keySize : 4*keySize],
+		edSigning:    packed[4*keySize : 4*keySize+ed25519.PrivateKeySize],
+		mlSeed:       packed[4*keySize+ed25519.PrivateKeySize:],
+		edPublic:     public.Ed25519, mlPublic: public.MLDSA65,
 	}
+	copy(v.scopeKey, scopeKey)
+	name := derive(v.scopeKey, nameLabel)
+	copy(v.nameKey, name)
+	clear(name)
+	value := derive(v.scopeKey, valueLabel)
+	copy(v.valueKey, value)
+	clear(value)
+	scopeName := derive(v.scopeKey, scopeNameLabel)
+	copy(v.scopeNameKey, scopeName)
+	clear(scopeName)
+	copy(v.edSigning, ed)
+	clear(ed)
+	mlSeed := ml.Seed()
+	copy(v.mlSeed, mlSeed)
+	clear(mlSeed)
 	*ml = mldsa65.PrivateKey{}
 	return v
 }
@@ -162,6 +184,9 @@ func fingerprint(publicKey []byte) []byte {
 // Create makes a new vault in dir for the identity, which becomes its only member.
 // It refuses to overwrite an existing scope file.
 func Create(dir string, id *identity.Identity) (*Vault, error) {
+	if id == nil || id.KEMPrivateKey() == nil {
+		return nil, identity.ErrClosed
+	}
 	scopeID := make([]byte, scopeIDSize)
 	scopeKey := make([]byte, keySize)
 	defer clear(scopeKey)
@@ -206,6 +231,9 @@ func Open(dir string, id *identity.Identity) (*Vault, error) {
 }
 
 func openScope(dir string, id *identity.Identity, verify bool) (*Vault, error) {
+	if id == nil || id.KEMPrivateKey() == nil {
+		return nil, identity.ErrClosed
+	}
 	file, err := readLimited(filepath.Join(dir, scopeName), scopeFileSize)
 	if err != nil {
 		return nil, err
@@ -241,12 +269,12 @@ func openScope(dir string, id *identity.Identity, verify bool) (*Vault, error) {
 
 // Close erases the keys held in memory. The vault cannot be used afterward.
 func (v *Vault) Close() {
-	clear(v.nameKey)
-	clear(v.valueKey)
-	clear(v.scopeNameKey)
-	clear(v.edSigning)
-	clear(v.mlSeed)
-	v.edSigning, v.mlSeed = nil, nil
+	if v == nil {
+		return
+	}
+	v.keys.Destroy()
+	v.keys = nil
+	v.scopeKey, v.edSigning, v.mlSeed = nil, nil, nil
 	v.nameKey, v.valueKey, v.scopeNameKey = nil, nil, nil
 }
 

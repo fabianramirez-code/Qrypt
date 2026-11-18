@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
+	"github.com/fabianramirez-code/qrypt/internal/secmem"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -59,6 +60,8 @@ const (
 var (
 	// ErrInvalidSeed means the master seed is not SeedSize bytes long.
 	ErrInvalidSeed = errors.New("invalid seed length")
+	// ErrClosed means the identity's seed has been destroyed.
+	ErrClosed = errors.New("identity is closed")
 	// ErrWordCount means the recovery input does not contain 24 entries.
 	ErrWordCount = errors.New("recovery: expected exactly 24 entries")
 	// ErrUnknownWord means a recovery entry is not in the English BIP39 list.
@@ -107,7 +110,23 @@ func InWordList(word string) bool {
 }
 
 // Identity holds the secret master seed from which its keys are derived.
-type Identity struct{ seed []byte }
+type Identity struct{ seed *secmem.Buffer }
+
+// Close wipes and releases the identity seed. It may be called more than once.
+func (id *Identity) Close() {
+	if id == nil {
+		return
+	}
+	id.seed.Destroy()
+	id.seed = nil
+}
+
+func (id *Identity) seedBytes() []byte {
+	if id == nil {
+		return nil
+	}
+	return id.seed.Bytes()
+}
 
 // PublicKeys contains independent copies of the identity's three public keys.
 type PublicKeys struct {
@@ -126,7 +145,9 @@ func Generate() (*Identity, error) {
 		clear(seed)
 		return nil, err
 	}
-	return &Identity{seed: seed}, nil
+	id, err := FromSeed(seed)
+	clear(seed)
+	return id, err
 }
 
 // FromSeed creates an identity from a copy of exactly 32 seed bytes.
@@ -134,7 +155,9 @@ func FromSeed(seed []byte) (*Identity, error) {
 	if len(seed) != SeedSize {
 		return nil, ErrInvalidSeed
 	}
-	return &Identity{seed: bytes.Clone(seed)}, nil
+	buffer := secmem.New(SeedSize)
+	copy(buffer.Bytes(), seed)
+	return &Identity{seed: buffer}, nil
 }
 
 func derive(seed []byte, label string) []byte {
@@ -147,7 +170,10 @@ func derive(seed []byte, label string) []byte {
 
 // KEMPrivateKey returns the identity's secret X-Wing private key.
 func (id *Identity) KEMPrivateKey() hpke.PrivateKey {
-	seed := derive(id.seed, kemLabel)
+	if id.seedBytes() == nil {
+		return nil
+	}
+	seed := derive(id.seedBytes(), kemLabel)
 	defer clear(seed)
 	key, err := hpke.MLKEM768X25519().NewPrivateKey(seed)
 	if err != nil {
@@ -158,14 +184,20 @@ func (id *Identity) KEMPrivateKey() hpke.PrivateKey {
 
 // Ed25519PrivateKey returns the identity's secret Ed25519 private key.
 func (id *Identity) Ed25519PrivateKey() ed25519.PrivateKey {
-	seed := derive(id.seed, ed25519Label)
+	if id.seedBytes() == nil {
+		return nil
+	}
+	seed := derive(id.seedBytes(), ed25519Label)
 	defer clear(seed)
 	return ed25519.NewKeyFromSeed(seed)
 }
 
 // MLDSA65PrivateKey returns the identity's secret ML-DSA-65 private key.
 func (id *Identity) MLDSA65PrivateKey() *mldsa65.PrivateKey {
-	derivedSeed := derive(id.seed, mldsa65Label)
+	if id.seedBytes() == nil {
+		return nil
+	}
+	derivedSeed := derive(id.seedBytes(), mldsa65Label)
 	defer clear(derivedSeed)
 	var seed [mldsa65.SeedSize]byte
 	copy(seed[:], derivedSeed)
@@ -176,10 +208,14 @@ func (id *Identity) MLDSA65PrivateKey() *mldsa65.PrivateKey {
 
 // PublicKeys returns copies of the X-Wing, Ed25519, and ML-DSA-65 public keys.
 func (id *Identity) PublicKeys() PublicKeys {
+	if id.seedBytes() == nil {
+		return PublicKeys{}
+	}
 	kemKey := id.KEMPrivateKey()
 	edKey := id.Ed25519PrivateKey()
 	defer clear(edKey)
 	mlKey := id.MLDSA65PrivateKey()
+	defer func() { *mlKey = mldsa65.PrivateKey{} }()
 	return PublicKeys{
 		KEM:     kemKey.PublicKey().Bytes(),
 		Ed25519: bytes.Clone(edKey[SeedSize:]),
@@ -189,10 +225,13 @@ func (id *Identity) PublicKeys() PublicKeys {
 
 // RecoveryPhrase returns the full secret as 24 BIP39 words; show it only to the user.
 func (id *Identity) RecoveryPhrase() string {
-	checksum := sha256.Sum256(id.seed)
+	if id.seedBytes() == nil {
+		return ""
+	}
+	checksum := sha256.Sum256(id.seedBytes())
 	defer clear(checksum[:])
 	bits := make([]byte, SeedSize+checksumSize)
-	copy(bits, id.seed)
+	copy(bits, id.seedBytes())
 	bits[SeedSize] = checksum[0]
 	defer clear(bits)
 
@@ -290,6 +329,9 @@ func normalizePassphrase(passphrase []byte) ([]byte, error) {
 // It generates a new seven-word passphrase on every call; the returned passphrase
 // is secret and must only be shown to the user.
 func (id *Identity) Seal() (sealed []byte, passphrase string, err error) {
+	if id.seedBytes() == nil {
+		return nil, "", ErrClosed
+	}
 	passphrase, err = generatePassphrase()
 	if err != nil {
 		return nil, "", err
@@ -306,7 +348,7 @@ func (id *Identity) Seal() (sealed []byte, passphrase string, err error) {
 	if err != nil {
 		return nil, "", err
 	}
-	aead.Seal(file[ciphertextOffset:ciphertextOffset], file[nonceOffset:ciphertextOffset], id.seed, file[:nonceOffset])
+	aead.Seal(file[ciphertextOffset:ciphertextOffset], file[nonceOffset:ciphertextOffset], id.seedBytes(), file[:nonceOffset])
 	return file, passphrase, nil
 }
 

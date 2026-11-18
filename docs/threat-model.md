@@ -35,7 +35,7 @@ Ordered from most to least likely.
 - Decrypt only the secret the user asks for, never the whole vault.
 - Wipe secrets from memory after use and clear the clipboard.
 
-**Limit:** Go's garbage collector and immutable strings make memory wiping hard to guarantee. How secrets are held in memory is an open design question.
+**Limit:** Phase 1 keeps long-lived identity and scope key bytes in best-effort locked, wiped pages. This reduces exposure to swap and hibernation files and, on Linux, core dumps. Lock or allocation refusal does not block use; Go runtime and cryptographic-library copies and TUI strings are not protected. It does not defend against a live attacker with the same privileges or a debugger.
 
 ## 2. Weak passphrase or exposed recovery phrase
 
