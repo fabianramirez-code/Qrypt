@@ -72,9 +72,6 @@ func TestCarbonPaintAndExistingThemeView(t *testing.T) {
 		if v.BackgroundColor != nil {
 			t.Errorf("%s changed terminal background", name)
 		}
-		if !strings.Contains(v.Content, "ICONS / ICONOS") || !strings.Contains(v.Content, "ANIMATION / ANIMACIÓN") {
-			t.Errorf("%s first screen missing settings sections", name)
-		}
 		m.screen = welcome
 		wantWelcome := map[string]string{
 			"green": "0ba2fad1920d40119e012463b9261898c90d2f138548e56aad6dbafb929677c2",

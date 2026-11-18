@@ -145,7 +145,7 @@ Motion is a signature of Qrypt and is **kept**.
 - Motion only on the logo. No spinners, blinking, or sliding on screens that show secrets.
 - The sweep must never change the logo's width or the layout; it changes color only.
 - With `NO_COLOR` set, Qrypt draws without hue and the logo is bold and static (implemented).
-- **(implemented)** A `reduce motion` setting keeps the gradient and stops the sweep. This is the terminal equivalent of `prefers-reduced-motion`.
+- **(removed)** The `reduce motion` setting was removed at the owner's request: the sweep always runs, except with `NO_COLOR`.
 - **(proposed)** Stop the tick while a modal covers the logo, to save redraws and battery.
 
 ## 7. Security-driven UX
@@ -171,7 +171,7 @@ How secrets are protected in memory (keys, decrypted values, the passphrase) is 
 - Every action is reachable by keyboard; there is no mouse requirement.
 - Focus is always visible: Accent border on the focused section, `>` on every selected row. The first screen centers its logo, four sections and hints inside one solid Surface box, leaving the exterior unpainted.
 - Two languages (English and Spanish); only the interface is translated, recovery words are always English.
-- `NO_COLOR` and the `reduce motion` setting are respected (implemented; section 6.2).
+- `NO_COLOR` is respected (implemented; section 6.2).
 - **(implemented)** Help overlay on `?` when no text field is active, or F1 anywhere, listing the current screen's keys in the chosen language.
 
 ## 9. Voice and copy

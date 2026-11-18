@@ -19,55 +19,6 @@ func logoModel(t *testing.T, themeName string) Model {
 	return m
 }
 
-func TestReducedMotionToggleAndTickChain(t *testing.T) {
-	m := logoModel(t, "green")
-	path := m.settingsPath
-	before := m.View().Content
-	m = key(t, m, 'a')
-	if !strings.Contains(plain(m), "> off / detenida") {
-		t.Fatal(plain(m))
-	}
-	m.logoPhase = 35
-	if m.View().Content == before || m.logoView() != func() string { m.logoPhase = 70; return m.logoView() }() {
-		t.Fatal("reduced logo must keep gradient without moving band")
-	}
-	m.lastKey = m.now().Add(-time.Minute)
-	last := m.lastKey
-	next, cmd := m.Update(logoTickMsg{})
-	m = next.(Model)
-	if cmd != nil || !m.lastKey.Equal(last) {
-		t.Fatal("reduced tick rescheduled or counted as activity")
-	}
-	m = enter(t, m)
-	stored, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(stored), "motion=reduced\n") {
-		t.Fatalf("motion not saved: %q %v", stored, err)
-	}
-	m = send(t, New(m.path, English), tea.WindowSizeMsg{Width: 80, Height: 24})
-	if !strings.Contains(plain(m), "> off / detenida") {
-		t.Fatal("setting not loaded")
-	}
-	next, cmd = m.Update(tea.KeyPressMsg{Code: 'A', Mod: tea.ModShift})
-	m = next.(Model)
-	if cmd == nil || !strings.Contains(plain(m), "> on / activa") {
-		t.Fatal("animated toggle did not restart one chain")
-	}
-	tick, ok := cmd().(logoTickMsg)
-	if !ok {
-		t.Fatal("toggle must return one logo tick")
-	}
-	next, cmd = m.Update(tick)
-	if cmd == nil || next.(Model).logoPhase != m.logoPhase+1 {
-		t.Fatal("animation not resumed")
-	}
-	m = next.(Model)
-	oldPhase := m.logoPhase
-	next, cmd = m.Update(logoTickMsg{token: 0})
-	if cmd != nil || next.(Model).logoPhase != oldPhase {
-		t.Fatal("stale logo chain restarted")
-	}
-}
-
 func TestMotionUnchangedDoesNotSave(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity")
 	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 80, Height: 24})

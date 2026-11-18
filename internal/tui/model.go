@@ -210,10 +210,7 @@ func New(path string, preferred Language) Model {
 	m := Model{path: path, settingsPath: filepath.Join(filepath.Dir(path), "settings"), language: preferred, themeName: "green", plain: os.Getenv("NO_COLOR") != "", icons: settings.DefaultIcons, darkBackground: true, status: 1, generate: identity.Generate, pick: randomPositions, copyFn: clipboard.Copy, clearFn: clipboard.ClearIfUnchanged, now: time.Now, memoryStatus: secmem.Status}
 	loaded, err := settings.Load(m.settingsPath)
 	m.settings = loaded
-	m.motion = loaded.Motion
-	if loaded.Icons != "" {
-		m.icons = loaded.Icons
-	}
+	// Icons and the logo animation are not user options: both always use the defaults.
 	m.settingsError = err != nil
 	if m.settings.Language == "es" {
 		m.language = Spanish
@@ -489,30 +486,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch m.screen {
 		case languageScreen:
-			if plainKey(v, 'a') {
-				if m.motion == "reduced" {
-					m.motion = ""
-					m.logoToken++
-					if !m.plain {
-						return m, logoTick(m.logoToken)
-					}
-				} else {
-					m.motion = "reduced"
-					m.logoToken++
-				}
-				return m, nil
-			}
-			if (v.Code == 'i' || v.Code == 'I') && v.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
-				m.cycleIcons(1)
-				break
-			}
 			switch v.Code {
 			case tea.KeyEsc:
 				return m, tea.Quit
 			case tea.KeyTab, tea.KeyRight:
-				m.preferenceSection = (m.preferenceSection + 1) % 4
+				m.preferenceSection = (m.preferenceSection + 1) % 2
 			case tea.KeyLeft:
-				m.preferenceSection = (m.preferenceSection + 3) % 4
+				m.preferenceSection = (m.preferenceSection + 1) % 2
 			case tea.KeyUp, tea.KeyDown:
 				if m.preferenceSection == 1 {
 					step := 1
@@ -527,29 +507,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.themeName = themeChoice(m.themeIndex)
 						m.refreshStyles()
 					}
-				} else if m.preferenceSection == 0 {
-					if v.Code == tea.KeyUp {
-						m.language = English
-					} else {
-						m.language = Spanish
-					}
-				} else if m.preferenceSection == 2 {
-					step := 1
-					if v.Code == tea.KeyUp {
-						step = -1
-					}
-					m.cycleIcons(step)
 				} else if v.Code == tea.KeyUp {
-					if m.motion == "reduced" {
-						m.motion = ""
-						m.logoToken++
-						if !m.plain {
-							return m, logoTick(m.logoToken)
-						}
-					}
-				} else if m.motion != "reduced" {
-					m.motion = "reduced"
-					m.logoToken++
+					m.language = English
+				} else {
+					m.language = Spanish
 				}
 			case tea.KeyEnter:
 				if m.preferenceSection == 1 && m.themeIndex == len(theme.Names())+1 {

@@ -37,7 +37,7 @@ func TestFirstScreenSingleCenteredBox(t *testing.T) {
 	if left != (100-lipgloss.Width(strings.TrimSpace(rows[top])))/2 {
 		t.Fatalf("box not horizontally centered: %s", rows[top])
 	}
-	for _, label := range []string{"██████╗", "LANGUAGE / IDIOMA", "THEME / TEMA", "ICONS / ICONOS", "ANIMATION / ANIMACIÓN", "Enter: select"} {
+	for _, label := range []string{"██████╗", "LANGUAGE / IDIOMA", "THEME / TEMA", "Enter: select"} {
 		found := false
 		for i := top + 1; i < bottom; i++ {
 			if strings.Contains(rows[i], label) {
@@ -65,44 +65,6 @@ func TestFirstScreenSolidBoxTransparentExterior(t *testing.T) {
 	}
 }
 
-func TestFirstScreenSettingsAreMenuSections(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "identity")
-	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 80, Height: 24})
-	for _, name := range []string{"ICONS / ICONOS", "ANIMATION / ANIMACIÓN"} {
-		if !strings.Contains(framed(m), name) {
-			t.Fatal(framed(m))
-		}
-	}
-	if strings.Contains(framed(m), "Icons / Iconos:") || strings.Contains(framed(m), "Animation / Animación:") {
-		t.Fatal("loose setting lines", framed(m))
-	}
-	m = key(t, m, tea.KeyTab)
-	m = key(t, m, tea.KeyTab)
-	m = key(t, m, tea.KeyDown)
-	if !strings.Contains(framed(m), "> nerd") {
-		t.Fatal("icon selection", framed(m))
-	}
-	m = key(t, m, tea.KeyRight)
-	m = key(t, m, tea.KeyDown)
-	if !strings.Contains(framed(m), "> off / detenida") {
-		t.Fatal("animation selection", framed(m))
-	}
-	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	m = next.(Model)
-	if cmd == nil || !strings.Contains(framed(m), "> on / activa") {
-		t.Fatal("animation did not restart", framed(m))
-	}
-	m = key(t, m, tea.KeyDown)
-	if _, err := os.Stat(filepath.Join(filepath.Dir(path), "settings")); !os.IsNotExist(err) {
-		t.Fatalf("selection wrote: %v", err)
-	}
-	m = enter(t, m)
-	stored, err := settings.Load(filepath.Join(filepath.Dir(path), "settings"))
-	if err != nil || stored.Icons != "nerd" || stored.Motion != "reduced" {
-		t.Fatalf("settings: %+v %v", stored, err)
-	}
-}
-
 func TestFirstScreenFocusReadable(t *testing.T) {
 	m := firstScreen(t, 80, 24)
 	before := m.View().Content
@@ -126,5 +88,36 @@ func TestFirstScreenMinimumAndBelow(t *testing.T) {
 	m = send(t, m, tea.WindowSizeMsg{Width: 59, Height: 19})
 	if !strings.Contains(plain(m), "Enlarge the window") {
 		t.Fatal(plain(m))
+	}
+}
+
+// Icons and animation are not options: the first screen does not offer them,
+// their old keys do nothing, and values saved by earlier versions are ignored.
+func TestFirstScreenHasNoIconOrAnimationOptions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "identity")
+	saved := "icons=nerd\nmotion=reduced\n"
+	if err := os.WriteFile(filepath.Join(filepath.Dir(path), "settings"), []byte(saved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := send(t, New(path, English), tea.WindowSizeMsg{Width: 100, Height: 34})
+	if m.icons != settings.DefaultIcons || m.motion != "" {
+		t.Fatalf("saved values used: icons %q motion %q", m.icons, m.motion)
+	}
+	before := plain(m)
+	for _, gone := range []string{"ICONS", "ICONOS", "ANIMATION", "ANIMACIÓN", "I: icons"} {
+		if strings.Contains(before, gone) {
+			t.Errorf("first screen still shows %q", gone)
+		}
+	}
+	for _, code := range []rune{'i', 'a'} {
+		next, cmd := m.Update(tea.KeyPressMsg{Code: code, Text: string(code)})
+		m = next.(Model)
+		if cmd != nil || plain(m) != before || m.icons != settings.DefaultIcons || m.motion != "" {
+			t.Fatalf("key %q changed the first screen", code)
+		}
+	}
+	// Tab still alternates between the two remaining sections.
+	if m = key(t, key(t, m, tea.KeyTab), tea.KeyTab); m.preferenceSection != 0 {
+		t.Fatalf("section %d after two Tabs", m.preferenceSection)
 	}
 }

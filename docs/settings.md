@@ -29,7 +29,7 @@ The file never holds a secret, a name, a value, a path to the working vault, or 
 - **Whole or not at all:** a temporary file in the same directory, synced, then renamed over the old one.
 - **Owner only:** directory `0700`, file `0600`.
 - **Never fatal.** A missing, unreadable, too large (over 4 KiB) or invalid file is ignored: Qrypt starts with the defaults (system language, theme `green`) and shows a one-line notice on the first screen. It never overwrites a file it could not read until the user changes a setting.
-- **Format:** one `key=value` per line, UTF-8, for example `language=es`, `theme=custom`, `motion=reduced`, `color.accent=#22d3ee`. Unknown keys are ignored. Invalid values make that one line be ignored. An absent or empty `mirror` means no mirror; stopping mirroring removes the line without deleting the folder.
+- **Format:** one `key=value` per line, UTF-8, for example `language=es`, `theme=custom`, `color.accent=#22d3ee`. Unknown keys are ignored. Invalid values make that one line be ignored. An absent or empty `mirror` means no mirror; stopping mirroring removes the line without deleting the folder.
 
 ## Themes
 
@@ -60,11 +60,11 @@ A theme gives a color to each role. The interface uses roles, never raw colors.
 
 ## Motion
 
-Press A on the first screen to turn the logo animation on or off. Reduced motion saves `motion=reduced` only when selected; the default keeps the animated sweep. The static accent-to-light gradient remains. `NO_COLOR` also stops the animation, regardless of this preference.
+The logo animation is always on; there is no setting for it. `NO_COLOR` is the only thing that stops it. A `motion` line saved by an earlier version is ignored.
 
 ## Icons
 
-The first screen previews the selected glyphs and cycles sets with I (emoji, nerd, unicode). `emoji` is the default, so spaces show as folders without installing anything; a terminal that draws emoji badly can switch to `unicode`, which uses one-cell symbols available in ordinary fonts. `emoji` needs a terminal and font that render emoji (some occupy two cells). `nerd` needs a Nerd Font with the private-use icon glyphs. Qrypt cannot detect the terminal font; choose the set whose preview looks right. Missing or invalid `icons` defaults to `unicode`.
+Qrypt always uses the default `emoji` icon set; there is no setting for it. An `icons` line saved by an earlier version is ignored.
 
 ## Custom colors
 

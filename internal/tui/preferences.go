@@ -45,7 +45,7 @@ func (m Model) languageView() string {
 	if !m.plain {
 		m.styles.dim = lipgloss.NewStyle().Foreground(lipgloss.Color(hexColor(m.styles.palette.Dim)))
 	}
-	var languageRows, themeRows, iconRows, motionRows []string
+	var languageRows, themeRows []string
 	for i, name := range []string{"English", "Español"} {
 		selected := (i == 0 && m.language == English) || (i == 1 && m.language == Spanish)
 		languageRows = append(languageRows, m.choiceRow(name, i, selected, m.preferenceSection == 0))
@@ -56,12 +56,6 @@ func (m Model) languageView() string {
 			name = themeChoice(i)
 		}
 		themeRows = append(themeRows, m.choiceRow(name, i, i == m.themeIndex, m.preferenceSection == 1))
-	}
-	for i, name := range []string{"emoji", "nerd", "unicode"} {
-		iconRows = append(iconRows, m.choiceRow(name, i, name == m.icons, m.preferenceSection == 2))
-	}
-	for i, name := range []string{"on / activa", "off / detenida"} {
-		motionRows = append(motionRows, m.choiceRow(name, i, (i == 1) == (m.motion == "reduced"), m.preferenceSection == 3))
 	}
 	pair := func(a, b string, aw, bw int) string {
 		left, right := strings.Split(a, "\n"), strings.Split(b, "\n")
@@ -79,23 +73,11 @@ func (m Model) languageView() string {
 	}
 	join := func(rows []string) string { return strings.Join(rows, "\n") }
 	first := pair(m.panel("LANGUAGE / IDIOMA", join(languageRows), 21, m.preferenceSection == 0, false), m.panel("THEME / TEMA", join(themeRows), 34, m.preferenceSection == 1, false), 21, 34)
-	second := pair(m.panel("ICONS / ICONOS", join(iconRows), 21, m.preferenceSection == 2, false), m.panel("ANIMATION / ANIMACIÓN", join(motionRows), 34, m.preferenceSection == 3, false), 21, 34)
-	body := first + "\n" + second
+	body := first
 	if m.settingsError {
 		body += "\n" + m.styles.dim.Render("Settings could not be read / No se pudieron leer los ajustes.")
 	}
 	return body
-}
-
-func (m *Model) cycleIcons(step int) {
-	choices := []string{"emoji", "nerd", "unicode"}
-	for i, name := range choices {
-		if m.icons == name {
-			m.icons = choices[(i+step+len(choices))%len(choices)]
-			return
-		}
-	}
-	m.icons = choices[0]
 }
 
 func (m Model) choiceRow(name string, index int, selected, focused bool) string {
