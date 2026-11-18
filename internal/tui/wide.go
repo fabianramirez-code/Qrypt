@@ -58,7 +58,8 @@ func (m *Model) refreshTree() {
 	for i, space := range m.spaceRows {
 		spaceStart := len(rows)
 		rows = append(rows, treeRow{space: i, name: space.name, count: space.count})
-		if i != m.spaceCursor || space.problem >= 0 {
+		// Yazi-like levels: a space or folder shows its children only once entered.
+		if i != m.spaceCursor || space.problem >= 0 || m.screen != vaultList && m.screen != vaultItem {
 			continue
 		}
 		// Walk every folder and its direct items; only the current space is expanded.
@@ -90,7 +91,9 @@ func (m *Model) refreshTree() {
 					branch, continuation = "└─ ", "   "
 				}
 				rows = append(rows, treeRow{space: i, path: path, name: name, count: counts[name], depth: depth, branch: indent + branch})
-				walk(path, indent+continuation, depth+1)
+				if hasPath(m.folderPath, path) {
+					walk(path, indent+continuation, depth+1)
+				}
 			}
 			for j, item := range items {
 				branch := "├─ "
@@ -173,6 +176,33 @@ func (m Model) wide() bool {
 
 // wideKey translates tree selection into the existing validated vault handlers.
 func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// Yazi navigation keys: h/j/k/l mirror the arrows, g/G and Home/End jump to
+	// the first/last row of the level, Ctrl+U/D and PgUp/PgDn move half a page.
+	if v.Mod & ^(tea.ModShift|tea.ModCapsLock) == 0 {
+		switch {
+		case v.Code == tea.KeyHome || v.Code == 'g' && v.Text != "G" && v.Mod&tea.ModShift == 0:
+			return m.wideJump(tea.KeyUp, 1<<20)
+		case v.Code == tea.KeyEnd || v.Code == 'g' || v.Code == 'G':
+			return m.wideJump(tea.KeyDown, 1<<20)
+		case v.Code == tea.KeyPgUp:
+			return m.wideJump(tea.KeyUp, max(1, m.height/4))
+		case v.Code == tea.KeyPgDown:
+			return m.wideJump(tea.KeyDown, max(1, m.height/4))
+		case v.Code == 'h':
+			v = tea.KeyPressMsg{Code: tea.KeyLeft}
+		case v.Code == 'j':
+			v = tea.KeyPressMsg{Code: tea.KeyDown}
+		case v.Code == 'k':
+			v = tea.KeyPressMsg{Code: tea.KeyUp}
+		case v.Code == 'l':
+			v = tea.KeyPressMsg{Code: tea.KeyRight}
+		}
+	} else if v.Mod == tea.ModCtrl && (v.Code == 'u' || v.Code == 'd') {
+		if v.Code == 'u' {
+			return m.wideJump(tea.KeyUp, max(1, m.height/4))
+		}
+		return m.wideJump(tea.KeyDown, max(1, m.height/4))
+	}
 	if m.screen == vaultItem {
 		if v.Code == tea.KeyLeft || v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0 {
 			m.leaveItem()
@@ -187,12 +217,6 @@ func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.treeFollow()
 		forward := v.Code == tea.KeyTab && v.Mod&tea.ModShift == 0 || v.Code == tea.KeyRight || v.Code == tea.KeyEnter
 		switch {
-		case v.Code == tea.KeyUp || v.Code == tea.KeyDown:
-			step := 1
-			if v.Code == tea.KeyUp {
-				step = -1
-			}
-			return m.selectTreeRow(max(0, min(len(m.treeRows)-1, m.treeCursor+step))), nil
 		case v.Code == tea.KeyLeft || v.Code == tea.KeyTab && v.Mod&tea.ModShift != 0:
 			// One level up: the folder just left stays selected in its parent.
 			if m.screen == vaultList && len(m.folderPath) > 0 {
@@ -269,38 +293,18 @@ func (m Model) wideKey(v tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// selectTreeRow moves the navigation state onto one tree row.
-func (m Model) selectTreeRow(target int) Model {
-	if target < 0 || target >= len(m.treeRows) {
-		return m
-	}
-	row := m.treeRows[target]
-	m.message = ""
-	if row.space != m.spaceCursor {
-		m.spaceCursor = row.space
-		m.selectSpace()
-	}
-	m.folderPath, m.cursor = nil, 0
-	if row.depth == 0 || m.vlt == nil {
-		m.screen = spacesList
-		m.refresh()
-		m.treeFollow()
-		return m
-	}
-	m.screen = vaultList
-	path := row.path
-	if row.id == "" {
-		path = row.path[:len(row.path)-1]
-	}
-	m.folderPath = slices.Clone(path)
-	m.refresh()
-	for i, entry := range m.folderRows {
-		if row.id != "" && entry.id == row.id || row.id == "" && entry.folder && entry.name == row.name {
-			m.cursor = i
+// wideJump repeats one arrow step, stopping at the end of the current level.
+func (m Model) wideJump(code rune, steps int) (tea.Model, tea.Cmd) {
+	position := func(m Model) [3]int { return [3]int{m.spaceCursor, m.cursor, m.fieldCursor} }
+	for range steps {
+		next, _ := m.wideKey(tea.KeyPressMsg{Code: code})
+		moved := next.(Model)
+		if position(moved) == position(m) {
+			break
 		}
+		m = moved
 	}
-	m.treeFollow()
-	return m
+	return m, nil
 }
 
 // wideTrim cuts names and UI text by display cells, never secret values.

@@ -151,10 +151,13 @@ func TestWideTreeSelectionAndPreviewStructure(t *testing.T) {
 	for m.spaceTitle() != "Work" {
 		m = key(t, m, tea.KeyDown)
 	}
-	if !strings.Contains(framed(m), "AWS (1)") || !strings.Contains(framed(m), "Google Stitch (2)") {
+	if strings.Contains(framed(m), "AWS (1)") {
+		t.Fatal("a space opened by moving over it")
+	}
+	m = key(t, m, tea.KeyRight) // open Work: AWS is selected and still closed
+	if !strings.Contains(framed(m), "AWS (1)") || !strings.Contains(framed(m), "Google Stitch (2)") || strings.Contains(framed(m), "prod (1)") {
 		t.Fatal(framed(m))
 	}
-	m = key(t, m, tea.KeyDown) // AWS in the tree
 	if !strings.Contains(framed(m), "▌") {
 		t.Fatal(framed(m))
 	}
@@ -189,7 +192,7 @@ func TestWideTreeSelectionAndPreviewStructure(t *testing.T) {
 }
 
 func TestWideUnboxedColumnsAndRoles(t *testing.T) {
-	m := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 120, Height: 30})
+	m := key(t, send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 120, Height: 30}), tea.KeyRight)
 	m.themeName = "carbon"
 	m.refreshStyles()
 	view := framed(m)
@@ -320,6 +323,9 @@ func TestWideThresholdPanesAndFocus(t *testing.T) {
 			}
 			wideFit(t, x, size.Width, size.Height)
 			for _, part := range []string{"Personal (1)", "Work (1)", "account"} {
+				if part == "account" && state == spacesList {
+					continue // A space shows its contents only once opened.
+				}
 				if !strings.Contains(view, part) {
 					t.Fatalf("%dx%d %d missing %q: %s", size.Width, size.Height, state, part, view)
 				}
@@ -456,13 +462,13 @@ func TestWideTickCacheAndIdle(t *testing.T) {
 
 func TestWideActionsPreviewAndNarrowPreservation(t *testing.T) {
 	m := send(t, wideFixture(t, English), tea.WindowSizeMsg{Width: 100, Height: 20})
-	if !strings.Contains(framed(m), "account") || !strings.Contains(framed(m), "Personal (1)") {
-		t.Fatal("spaces preview not cached")
+	if strings.Contains(framed(m), "account") || !strings.Contains(framed(m), "Personal (1)") {
+		t.Fatal("a closed space must show its count and not its contents")
 	}
 	for m.spaceTitle() != "Work" {
 		m = key(t, m, tea.KeyDown)
 	}
-	if !strings.Contains(framed(m), "work-only") || !strings.Contains(framed(m), "Work (1)") {
+	if strings.Contains(framed(m), "work-only") || !strings.Contains(framed(m), "Work (1)") {
 		t.Fatal("space switch not refreshed")
 	}
 	m = key(t, m, 'r')

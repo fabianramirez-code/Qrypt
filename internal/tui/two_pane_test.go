@@ -23,8 +23,7 @@ func TestWideAndModalOpaqueWithDestination(t *testing.T) {
 		t.Fatal("tree has no solid background")
 	}
 	m = enter(t, m)
-	m = key(t, m, tea.KeyDown)
-	m = key(t, m, tea.KeyDown)
+	m = key(t, m, tea.KeyRight) // into Google; Proyecto 2 is selected, still closed
 	m = key(t, m, 'a')
 	if m.screen != vaultAddName || !strings.Contains(framed(m), "Crear en: Personal / Google / Proyecto 2") {
 		t.Fatalf("modal destination: %s", framed(m))
@@ -41,11 +40,9 @@ func TestTwoPaneTreeShowsNestedItemAndFullLocation(t *testing.T) {
 	}
 	m.refreshSpaces()
 	m = send(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = enter(t, m)
-	m = key(t, m, tea.KeyDown)
-	m = key(t, m, tea.KeyDown)
-	m = key(t, m, tea.KeyDown)
-	m = enter(t, m)
+	for range 4 { // space, Google, Proyecto 2, then the item itself
+		m = key(t, m, tea.KeyRight)
+	}
 	if m.screen != vaultItem {
 		t.Fatalf("not in detail: %d", m.screen)
 	}
@@ -65,13 +62,13 @@ func TestTwoPaneTreeRowsNavigationDoesNotWrite(t *testing.T) {
 	m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	before := spaceSnapshot(t, vaultDir(m.path))
 	for _, want := range []string{"outer (1)", "inner (1)", "[2] ITEM // Personal / outer / inner / entry"} {
-		m = key(t, m, tea.KeyDown)
+		m = key(t, m, tea.KeyRight)
 		if !strings.Contains(framed(m), want) || strings.Contains(framed(m), "secret-never-on-tree") || !reflect.DeepEqual(before, spaceSnapshot(t, vaultDir(m.path))) {
 			t.Fatalf("selection %q changed disk or preview: %s", want, framed(m))
 		}
 	}
 	for i := 0; i < 3; i++ {
-		m = key(t, m, tea.KeyUp)
+		m = key(t, m, tea.KeyLeft)
 	}
 	if m.screen != spacesList || !reflect.DeepEqual(before, spaceSnapshot(t, vaultDir(m.path))) {
 		t.Fatal("up changed disk or lost space selection")
@@ -86,7 +83,7 @@ func TestTwoPaneCreateInsideSelectedFolder(t *testing.T) {
 		}
 		m.refreshSpaces()
 		m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
-		m = key(t, m, tea.KeyDown) // select folder without entering it
+		m = key(t, m, tea.KeyRight) // open the space: the folder is selected, not entered
 		m = key(t, m, create)
 		if !strings.Contains(framed(m), "Create in: Personal / parent") {
 			t.Fatalf("wrong destination: %s", framed(m))
@@ -126,7 +123,7 @@ func TestWideCreatingModalNamesDestinationInBothLanguages(t *testing.T) {
 		}
 		m.refreshSpaces()
 		m = send(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
-		m = key(t, m, tea.KeyDown)
+		m = key(t, m, tea.KeyRight)
 		for _, keyCode := range []rune{'a', 'f'} {
 			x := key(t, m, keyCode)
 			if !strings.Contains(framed(x), tc.line) {
