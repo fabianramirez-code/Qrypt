@@ -181,7 +181,7 @@ How secrets are protected in memory (keys, decrypted values, the passphrase) is 
 | Need | Tool |
 | --- | --- |
 | Framework, styles | Bubble Tea v2, Lip Gloss v2 |
-| Visual review and README demos | **(proposed)** VHS scripts under `design/vhs/` |
+| Visual review and README demos | VHS scripts under `design/vhs/` (written, not recorded yet) |
 | Icons and font | Nerd Fonts `SymbolsNerdFontMono` |
 | Contrast check | WCAG 2.2 formula in the theme unit tests (implemented) |
 
@@ -193,4 +193,4 @@ Lint, CI, fuzzing, releases and every other engineering tool are in [ARCHITECTUR
 
 Design items only; engineering work is tracked in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-1. Add VHS demo scripts and use their output in the README.
+1. Record the VHS demos in `design/vhs/` and use their output in the README.

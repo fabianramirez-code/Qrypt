@@ -88,7 +88,7 @@ go test ./...
 
 ### Development checks
 
-CI runs `go vet ./...` and `go test ./... -count=1` on Windows, Linux and macOS. On Ubuntu it also runs `golangci-lint` (configured in `.golangci.yml`) and `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`. Run the linter locally with `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run ./...`. Dependabot checks Go modules and GitHub Actions weekly. Existing lint findings are not yet fully cleared; check CI before relying on a release.
+CI runs `go vet ./...` and `go test ./... -count=1` on Windows, Linux and macOS. On Ubuntu it also runs `golangci-lint` (configured in `.golangci.yml`) and `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`. Run the linter locally with `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run ./...`. Dependabot checks Go modules and GitHub Actions weekly. Findings that existed before the linter was added (unchecked errors on cleanup paths, a few unused helpers) are excluded by narrow rules in `.golangci.yml`; new code must pass without new exclusions.
 
 ### Releases
 
