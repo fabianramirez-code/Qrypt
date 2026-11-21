@@ -14,6 +14,7 @@ type Buffer struct {
 	data   []byte
 	pages  []byte
 	locked bool
+	mu     sync.Mutex // makes Destroy safe to call twice or from two goroutines
 }
 
 var (
@@ -111,9 +112,14 @@ func (b *Buffer) Bytes() []byte {
 // Locked reports whether this buffer is currently locked against paging.
 func (b *Buffer) Locked() bool { return b != nil && b.locked }
 
-// Destroy wipes the entire allocation before releasing it. It is nil-safe and idempotent.
+// Destroy wipes the entire allocation before releasing it. It is nil-safe, idempotent and safe to call from several goroutines.
 func (b *Buffer) Destroy() {
-	if b == nil || b.data == nil && b.pages == nil {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.data == nil && b.pages == nil {
 		return
 	}
 	if b.pages != nil {

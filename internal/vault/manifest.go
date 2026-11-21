@@ -268,9 +268,17 @@ func (v *Vault) checkDisk() error {
 	}
 	return nil
 }
+
+// maxManifestSize bounds what is read from an untrusted manifest before its
+// signatures are checked. It allows about a million files in one scope.
+const maxManifestSize = 64 << 20
+
 func (v *Vault) openManifest() error {
 	path := filepath.Join(v.dir, "manifest")
-	data, err := os.ReadFile(path)
+	data, err := readLimited(path, maxManifestSize)
+	if err == nil && len(data) > maxManifestSize {
+		return ErrIntegrity
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		// Old scopes gain their first manifest from the files already on disk.
 		m := Manifest{ScopeID: v.ID(), Generation: 1, Files: make(map[string][32]byte)}

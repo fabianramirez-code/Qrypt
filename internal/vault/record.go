@@ -73,10 +73,30 @@ func writeRecord(path string, entries map[string]recordEntry) error {
 	return writeReplacing(path, []byte(b.String()))
 }
 
+// ErrRollback means a restore would bring back a state older than the one the
+// local record has already seen.
+var ErrRollback = errors.New("the copy is older than the state this device has already seen")
+
+// CheckRestoredScopes refuses scopes whose generation is lower than the one the
+// local record holds for the same scope. A deleted secret must not come back
+// through an older copy, and the record must not be reset to hide it.
+func CheckRestoredScopes(statePath string, scopes []*Vault) error {
+	entries, err := readRecord(statePath)
+	if err != nil {
+		return err
+	}
+	for _, v := range scopes {
+		if seen, ok := entries[v.ID()]; ok && v.Generation() < seen.generation {
+			return ErrRollback
+		}
+	}
+	return nil
+}
+
 // RecordRestoredScopes replaces the local record after verified staged scopes have
 // been moved into place. It uses the same validation and atomic writer as normal changes.
 func RecordRestoredScopes(statePath string, scopes []*Vault) error {
-	if _, err := readRecord(statePath); err != nil {
+	if err := CheckRestoredScopes(statePath, scopes); err != nil {
 		return err
 	}
 	entries := make(map[string]recordEntry, len(scopes))
@@ -160,10 +180,10 @@ func keyProven(v *Vault) (bool, error) {
 		}
 	}
 	if items > 0 {
-		// A name that decrypts proves only the key that sealed it. Someone who can
-		// write to the vault can replace the scope file and the name together, so
-		// while items exist only an item can prove the key.
-		return false, nil
+		// A name that decrypts proves only the key that sealed it, and someone who
+		// can write to the vault can replace the scope file and the name together.
+		// The name counts only when it is the one the signed manifest recorded.
+		return v.nameMatchesSignedManifest(), nil
 	}
 	// With no item there is nothing of value to lose; a name that cannot be read
 	// is the only thing Accept can remove.
@@ -381,4 +401,24 @@ func Accept(root, statePath string, id *identity.Identity, scopeID string) error
 	v.manifest = m
 	v.statePath = statePath
 	return recordVault(v)
+}
+
+// nameMatchesSignedManifest reports whether the name file is byte for byte the
+// one recorded by the scope's signed manifest and decrypts with the scope key.
+// Only this identity can sign that manifest, so a forged name cannot match it.
+func (v *Vault) nameMatchesSignedManifest() bool {
+	raw, err := os.ReadFile(filepath.Join(v.dir, "manifest"))
+	if err != nil {
+		return false
+	}
+	m, err := verifyManifest(v.edPublic, v.mlPublic, raw)
+	if err != nil || m.NameHash == ([32]byte{}) {
+		return false
+	}
+	name, err := os.ReadFile(filepath.Join(v.dir, scopeNameFile))
+	if err != nil || sha256.Sum256(name) != m.NameHash {
+		return false
+	}
+	_, err = v.nameUnchecked()
+	return err == nil
 }

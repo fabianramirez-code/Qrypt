@@ -12,7 +12,7 @@ import (
 
 type directory struct{ root string }
 
-func Dir(path string) Storage { return directory{path} }
+func Dir(path string) Storage { return directory{filepath.Clean(path)} }
 func (d directory) path(name string) (string, error) {
 	if name == "" || strings.Contains(name, "\\") || strings.HasPrefix(name, "/") || filepath.IsAbs(name) {
 		return "", fmt.Errorf("invalid mirror path %q", name)

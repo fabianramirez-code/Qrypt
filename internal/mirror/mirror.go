@@ -343,6 +343,9 @@ func Restore(from Storage, root, statePath string, id *identity.Identity) (ret e
 		}
 		staged = append(staged, v)
 	}
+	if e = vault.CheckRestoredScopes(statePath, staged); e != nil {
+		return e
+	}
 	destRoot := filepath.Join(root, "scopes")
 	if e = os.MkdirAll(destRoot, 0700); e != nil {
 		return e

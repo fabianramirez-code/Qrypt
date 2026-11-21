@@ -3,6 +3,7 @@
 package secmem
 
 import (
+	"errors"
 	"sync"
 	"unsafe"
 
@@ -23,6 +24,12 @@ func platformLock(p []byte) error {
 		var min, max uintptr
 		var flags uint32
 		windows.GetProcessWorkingSetSizeEx(windows.CurrentProcess(), &min, &max, &flags)
+		if max == 0 {
+			// The call reports no error; a zero maximum means it failed. Setting
+			// new limits without the real ones could shrink them.
+			record(errors.New("working set size unavailable"))
+			return
+		}
 		// Keep the original maximum at least as large as the new minimum.
 		const target = 16 << 20
 		if min < target {

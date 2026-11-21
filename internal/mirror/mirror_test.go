@@ -588,3 +588,46 @@ func TestPushWritesNothingIntoAnotherVaultsMirror(t *testing.T) {
 		}
 	}
 }
+
+// A scope whose last secret was deleted has a higher recorded generation than
+// an older mirror copy. Restoring that copy would bring the deleted secret back
+// and reset the record, so the rollback would no longer be detected.
+func TestRestoreRefusesAnOlderMirrorThanTheLocalRecord(t *testing.T) {
+	root, state, id := device(t)
+	v := scope(t, root, state, id, "Work")
+	must(t, addValue(v, "gone", []byte("secret")))
+	m := newMemory()
+	_, e := mirror.Push(root, state, id, m)
+	must(t, e)
+	entries, e := v.Entries()
+	must(t, e)
+	must(t, v.Remove(entries[0].ID))
+	recordBefore, e := os.ReadFile(state)
+	must(t, e)
+	if e := mirror.Restore(m, root, state, id); !errors.Is(e, vault.ErrRollback) {
+		t.Fatalf("Restore = %v, want ErrRollback", e)
+	}
+	recordAfter, e := os.ReadFile(state)
+	must(t, e)
+	if !bytes.Equal(recordBefore, recordAfter) {
+		t.Fatal("the record changed")
+	}
+	left, e := v.Entries()
+	must(t, e)
+	if len(left) != 0 {
+		t.Fatalf("the deleted secret came back: %v", left)
+	}
+}
+
+// A mirror folder typed with a trailing separator must still stop the removal
+// of empty folders at the mirror folder itself.
+func TestDirRemoveStopsAtRootWithTrailingSeparator(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "mirror")
+	s := mirror.Dir(root + string(os.PathSeparator))
+	must(t, s.Write("scopes/a/name", []byte("x")))
+	must(t, s.Remove("scopes/a/name"))
+	if _, e := os.Stat(parent); e != nil {
+		t.Fatalf("the parent folder was removed: %v", e)
+	}
+}
