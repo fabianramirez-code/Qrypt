@@ -8,7 +8,7 @@ How Qrypt creates, protects, and uses keys. Three decisions define it:
 | Private key protection        | Local file encrypted with a passphrase, plus a recovery phrase |
 | Encryption for several people | One key per scope                                              |
 
-> **Status:** design only. Nothing here is implemented or audited. Do not store real secrets with Qrypt yet.
+> **Status:** the keys, the hybrid algorithms and the one-member space are implemented (see [Vault](vault.md)); wrapping a key for other people is design only. Not audited. Do not store real secrets with Qrypt yet.
 
 ## Design principles
 
@@ -34,7 +34,7 @@ The encryption pair is X-Wing, a published combination of X25519 and ML-KEM-768.
 ### Why hybrid
 
 - ML-KEM and ML-DSA became standards in August 2024. If a flaw appears in them or in an implementation, the classical algorithm still protects the data.
-- Data pushed to Git is stored indefinitely. Data protected only by classical encryption can be copied today and decrypted once a large quantum computer exists.
+- Encrypted data that leaves the device (a mirror in a synchronized folder, a backup) can be kept indefinitely by whoever copies it. Data protected only by classical encryption can be copied today and decrypted once a large quantum computer exists.
 
 ### Alternatives considered
 
@@ -91,6 +91,5 @@ Removing a member does not take back what they already saw. Two steps are always
 
 These are not decided yet:
 
-- **Vault format:** file layout in the repository, exact scope boundaries (for example, whether categories get their own key), and how names and other metadata are encrypted.
 - **Trust in public keys:** how a client verifies that a public key really belongs to a member. See the [threat model](threat-model.md#3-tampering-with-the-vault-repository).
 - **Constructions for several members:** the vault constructions for one member are fixed in [Vault](vault.md), including how the two signatures are combined. Wrapping a scope key for other people and signing the member list are not decided yet.

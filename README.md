@@ -1,19 +1,19 @@
 # PQC (Post-Quantum Cryptography) TUI Secrets and Password Manager
 
-An ultralight, secure, TUI-based secrets manager designed to run 100% on top of Git repositories as its storage and identity backend, with no need for complex centralized servers.
+An ultralight, secure, TUI-based secrets manager whose vault is a local directory of encrypted files, with an optional mirror folder (for example one synchronized by a cloud service). It needs no server and no Git repository.
 
 > **Status:** early stage. Qrypt can create, unlock and restore an identity, and store, view, edit and delete items in a local vault. Nothing is audited: do not rely on Qrypt for real secrets. The design is documented in [`docs/`](docs/).
 
 ## Key Features
 
-- **Workspaces:** Personal and Enterprise.
-- **Hierarchy by environment** (`DEV`, `QA`, `PRO`) and by category.
+- **Spaces:** each space has its own key and one member, the identity that created it. Sharing a space with other people is planned, not built.
+- **Folders** inside spaces, at any depth, and accounts with several secrets each (hidden, visible or long text).
 - **One protection level:** personal, test, and production secrets are all protected the same way.
 - **Quantum-resistant hybrid cryptography** (classical + NIST post-quantum standards):
   - **X25519 + ML-KEM-768** (FIPS 203) for key encapsulation. Secrets are encrypted with a symmetric AEAD.
   - **Ed25519 + ML-DSA-65** (FIPS 204) for digital signatures.
-- **Access control** based on public keys and per-recipient encryption.
-- **Secure memory handling:** direct wiping of in-RAM buffers and a self-clearing clipboard.
+- **Integrity:** a signed manifest per space detects a removed file or a rollback.
+- **Secure memory handling:** keys and typed secrets are held in locked, wiped memory where the system allows it (the limits are listed in `ARCHITECTURE.md`, D9), and the clipboard clears itself.
 
 ## Tech Stack
 
@@ -23,7 +23,7 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 | TUI Framework | `charmbracelet/bubbletea` & `charmbracelet/lipgloss`                          |
 | Cryptography  | Hybrid: X25519 + ML-KEM-768, Ed25519 + ML-DSA-65                              |
 | Crypto code   | Go standard library, `golang.org/x/crypto`, `cloudflare/circl` (ML-DSA only)  |
-| Storage       | File-based vaults on top of Git (GitHub integration)                          |
+| Storage       | Local vault directory with an optional mirror folder                          |
 
 ## Design
 
@@ -36,20 +36,20 @@ An ultralight, secure, TUI-based secrets manager designed to run 100% on top of 
 | [Vault](docs/vault.md)               | Exact constructions and the secret file format                       |
 | [Terminal interface](docs/tui.md)    | Screens and the rules they follow                                    |
 | [Settings](docs/settings.md)         | Language, themes and custom colors                                   |
-| [Threat model](docs/threat-model.md) | Main attack paths and the planned defenses                           |
+| [Mirror](docs/mirror.md)             | The optional second copy of the vault                                |
+| [Threat model](docs/threat-model.md) | Main attack paths and which defenses exist                           |
 
 ## Project Structure
 
 ```
 .
 ├── cmd/        # Binary entry points
-├── internal/   # Private application code
-└── pkg/        # Public reusable packages
+└── internal/   # Private application code (identity, vault, mirror, TUI...)
 ```
 
 ## Download
 
-A prebuilt program for Windows is published on the [Releases](https://github.com/fabianramirez-code/Qrypt/releases) page. You do not need Go to run it.
+Prebuilt programs are published (Windows ZIP, Linux and macOS tar.gz) on the [Releases](https://github.com/fabianramirez-code/Qrypt/releases) page. You do not need Go to run it.
 
 1. Download `qrypt-<version>-windows-amd64.zip` and unzip it.
 2. Double-click `qrypt.exe`, or run it from Windows Terminal, PowerShell or cmd.

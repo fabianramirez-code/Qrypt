@@ -11,8 +11,8 @@ How Qrypt remembers the interface language and theme, and how a user edits color
 | Language | `en` or `es`                                                        |
 | Theme    | `green`, `carbon`, or `custom`                                      |
 | Colors   | For `custom` only: the hex value of each color role                 |
-| `icons`  | `emoji` (default), `unicode`, or `nerd`                                |
-| `motion` | `reduced` to stop the logo sweep; absent means animated                |
+| `icons`  | Not an option. The screens always use `emoji`; an old line is ignored |
+| `motion` | Not an option. The logo always animates unless `NO_COLOR` is set; an old line is ignored |
 | `mirror` | Optional folder path as typed on the Mirror screen                  |
 
 The file never holds a secret, a name, a value, a path to the working vault, or anything about the identity. The optional `mirror=<path>` line does reveal where the copy is. It is plain text, so the user can read it and Qrypt can show exactly what it saves.
@@ -82,7 +82,7 @@ Language and theme are chosen on the same first screen, as today but with a seco
 - LANGUAGE and THEME appear in side-by-side bordered panels. Up and Down move within the focused panel; Left and Right or Tab switch panels. Both selections keep a `>` marker, and only the focused selection is highlighted. Enter continues. Esc quits with status 1.
 - The theme preview is live: moving in the theme list recolors the screen at once.
 - The saved choice is selected in advance. Without a settings file, the language comes from the system and the theme is `green`.
-- Continuing saves the language, theme, icons and motion only if they differ from what is stored.
+- Continuing saves the language and theme only if they differ from what is stored. A stored `icons` or `motion` line has no effect and is dropped the next time the file is written.
 
 ## What does not change
 
