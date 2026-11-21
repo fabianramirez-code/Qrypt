@@ -110,7 +110,7 @@ Each decision lists context, decision, alternatives and consequences.
 | Area | Decision | Status |
 | --- | --- | --- |
 | Tests | `go vet ./...` and `go test ./...`; TUI tests read content through `plain(m)` and the frame through `framed(m)`; cross-platform vets cover page locking | implemented |
-| Fuzzing | Native Go fuzz tests kept in the repository for the parsers listed in the Fuzz tests task: item file, fields, manifest, record, settings (the scope file, the scope name file, the item head and the identity file do not have one yet) | implemented |
+| Fuzzing | Native Go fuzz tests kept in the repository for every parser of untrusted bytes: item file, item head, fields, scope file, scope name file, manifest, record, identity file layout, typed passphrase, settings | implemented |
 | Lint | `golangci-lint` v2 with a committed `.golangci.yml` and an Ubuntu CI job; reports 0 issues. Unchecked errors on cleanup paths that predate the linter are excluded by narrow rules | implemented |
 | Vulnerabilities | `govulncheck` Ubuntu CI job; dependency updates are done by hand (Dependabot was removed at the owner's request) | implemented |
 | CI | GitHub Actions: vet and test on Windows, Linux and macOS; lint and `govulncheck` on Ubuntu | implemented |
