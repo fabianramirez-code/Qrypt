@@ -140,15 +140,6 @@ func undecryptable(err error) bool {
 // scope key, or the scope holds no item at all. When nothing decrypts, the key
 // itself is in doubt (a replaced scope file), so nothing may be removed.
 func keyProven(v *Vault) (bool, error) {
-	if _, err := os.Stat(filepath.Join(v.dir, scopeNameFile)); err == nil {
-		if _, nameErr := v.nameUnchecked(); nameErr == nil {
-			return true, nil
-		} else if !undecryptable(nameErr) {
-			return false, nameErr
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return false, err
-	}
 	files, err := os.ReadDir(filepath.Join(v.dir, secretDir))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, err
@@ -168,8 +159,18 @@ func keyProven(v *Vault) (bool, error) {
 			return true, nil
 		}
 	}
-	// With no item there is nothing of value to lose: at most a name that cannot be read.
-	return items == 0, nil
+	if items > 0 {
+		// A name that decrypts proves only the key that sealed it. Someone who can
+		// write to the vault can replace the scope file and the name together, so
+		// while items exist only an item can prove the key.
+		return false, nil
+	}
+	// With no item there is nothing of value to lose; a name that cannot be read
+	// is the only thing Accept can remove.
+	if _, err := os.Stat(filepath.Join(v.dir, scopeNameFile)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	return true, nil
 }
 
 func scopeProblem(v *Vault, kind ProblemKind, recorded uint64) (Problem, error) {
