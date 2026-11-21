@@ -83,7 +83,7 @@ A terminal program cannot choose the terminal font. Qrypt can only ask for a goo
   - `unicode` (plain symbols, safest).
 - **Nerd Font:** `SymbolsNerdFontMono-Regular.ttf` is bundled in the release zip (pinned SHA-256) with install instructions; it is not embedded in the executable.
 - **Every icon has a text fallback** in the `unicode` set, and no information exists only as an icon.
-- The first screen offers the icon sets as choices inside its Icons section; I cycles them as a shortcut.
+- Icons are not an option: Qrypt always uses the `emoji` set. The `unicode` and `nerd` sets remain in the code for tests and a possible later setting.
 
 ## 4. Layout
 
@@ -169,7 +169,7 @@ How secrets are protected in memory (keys, decrypted values, the passphrase) is 
 - Contrast floor of 4.5:1 for text, checked per role (section 2.4).
 - Meaning never depends on color or on an icon alone.
 - Every action is reachable by keyboard; there is no mouse requirement.
-- Focus is always visible: Accent border on the focused section, `>` on every selected row. The first screen centers its logo, four sections and hints inside one solid Surface box, leaving the exterior unpainted.
+- Focus is always visible: Accent border on the focused section, `>` on every selected row. The first screen centers its logo, two sections (language and theme) and hints inside one solid Surface box, leaving the exterior unpainted.
 - Two languages (English and Spanish); only the interface is translated, recovery words are always English.
 - `NO_COLOR` is respected (implemented; section 6.2).
 - **(implemented)** Help overlay on `?` when no text field is active, or F1 anywhere, listing the current screen's keys in the chosen language.

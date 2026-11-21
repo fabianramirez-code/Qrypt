@@ -13,4 +13,6 @@ The report stays private between you and the maintainers. Please include the ver
 
 ## Scope
 
+Qrypt has not been audited. The limits accepted so far, including those found by an internal adversarial review, are listed in [ARCHITECTURE.md](ARCHITECTURE.md), decision D9 and section 4.
+
 The design, its assumptions and its known limits are described in the [threat model](docs/threat-model.md).
