@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
@@ -110,15 +111,46 @@ func InWordList(word string) bool {
 }
 
 // Identity holds the secret master seed from which its keys are derived.
-type Identity struct{ seed *secmem.Buffer }
+//
+// An Identity is safe for use from several goroutines, including Close racing
+// a use: every use holds the lock while it reads the seed. It must not be copied.
+type Identity struct {
+	mu   sync.Mutex
+	seed *secmem.Buffer
+}
 
 // Close wipes and releases the identity seed. It may be called more than once.
 func (id *Identity) Close() {
 	if id == nil {
 		return
 	}
+	id.mu.Lock()
+	defer id.mu.Unlock()
 	id.seed.Destroy()
 	id.seed = nil
+}
+
+// isOpen reports whether the seed is still held.
+func (id *Identity) isOpen() bool {
+	if id == nil {
+		return false
+	}
+	id.mu.Lock()
+	defer id.mu.Unlock()
+	return id.seed.Bytes() != nil
+}
+
+// lock takes the lock; a nil identity has none, and its methods return before use.
+func (id *Identity) lock() {
+	if id != nil {
+		id.mu.Lock()
+	}
+}
+
+func (id *Identity) unlock() {
+	if id != nil {
+		id.mu.Unlock()
+	}
 }
 
 func (id *Identity) seedBytes() []byte {
@@ -170,6 +202,8 @@ func derive(seed []byte, label string) []byte {
 
 // KEMPrivateKey returns the identity's secret X-Wing private key.
 func (id *Identity) KEMPrivateKey() hpke.PrivateKey {
+	id.lock()
+	defer id.unlock()
 	if id.seedBytes() == nil {
 		return nil
 	}
@@ -184,6 +218,8 @@ func (id *Identity) KEMPrivateKey() hpke.PrivateKey {
 
 // Ed25519PrivateKey returns the identity's secret Ed25519 private key.
 func (id *Identity) Ed25519PrivateKey() ed25519.PrivateKey {
+	id.lock()
+	defer id.unlock()
 	if id.seedBytes() == nil {
 		return nil
 	}
@@ -194,6 +230,8 @@ func (id *Identity) Ed25519PrivateKey() ed25519.PrivateKey {
 
 // MLDSA65PrivateKey returns the identity's secret ML-DSA-65 private key.
 func (id *Identity) MLDSA65PrivateKey() *mldsa65.PrivateKey {
+	id.lock()
+	defer id.unlock()
 	if id.seedBytes() == nil {
 		return nil
 	}
@@ -208,7 +246,7 @@ func (id *Identity) MLDSA65PrivateKey() *mldsa65.PrivateKey {
 
 // PublicKeys returns copies of the X-Wing, Ed25519, and ML-DSA-65 public keys.
 func (id *Identity) PublicKeys() PublicKeys {
-	if id.seedBytes() == nil {
+	if !id.isOpen() {
 		return PublicKeys{}
 	}
 	kemKey := id.KEMPrivateKey()
@@ -226,6 +264,8 @@ func (id *Identity) PublicKeys() PublicKeys {
 // RecoveryPhrase returns the full secret as 24 BIP39 words; show it only to the
 // user. The caller owns the returned bytes and should clear them after use.
 func (id *Identity) RecoveryPhrase() []byte {
+	id.lock()
+	defer id.unlock()
 	if id.seedBytes() == nil {
 		return nil
 	}
@@ -336,6 +376,8 @@ func normalizePassphrase(passphrase []byte) ([]byte, error) {
 // It generates a new seven-word passphrase on every call; the returned passphrase
 // is secret, must only be shown to the user, and should be cleared after use.
 func (id *Identity) Seal() (sealed []byte, passphrase []byte, err error) {
+	id.lock()
+	defer id.unlock()
 	if id.seedBytes() == nil {
 		return nil, nil, ErrClosed
 	}
